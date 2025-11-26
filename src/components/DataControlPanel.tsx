@@ -37,41 +37,39 @@ export const DataControlPanel = () => {
           const dataLines = lines.slice(1);
           
           const data = dataLines.map(line => {
-            const [timestamp, temperature, humidity] = line.split(',').map(v => v.trim());
+            // Remove quotes and split by comma
+            const values = line.replace(/"/g, '').split(',');
             
-            // Parse timestamp (format: DD/MM/YYYY HH:MM:SS)
-            const [datePart, timePart] = timestamp.split(' ');
-            const [day, month, year] = datePart.split('/');
-            const [hours, minutes, seconds] = timePart.split(':');
-            const date = new Date(
-              parseInt(year),
-              parseInt(month) - 1,
-              parseInt(day),
-              parseInt(hours),
-              parseInt(minutes),
-              parseInt(seconds)
-            );
+            if (values.length < 5) return null;
             
-            const temp = parseFloat(temperature);
-            const hum = parseFloat(humidity);
+            const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
             
-            // Calculate absolute humidity (g/m³)
-            const absoluteHumidity = (6.112 * Math.exp((17.67 * temp) / (temp + 243.5)) * hum * 2.1674) / (273.15 + temp);
+            // Parse timestamp (format: YYYY-MM-DD HH:MM:SS)
+            const date = new Date(timestampStr.trim());
             
-            // Calculate dew point (°C)
-            const a = 17.27;
-            const b = 237.7;
-            const alpha = ((a * temp) / (b + temp)) + Math.log(hum / 100);
-            const dewPoint = (b * alpha) / (a - alpha);
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid timestamp:', timestampStr);
+              return null;
+            }
+            
+            const temp = parseFloat(tempStr);
+            const hum = parseFloat(humStr);
+            const absHum = parseFloat(absHumStr);
+            const dpt = parseFloat(dptStr);
+            
+            if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) {
+              console.warn('Invalid values:', { temp, hum, absHum, dpt });
+              return null;
+            }
             
             return {
               timestamp: date.getTime(),
               temperature: temp,
               humidity: hum,
-              absoluteHumidity,
-              dewPoint
+              absoluteHumidity: absHum,
+              dewPoint: dpt
             };
-          });
+          }).filter(d => d !== null);
           
           return {
             sensorId: sensor.id,
@@ -81,7 +79,7 @@ export const DataControlPanel = () => {
       );
       
       // Filter out null values
-      const validData = parsedData.filter(d => d !== null);
+      const validData = parsedData.filter(d => d !== null && d.data.length > 0);
       
       if (validData.length === 0) {
         throw new Error('Aucune donnée valide trouvée');
@@ -96,10 +94,13 @@ export const DataControlPanel = () => {
       setCurrentTimestamp(minTime);
       setDataReady(true);
       
-      showSuccess(`Analyse terminée ! ${validData.length} capteurs, ${allTimestamps.length} points de données`);
+      const totalPoints = allTimestamps.length;
+      const duration = (maxTime - minTime) / (1000 * 60 * 60); // hours
+      
+      showSuccess(`Analyse terminée ! ${validData.length} capteurs, ${totalPoints} points de données sur ${duration.toFixed(1)}h`);
     } catch (error) {
       console.error('Error analyzing data:', error);
-      showError('Erreur lors de l\'analyse des données');
+      showError(error instanceof Error ? error.message : 'Erreur lors de l\'analyse des données');
     } finally {
       setIsAnalyzing(false);
     }
@@ -161,7 +162,8 @@ export const DataControlPanel = () => {
               </Tabs>
             </div>
 
-            <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+            <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1 bg-gray-50 dark:bg-gray-900/20 p-3 rounded-lg">
+              <p className="font-medium mb-2">📊 Métriques disponibles :</p>
               <p>• <strong>Température</strong> : Température ambiante (°C)</p>
               <p>• <strong>Humidité Relative</strong> : Pourcentage d'humidité (%)</p>
               <p>• <strong>Humidité Absolue</strong> : Quantité d'eau dans l'air (g/m³)</p>
