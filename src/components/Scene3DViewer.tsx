@@ -21,20 +21,12 @@ export const Scene3DViewer = () => {
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
 
-  console.log('🎬 Scene3DViewer render - gltfModel:', gltfModel);
-  console.log('🎬 Scene3DViewer render - sensors:', sensors);
-
   useLayoutEffect(() => {
-    console.log('🔄 useLayoutEffect triggered - gltfModel:', gltfModel);
-    console.log('🔄 useLayoutEffect triggered - containerRef.current:', containerRef.current);
-
     if (!containerRef.current) {
-      console.warn('⚠️ Container ref is null');
       return;
     }
 
     if (!gltfModel) {
-      console.warn('⚠️ No GLTF model URL provided');
       setLoading(false);
       return;
     }
@@ -43,21 +35,16 @@ export const Scene3DViewer = () => {
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    console.log('📐 Container dimensions:', { width, height });
-
     setLoading(true);
     setError(null);
 
-    // Timeout pour détecter les chargements bloqués
     const loadingTimeout = setTimeout(() => {
-      console.error('⏱️ Loading timeout - model took too long to load');
       setError('Le chargement du modèle a pris trop de temps. Vérifiez que tous les fichiers nécessaires sont présents.');
       setLoading(false);
-    }, 30000); // 30 secondes
+    }, 30000);
 
     // Cleanup previous scene if exists
     if (sceneRef.current) {
-      console.log('🧹 Cleaning up previous scene');
       const { renderer, scene, controls, animationId } = sceneRef.current;
       cancelAnimationFrame(animationId);
       controls.dispose();
@@ -80,15 +67,14 @@ export const Scene3DViewer = () => {
       sceneRef.current = null;
     }
 
-    console.log('🎨 Creating new scene');
-
-    // Scene
+    // Scene with gradient background
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xe0e0e0);
+    scene.background = new THREE.Color(0xf0f4f8);
+    scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
 
     // Camera
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-    camera.position.set(5, 5, 5);
+    camera.position.set(8, 6, 8);
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ 
@@ -100,56 +86,51 @@ export const Scene3DViewer = () => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
-    console.log('✅ Renderer created and appended to container');
-
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    // Enhanced lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    directionalLight.position.set(10, 10, 5);
-    directionalLight.castShadow = true;
-    scene.add(directionalLight);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    mainLight.position.set(10, 15, 10);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 2048;
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 50;
+    scene.add(mainLight);
 
-    const pointLight = new THREE.PointLight(0xffffff, 0.5);
-    pointLight.position.set(-10, -10, -5);
-    scene.add(pointLight);
+    const fillLight = new THREE.DirectionalLight(0xadd8e6, 0.8);
+    fillLight.position.set(-10, 10, -10);
+    scene.add(fillLight);
 
-    // Add grid helper
-    const gridHelper = new THREE.GridHelper(20, 20);
-    scene.add(gridHelper);
+    const backLight = new THREE.DirectionalLight(0xffa07a, 0.6);
+    backLight.position.set(0, 5, -15);
+    scene.add(backLight);
 
-    // Add axes helper
-    const axesHelper = new THREE.AxesHelper(5);
-    scene.add(axesHelper);
+    const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0xf0e68c, 0.6);
+    scene.add(hemisphereLight);
 
-    console.log('💡 Lights and helpers added');
-
-    // Controls
+    // Controls with auto-rotate
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.autoRotate = false;
-    controls.minDistance = 1;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.0;
+    controls.minDistance = 2;
     controls.maxDistance = 50;
-
-    console.log('🎮 Controls initialized');
+    controls.maxPolarAngle = Math.PI / 1.5;
 
     // Load GLTF Model
     const loader = new GLTFLoader();
-
-    console.log('🔄 Starting to load GLTF from:', gltfModel);
 
     loader.load(
       gltfModel,
       (gltf) => {
         clearTimeout(loadingTimeout);
-        console.log('✅ GLTF loaded successfully');
-        console.log('Scene:', gltf.scene);
-        console.log('Animations:', gltf.animations);
-        
         setError(null);
         setLoading(false);
         
@@ -158,25 +139,17 @@ export const Scene3DViewer = () => {
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         
-        console.log('Model center:', center);
-        console.log('Model size:', size);
-        console.log('Model bounds:', { min: box.min, max: box.max });
-        
         // Check if model has geometry
         let hasGeometry = false;
-        let meshCount = 0;
         gltf.scene.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             hasGeometry = true;
-            meshCount++;
-            console.log('Mesh found:', child.name, 'vertices:', child.geometry.attributes.position.count);
+            child.castShadow = true;
+            child.receiveShadow = true;
           }
         });
         
-        console.log(`Total meshes found: ${meshCount}`);
-        
         if (!hasGeometry) {
-          console.warn('⚠️ No geometry found in the model');
           setError('Le modèle ne contient pas de géométrie visible');
           return;
         }
@@ -186,82 +159,99 @@ export const Scene3DViewer = () => {
         
         // Scale the model to fit in view
         const maxDim = Math.max(size.x, size.y, size.z);
-        if (maxDim > 0) {
-          const scale = 10 / maxDim;
-          gltf.scene.scale.multiplyScalar(scale);
-          console.log('Applied scale:', scale);
-        }
+        const scale = maxDim > 0 ? 10 / maxDim : 1;
+        gltf.scene.scale.multiplyScalar(scale);
         
         scene.add(gltf.scene);
         
+        // Add sensor markers with the SAME transformations as the model
+        const sensorGroup = new THREE.Group();
+        
+        sensors.forEach((sensor) => {
+          // Apply the same transformations: center offset + scale
+          const adjustedPosition = new THREE.Vector3(
+            sensor.position[0],
+            sensor.position[1],
+            sensor.position[2]
+          );
+          
+          // Subtract center (same as model)
+          adjustedPosition.sub(center);
+          
+          // Apply scale (same as model)
+          adjustedPosition.multiplyScalar(scale);
+          
+          // Sphere marker
+          const geometry = new THREE.SphereGeometry(0.15, 32, 32);
+          const material = new THREE.MeshStandardMaterial({
+            color: 0x4dabf7,
+            emissive: 0x2563eb,
+            emissiveIntensity: 0.4,
+            metalness: 0.6,
+            roughness: 0.2,
+          });
+          const sphere = new THREE.Mesh(geometry, material);
+          sphere.position.copy(adjustedPosition);
+          sphere.castShadow = true;
+          sphere.receiveShadow = true;
+          sensorGroup.add(sphere);
+
+          // Glow effect
+          const glowGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+          const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x4dabf7,
+            transparent: true,
+            opacity: 0.3,
+          });
+          const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+          glow.position.copy(adjustedPosition);
+          sensorGroup.add(glow);
+
+          // Label
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          if (context) {
+            canvas.width = 256;
+            canvas.height = 64;
+            context.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            context.roundRect(0, 0, canvas.width, canvas.height, 8);
+            context.fill();
+            context.fillStyle = '#1e40af';
+            context.font = 'bold 28px Arial';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(sensor.name, 128, 32);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ 
+              map: texture,
+              transparent: true,
+            });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.copy(adjustedPosition);
+            sprite.position.y += 0.5;
+            sprite.scale.set(1.2, 0.3, 1);
+            sensorGroup.add(sprite);
+          }
+        });
+        
+        scene.add(sensorGroup);
+        
         // Position camera to see the model
-        const distance = maxDim * 1.5;
-        camera.position.set(distance, distance, distance);
+        const distance = maxDim * 1.2;
+        camera.position.set(distance, distance * 0.75, distance);
         camera.lookAt(0, 0, 0);
         controls.target.set(0, 0, 0);
         controls.update();
-        
-        console.log('Camera position:', camera.position);
-        console.log('Camera looking at:', controls.target);
       },
-      (progress) => {
-        if (progress.total > 0) {
-          const percent = (progress.loaded / progress.total * 100).toFixed(2);
-          console.log('Loading progress:', percent + '%');
-        } else {
-          console.log('Loading progress:', progress.loaded, 'bytes loaded');
-        }
-      },
+      undefined,
       (err) => {
         clearTimeout(loadingTimeout);
-        console.error("❌ Error loading GLTF:", err);
+        console.error("Error loading GLTF:", err);
         setError("Erreur lors du chargement du modèle 3D. Vérifiez que tous les fichiers nécessaires sont présents et correctement formatés.");
         setLoading(false);
       }
     );
-
-    // Add sensor markers
-    const sensorGroup = new THREE.Group();
-    sensors.forEach((sensor) => {
-      const geometry = new THREE.SphereGeometry(0.2, 16, 16);
-      const material = new THREE.MeshStandardMaterial({
-        color: 0x4dabf7,
-        emissive: 0x4dabf7,
-        emissiveIntensity: 0.5,
-        metalness: 0.3,
-        roughness: 0.4,
-      });
-      const sphere = new THREE.Mesh(geometry, material);
-      sphere.position.set(sensor.position[0], sensor.position[1], sensor.position[2]);
-      sphere.castShadow = true;
-      sensorGroup.add(sphere);
-
-      // Add label
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      if (context) {
-        canvas.width = 256;
-        canvas.height = 64;
-        context.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        context.fillStyle = 'black';
-        context.font = 'bold 24px Arial';
-        context.textAlign = 'center';
-        context.fillText(sensor.name, 128, 40);
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-        const sprite = new THREE.Sprite(spriteMaterial);
-        sprite.position.set(sensor.position[0], sensor.position[1] + 0.5, sensor.position[2]);
-        sprite.scale.set(1, 0.25, 1);
-        sensorGroup.add(sprite);
-      }
-      
-      console.log('Added sensor:', sensor.name, 'at', sensor.position);
-    });
-    scene.add(sensorGroup);
-
-    console.log('🎯 Sensors added to scene');
 
     // Animation loop
     const animate = () => {
@@ -273,8 +263,6 @@ export const Scene3DViewer = () => {
       renderer.render(scene, camera);
     };
     const firstAnimationId = requestAnimationFrame(animate);
-
-    console.log('🎬 Animation loop started');
 
     // Store scene reference
     sceneRef.current = {
@@ -297,7 +285,6 @@ export const Scene3DViewer = () => {
 
     // Cleanup
     return () => {
-      console.log('🧹 Cleanup function called');
       clearTimeout(loadingTimeout);
       window.removeEventListener("resize", handleResize);
       
@@ -326,8 +313,6 @@ export const Scene3DViewer = () => {
     };
   }, [gltfModel, sensors]);
 
-  console.log('🎨 Rendering component - loading:', loading, 'error:', error, 'gltfModel:', !!gltfModel);
-
   return (
     <div ref={containerRef} className="w-full h-full rounded-lg overflow-hidden relative">
       {!gltfModel && (
@@ -344,9 +329,6 @@ export const Scene3DViewer = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600 dark:text-gray-300">
               Chargement du modèle 3D...
-            </p>
-            <p className="text-xs text-gray-500 mt-2">
-              Consultez la console pour plus de détails
             </p>
           </div>
         </div>
