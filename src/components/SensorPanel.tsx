@@ -17,8 +17,8 @@ export const SensorPanel = () => {
   };
 
   return (
-    <LiquidGlassCard className="p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+    <LiquidGlassCard className="h-full flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between p-6 pb-4 shrink-0">
         <h2 className="text-lg font-semibold">Capteurs SwitchBot</h2>
         <Badge variant="outline" className="text-xs">
           {sensors.length} capteur{sensors.length > 1 ? 's' : ''}
@@ -26,7 +26,7 @@ export const SensorPanel = () => {
       </div>
       
       {sensors.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center text-gray-500 dark:text-gray-400">
             <AlertCircle size={48} className="mx-auto mb-3 opacity-50" />
             <p className="text-sm">Aucun capteur configuré</p>
@@ -34,8 +34,8 @@ export const SensorPanel = () => {
           </div>
         </div>
       ) : (
-        <ScrollArea className="flex-1 -mx-2 px-2">
-          <div className="space-y-3">
+        <ScrollArea className="flex-1 px-6 pb-6">
+          <div className="space-y-3 pr-4">
             {sensors.map((sensor) => (
               <LiquidGlassCard key={sensor.id} className="p-4 hover:shadow-lg transition-shadow">
                 <div className="space-y-3">
@@ -91,12 +91,12 @@ export const SensorPanel = () => {
                   )}
 
                   {mode === 'replay' && (
-                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
                       {!sensor.csvFile ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          className="w-full h-8 text-xs"
+                          className="w-full h-9 text-xs bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30 border-blue-200 dark:border-blue-800"
                           onClick={() => {
                             const input = document.createElement('input');
                             input.type = 'file';
@@ -108,12 +108,12 @@ export const SensorPanel = () => {
                             input.click();
                           }}
                         >
-                          <Upload size={12} className="mr-1.5" />
-                          Importer CSV
+                          <Upload size={14} className="mr-2" />
+                          Importer les données CSV
                         </Button>
                       ) : (
-                        <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                          <FileText size={14} className="text-green-600 shrink-0" />
+                        <div className="flex items-center gap-2 p-2.5 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                          <FileText size={16} className="text-green-600 shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-medium text-green-700 dark:text-green-400 truncate">
                               {sensor.csvFile.name}
