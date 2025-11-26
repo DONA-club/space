@@ -57,6 +57,8 @@ export const FileUploadPanel = () => {
       return;
     }
 
+    console.log('📦 Loading GLTF pack with files:', fileArray.map(f => f.name));
+
     // Clear GLB if exists
     if (glbFile) {
       if (glbUrl) URL.revokeObjectURL(glbUrl);
@@ -64,44 +66,61 @@ export const FileUploadPanel = () => {
       setGlbUrl(null);
     }
 
-    // Créer des URLs pour tous les fichiers
-    const fileMap = new Map<string, string>();
-    fileArray.forEach(file => {
-      const url = URL.createObjectURL(file);
-      fileMap.set(file.name, url);
-    });
-
-    // Lire le fichier GLTF et modifier les références
     try {
+      // Créer des URLs pour tous les fichiers
+      const fileMap = new Map<string, string>();
+      fileArray.forEach(file => {
+        const url = URL.createObjectURL(file);
+        fileMap.set(file.name, url);
+        console.log(`Created blob URL for ${file.name}:`, url);
+      });
+
+      // Lire le fichier GLTF
       const gltfText = await gltfFile.text();
       const gltfData = JSON.parse(gltfText);
 
+      console.log('Original GLTF data:', gltfData);
+
       // Remplacer les références aux fichiers externes par les blob URLs
       if (gltfData.buffers) {
-        gltfData.buffers.forEach((buffer: any) => {
+        gltfData.buffers.forEach((buffer: any, index: number) => {
           if (buffer.uri) {
-            const fileName = buffer.uri.split('/').pop();
-            if (fileMap.has(fileName)) {
-              buffer.uri = fileMap.get(fileName);
+            const fileName = buffer.uri.split('/').pop()?.split('\\').pop();
+            console.log(`Buffer ${index} references: ${fileName}`);
+            if (fileName && fileMap.has(fileName)) {
+              const newUri = fileMap.get(fileName);
+              console.log(`Replacing buffer URI: ${buffer.uri} -> ${newUri}`);
+              buffer.uri = newUri;
+            } else {
+              console.warn(`⚠️ Buffer file not found: ${fileName}`);
             }
           }
         });
       }
 
       if (gltfData.images) {
-        gltfData.images.forEach((image: any) => {
+        gltfData.images.forEach((image: any, index: number) => {
           if (image.uri) {
-            const fileName = image.uri.split('/').pop();
-            if (fileMap.has(fileName)) {
-              image.uri = fileMap.get(fileName);
+            const fileName = image.uri.split('/').pop()?.split('\\').pop();
+            console.log(`Image ${index} references: ${fileName}`);
+            if (fileName && fileMap.has(fileName)) {
+              const newUri = fileMap.get(fileName);
+              console.log(`Replacing image URI: ${image.uri} -> ${newUri}`);
+              image.uri = newUri;
+            } else {
+              console.warn(`⚠️ Image file not found: ${fileName}`);
             }
           }
         });
       }
 
+      console.log('Modified GLTF data:', gltfData);
+
       // Créer un nouveau blob avec le GLTF modifié
       const modifiedGltfBlob = new Blob([JSON.stringify(gltfData)], { type: 'application/json' });
       const modifiedGltfUrl = URL.createObjectURL(modifiedGltfBlob);
+
+      console.log('Created modified GLTF URL:', modifiedGltfUrl);
 
       setGltfFiles(fileArray);
       setGltfModel(modifiedGltfUrl);
@@ -113,8 +132,8 @@ export const FileUploadPanel = () => {
       
       showSuccess(`Pack GLTF chargé avec succès (${fileArray.length} fichiers: ${fileTypes.join(', ')})`);
     } catch (error) {
+      console.error('Error processing GLTF pack:', error);
       showError('Erreur lors du traitement du pack GLTF');
-      console.error(error);
     }
   };
 

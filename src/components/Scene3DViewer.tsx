@@ -29,6 +29,14 @@ export const Scene3DViewer = () => {
     const height = container.clientHeight;
 
     setLoading(true);
+    setError(null);
+
+    // Timeout pour détecter les chargements bloqués
+    const loadingTimeout = setTimeout(() => {
+      console.error('⏱️ Loading timeout - model took too long to load');
+      setError('Le chargement du modèle a pris trop de temps. Vérifiez que tous les fichiers nécessaires sont présents.');
+      setLoading(false);
+    }, 30000); // 30 secondes
 
     // Cleanup previous scene if exists
     if (sceneRef.current) {
@@ -106,9 +114,12 @@ export const Scene3DViewer = () => {
     // Load GLTF Model
     const loader = new GLTFLoader();
 
+    console.log('🔄 Starting to load GLTF from:', gltfModel);
+
     loader.load(
       gltfModel,
       (gltf) => {
+        clearTimeout(loadingTimeout);
         console.log('✅ GLTF loaded successfully');
         console.log('Scene:', gltf.scene);
         console.log('Animations:', gltf.animations);
@@ -127,12 +138,16 @@ export const Scene3DViewer = () => {
         
         // Check if model has geometry
         let hasGeometry = false;
+        let meshCount = 0;
         gltf.scene.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             hasGeometry = true;
+            meshCount++;
             console.log('Mesh found:', child.name, 'vertices:', child.geometry.attributes.position.count);
           }
         });
+        
+        console.log(`Total meshes found: ${meshCount}`);
         
         if (!hasGeometry) {
           console.warn('⚠️ No geometry found in the model');
@@ -167,11 +182,14 @@ export const Scene3DViewer = () => {
         if (progress.total > 0) {
           const percent = (progress.loaded / progress.total * 100).toFixed(2);
           console.log('Loading progress:', percent + '%');
+        } else {
+          console.log('Loading progress:', progress.loaded, 'bytes loaded');
         }
       },
       (err) => {
+        clearTimeout(loadingTimeout);
         console.error("❌ Error loading GLTF:", err);
-        setError("Erreur lors du chargement du modèle 3D. Le fichier est peut-être corrompu.");
+        setError("Erreur lors du chargement du modèle 3D. Vérifiez que tous les fichiers nécessaires sont présents et correctement formatés.");
         setLoading(false);
       }
     );
@@ -249,6 +267,7 @@ export const Scene3DViewer = () => {
 
     // Cleanup
     return () => {
+      clearTimeout(loadingTimeout);
       window.removeEventListener("resize", handleResize);
       
       if (sceneRef.current) {
@@ -294,6 +313,9 @@ export const Scene3DViewer = () => {
           <p className="text-gray-600 dark:text-gray-300">
             Chargement du modèle 3D...
           </p>
+          <p className="text-xs text-gray-500 mt-2">
+            Consultez la console pour plus de détails
+          </p>
         </div>
       </div>
     );
@@ -310,8 +332,8 @@ export const Scene3DViewer = () => {
             <p className="font-medium mb-2">Solutions :</p>
             <ul className="text-left space-y-1">
               <li>• Utilisez un fichier <strong>GLB</strong> (format binaire autonome)</li>
-              <li>• Ou convertissez votre GLTF en GLB avec un outil en ligne</li>
-              <li>• Ou fournissez tous les fichiers .bin et textures associés</li>
+              <li>• Vérifiez que tous les fichiers du pack sont présents</li>
+              <li>• Consultez la console du navigateur pour plus de détails</li>
             </ul>
           </div>
         </div>
