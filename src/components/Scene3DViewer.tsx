@@ -21,12 +21,28 @@ export const Scene3DViewer = () => {
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
 
+  console.log('🎬 Scene3DViewer render - gltfModel:', gltfModel);
+  console.log('🎬 Scene3DViewer render - sensors:', sensors);
+
   useEffect(() => {
-    if (!containerRef.current || !gltfModel) return;
+    console.log('🔄 useEffect triggered - gltfModel:', gltfModel);
+    console.log('🔄 useEffect triggered - containerRef.current:', containerRef.current);
+
+    if (!containerRef.current) {
+      console.warn('⚠️ Container ref is null');
+      return;
+    }
+
+    if (!gltfModel) {
+      console.warn('⚠️ No GLTF model URL provided');
+      return;
+    }
 
     const container = containerRef.current;
     const width = container.clientWidth;
     const height = container.clientHeight;
+
+    console.log('📐 Container dimensions:', { width, height });
 
     setLoading(true);
     setError(null);
@@ -40,6 +56,7 @@ export const Scene3DViewer = () => {
 
     // Cleanup previous scene if exists
     if (sceneRef.current) {
+      console.log('🧹 Cleaning up previous scene');
       const { renderer, scene, controls, animationId } = sceneRef.current;
       cancelAnimationFrame(animationId);
       controls.dispose();
@@ -62,6 +79,8 @@ export const Scene3DViewer = () => {
       sceneRef.current = null;
     }
 
+    console.log('🎨 Creating new scene');
+
     // Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xe0e0e0);
@@ -81,6 +100,8 @@ export const Scene3DViewer = () => {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
+
+    console.log('✅ Renderer created and appended to container');
 
     // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -103,6 +124,8 @@ export const Scene3DViewer = () => {
     const axesHelper = new THREE.AxesHelper(5);
     scene.add(axesHelper);
 
+    console.log('💡 Lights and helpers added');
+
     // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -110,6 +133,8 @@ export const Scene3DViewer = () => {
     controls.autoRotate = false;
     controls.minDistance = 1;
     controls.maxDistance = 50;
+
+    console.log('🎮 Controls initialized');
 
     // Load GLTF Model
     const loader = new GLTFLoader();
@@ -235,6 +260,8 @@ export const Scene3DViewer = () => {
     });
     scene.add(sensorGroup);
 
+    console.log('🎯 Sensors added to scene');
+
     // Animation loop
     const animate = () => {
       const animationId = requestAnimationFrame(animate);
@@ -245,6 +272,8 @@ export const Scene3DViewer = () => {
       renderer.render(scene, camera);
     };
     const firstAnimationId = requestAnimationFrame(animate);
+
+    console.log('🎬 Animation loop started');
 
     // Store scene reference
     sceneRef.current = {
@@ -267,6 +296,7 @@ export const Scene3DViewer = () => {
 
     // Cleanup
     return () => {
+      console.log('🧹 Cleanup function called');
       clearTimeout(loadingTimeout);
       window.removeEventListener("resize", handleResize);
       
@@ -296,6 +326,7 @@ export const Scene3DViewer = () => {
   }, [gltfModel, sensors]);
 
   if (!gltfModel) {
+    console.log('📭 Rendering: No model state');
     return (
       <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-lg">
         <div className="text-center text-gray-500 dark:text-gray-400">
@@ -306,6 +337,7 @@ export const Scene3DViewer = () => {
   }
 
   if (loading) {
+    console.log('⏳ Rendering: Loading state');
     return (
       <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-lg">
         <div className="text-center">
@@ -322,6 +354,7 @@ export const Scene3DViewer = () => {
   }
 
   if (error) {
+    console.log('❌ Rendering: Error state -', error);
     return (
       <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg p-6">
         <div className="text-center text-red-600 dark:text-red-400 max-w-md">
@@ -341,6 +374,7 @@ export const Scene3DViewer = () => {
     );
   }
 
+  console.log('🎨 Rendering: Canvas container');
   return (
     <div ref={containerRef} className="w-full h-full rounded-lg overflow-hidden" />
   );
