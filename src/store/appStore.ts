@@ -46,7 +46,7 @@ interface AppState {
   updateSensorData: (sensorId: number, data: any) => void;
   setSensorCsv: (sensorId: number, file: File) => void;
   setPlaying: (playing: boolean) => void;
-  setCurrentTimestamp: (timestamp: number) => void;
+  setCurrentTimestamp: (timestamp: number | ((prev: number) => number)) => void;
   setTimeRange: (range: [number, number]) => void;
   setWsConnected: (connected: boolean) => void;
 }
@@ -79,7 +79,9 @@ export const useAppStore = create<AppState>((set) => ({
     )
   })),
   setPlaying: (playing) => set({ isPlaying: playing }),
-  setCurrentTimestamp: (timestamp) => set({ currentTimestamp: timestamp }),
+  setCurrentTimestamp: (timestamp) => set((state) => ({
+    currentTimestamp: typeof timestamp === 'function' ? timestamp(state.currentTimestamp) : timestamp
+  })),
   setTimeRange: (range) => set({ timeRange: range }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
 }));

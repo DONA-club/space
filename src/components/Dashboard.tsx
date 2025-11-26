@@ -5,7 +5,7 @@ import { Scene3D } from './Scene3D';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Play, Pause, Upload, Radio, History } from 'lucide-react';
+import { Play, Pause, Upload, Radio, History, LogOut } from 'lucide-react';
 import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
 
@@ -15,6 +15,14 @@ export const Dashboard = () => {
   const isPlaying = useAppStore((state) => state.isPlaying);
   const setPlaying = useAppStore((state) => state.setPlaying);
   const wsConnected = useAppStore((state) => state.wsConnected);
+  const logout = useAppStore((state) => state.logout);
+  const sensors = useAppStore((state) => state.sensors);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('machineId');
+    logout();
+  };
 
   return (
     <div className="min-h-screen p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900">
@@ -31,7 +39,7 @@ export const Dashboard = () => {
                   DONA.club Space
                 </h1>
                 <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Visualisation environnementale 3D
+                  Visualisation environnementale 3D - {sensors.length} capteurs
                 </p>
               </div>
 
@@ -51,6 +59,15 @@ export const Dashboard = () => {
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="bg-white/50 dark:bg-black/50"
+                >
+                  <LogOut size={16} />
+                </Button>
               </div>
             </div>
           </LiquidGlassCard>
@@ -66,7 +83,18 @@ export const Dashboard = () => {
             className="lg:col-span-2"
           >
             <LiquidGlassCard className="p-4 h-[600px]">
-              <Scene3D />
+              {sensors.length > 0 ? (
+                <Scene3D />
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600 dark:text-gray-300">
+                      Chargement de la scène 3D...
+                    </p>
+                  </div>
+                </div>
+              )}
             </LiquidGlassCard>
           </motion.div>
 
