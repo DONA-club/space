@@ -15,6 +15,8 @@ interface Sensor {
 }
 
 type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint';
+type InterpolationMethod = 'idw' | 'rbf';
+type RBFKernel = 'gaussian' | 'multiquadric' | 'inverse_multiquadric' | 'thin_plate_spline';
 
 interface AppState {
   // Auth
@@ -40,6 +42,13 @@ interface AppState {
   dataReady: boolean;
   selectedMetric: MetricType;
   
+  // Interpolation & Meshing
+  meshingEnabled: boolean;
+  interpolationMethod: InterpolationMethod;
+  rbfKernel: RBFKernel;
+  idwPower: number;
+  meshResolution: number;
+  
   // WebSocket
   wsConnected: boolean;
   
@@ -56,6 +65,11 @@ interface AppState {
   setTimeRange: (range: [number, number]) => void;
   setDataReady: (ready: boolean) => void;
   setSelectedMetric: (metric: MetricType) => void;
+  setMeshingEnabled: (enabled: boolean) => void;
+  setInterpolationMethod: (method: InterpolationMethod) => void;
+  setRbfKernel: (kernel: RBFKernel) => void;
+  setIdwPower: (power: number) => void;
+  setMeshResolution: (resolution: number) => void;
   setWsConnected: (connected: boolean) => void;
 }
 
@@ -71,6 +85,11 @@ export const useAppStore = create<AppState>((set) => ({
   timeRange: null,
   dataReady: false,
   selectedMetric: 'temperature',
+  meshingEnabled: false,
+  interpolationMethod: 'idw',
+  rbfKernel: 'multiquadric',
+  idwPower: 2,
+  meshResolution: 20,
   wsConnected: false,
   
   setAuth: (token, machineId) => set({ isAuthenticated: true, token, machineId }),
@@ -95,5 +114,10 @@ export const useAppStore = create<AppState>((set) => ({
   setTimeRange: (range) => set({ timeRange: range }),
   setDataReady: (ready) => set({ dataReady: ready }),
   setSelectedMetric: (metric) => set({ selectedMetric: metric }),
+  setMeshingEnabled: (enabled) => set({ meshingEnabled: enabled }),
+  setInterpolationMethod: (method) => set({ interpolationMethod: method }),
+  setRbfKernel: (kernel) => set({ rbfKernel: kernel }),
+  setIdwPower: (power) => set({ idwPower: power }),
+  setMeshResolution: (resolution) => set({ meshResolution: resolution }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
 }));
