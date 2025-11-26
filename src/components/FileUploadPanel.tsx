@@ -27,6 +27,15 @@ export const FileUploadPanel = () => {
     showSuccess('Modèle 3D chargé avec succès');
   };
 
+  const parseNumber = (value: any): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      // Remplacer les virgules par des points pour le parsing
+      return parseFloat(value.replace(',', '.'));
+    }
+    return 0;
+  };
+
   const handleJsonUpload = async (file: File) => {
     if (!file.name.endsWith('.json')) {
       showError('Veuillez sélectionner un fichier JSON');
@@ -34,18 +43,29 @@ export const FileUploadPanel = () => {
     }
 
     try {
-      const text = await file.text();
+      let text = await file.text();
+      
+      // Remplacer les virgules par des points dans les valeurs numériques
+      // Pattern: cherche "x":valeur, "y":valeur, "z":valeur avec virgules
+      text = text.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+      
       const data = JSON.parse(text);
 
       if (!data.points || !Array.isArray(data.points)) {
         throw new Error('Format JSON invalide. Le fichier doit contenir un tableau "points"');
       }
 
-      const sensors = data.points.map((point: any, index: number) => ({
-        id: index + 1,
-        position: [point.x, point.y, point.z] as [number, number, number],
-        name: point.name || `Capteur ${index + 1}`,
-      }));
+      const sensors = data.points.map((point: any, index: number) => {
+        const x = parseNumber(point.x);
+        const y = parseNumber(point.y);
+        const z = parseNumber(point.z);
+        
+        return {
+          id: index + 1,
+          position: [x, y, z] as [number, number, number],
+          name: point.name || `Capteur ${index + 1}`,
+        };
+      });
 
       setJsonFile(file);
       setSensors(sensors);
@@ -150,15 +170,18 @@ export const FileUploadPanel = () => {
 
         {/* Info */}
         <div className="text-xs text-gray-600 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <p className="font-medium mb-1">Format JSON attendu :</p>
+          <p className="font-medium mb-1">Formats JSON acceptés :</p>
           <pre className="text-xs overflow-x-auto">
 {`{
   "points": [
-    {"x": 1.0, "y": 2.0, "z": 3.0, "name": "Capteur 1"},
-    {"x": 4.0, "y": 5.0, "z": 6.0, "name": "Capteur 2"}
+    {"name": "P1", "x": -2.046877, "y": 2.426022, "z": 3.303156},
+    {"name": "P2", "x": 3.035000, "y": 2.346022, "z": 3.809492}
   ]
 }`}
           </pre>
+          <p className="mt-2 text-xs">
+            ✓ Supporte les virgules comme séparateurs décimaux (format européen)
+          </p>
         </div>
       </div>
     </LiquidGlassCard>
