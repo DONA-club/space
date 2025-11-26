@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { Button } from '@/components/ui/button';
-import { Upload, FileJson, Box, CheckCircle2 } from 'lucide-react';
+import { Upload, FileJson, Box, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { showSuccess, showError } from '@/utils/toast';
 
@@ -14,9 +14,21 @@ export const FileUploadPanel = () => {
   const setGltfModel = useAppStore((state) => state.setGltfModel);
   const setSensors = useAppStore((state) => state.setSensors);
 
-  const handleGlbUpload = (file: File) => {
+  const handleGlbUpload = async (file: File) => {
     if (!file.name.endsWith('.glb') && !file.name.endsWith('.gltf')) {
       showError('Veuillez sélectionner un fichier GLB ou GLTF');
+      return;
+    }
+
+    // Vérifier la taille du fichier (max 50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      showError('Le fichier est trop volumineux (max 50MB)');
+      return;
+    }
+
+    // Vérifier que le fichier n'est pas vide
+    if (file.size === 0) {
+      showError('Le fichier est vide');
       return;
     }
     
@@ -60,6 +72,11 @@ export const FileUploadPanel = () => {
         const y = parseNumber(point.y);
         const z = parseNumber(point.z);
         
+        // Vérifier que les coordonnées sont valides
+        if (isNaN(x) || isNaN(y) || isNaN(z)) {
+          throw new Error(`Coordonnées invalides pour le point ${index + 1}`);
+        }
+        
         return {
           id: index + 1,
           position: [x, y, z] as [number, number, number],
@@ -67,11 +84,15 @@ export const FileUploadPanel = () => {
         };
       });
 
+      if (sensors.length === 0) {
+        throw new Error('Aucun capteur trouvé dans le fichier');
+      }
+
       setJsonFile(file);
       setSensors(sensors);
-      showSuccess(`${sensors.length} capteurs chargés avec succès`);
+      showSuccess(`${sensors.length} capteur${sensors.length > 1 ? 's' : ''} chargé${sensors.length > 1 ? 's' : ''} avec succès`);
     } catch (error) {
-      showError('Erreur lors de la lecture du fichier JSON');
+      showError(error instanceof Error ? error.message : 'Erreur lors de la lecture du fichier JSON');
       console.error(error);
     }
   };
@@ -91,11 +112,17 @@ export const FileUploadPanel = () => {
           {glbFile ? (
             <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
               <CheckCircle2 size={20} className="text-green-600" />
-              <span className="text-sm flex-1">{glbFile.name}</span>
+              <div className="flex-1">
+                <span className="text-sm block">{glbFile.name}</span>
+                <span className="text-xs text-gray-500">
+                  {(glbFile.size / 1024 / 1024).toFixed(2)} MB
+                </span>
+              </div>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => {
+                  if (glbUrl) URL.revokeObjectURL(glbUrl);
                   setGlbFile(null);
                   setGlbUrl(null);
                   setGltfModel(null);
@@ -169,18 +196,24 @@ export const FileUploadPanel = () => {
         </div>
 
         {/* Info */}
-        <div className="text-xs text-gray-600 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <p className="font-medium mb-1">Formats JSON acceptés :</p>
-          <pre className="text-xs overflow-x-auto">
+        <div className="text-xs text-gray-600 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <p className="font-medium mb-2 flex items-center gap-2">
+            <AlertCircle size={14} />
+            Format JSON attendu :
+          </p>
+          <pre className="text-xs overflow-x-auto bg-white dark:bg-black p-2 rounded">
 {`{
   "points": [
-    {"name": "P1", "x": -2.046877, "y": 2.426022, "z": 3.303156},
-    {"name": "P2", "x": 3.035000, "y": 2.346022, "z": 3.809492}
+    {"x": -2.046877, "y": 2.426022, "z": 3.303156},
+    {"x": 3.035000, "y": 2.346022, "z": 3.809492}
   ]
 }`}
           </pre>
           <p className="mt-2 text-xs">
-            ✓ Supporte les virgules comme séparateurs décimaux (format européen)
+            ✓ Supporte les virgules comme séparateurs décimaux
+          </p>
+          <p className="text-xs">
+            ✓ Taille max du modèle 3D : 50 MB
           </p>
         </div>
       </div>
