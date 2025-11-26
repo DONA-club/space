@@ -15,12 +15,16 @@ export const Scene3DViewer = () => {
     camera: THREE.PerspectiveCamera;
     controls: OrbitControls;
     animationId: number;
-    sensorMeshes: Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh }>;
+    sensorMeshes: Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>;
+    boundingSphere: THREE.Sphere;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
+  const dataReady = useAppStore((state) => state.dataReady);
+  const selectedMetric = useAppStore((state) => state.selectedMetric);
+  const currentTimestamp = useAppStore((state) => state.currentTimestamp);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
 
   // Listen to hover events from SensorPanel
@@ -42,7 +46,7 @@ export const Scene3DViewer = () => {
     };
   }, []);
 
-  // Update sensor colors - SEPARATED from scene creation
+  // Update sensor colors
   useEffect(() => {
     if (!sceneRef.current) return;
 
@@ -55,38 +59,126 @@ export const Scene3DViewer = () => {
       const isHovered = hoveredSensorId === sensor.id;
       const hasCSV = !!sensor.csvFile;
 
-      // Determine color
       let color: number;
       let emissiveColor: number;
       let glowColor: number;
 
       if (isHovered) {
-        // Purple when hovered
         color = 0x9333ea;
         emissiveColor = 0x7c3aed;
         glowColor = 0x9333ea;
       } else if (hasCSV) {
-        // Green when CSV loaded
         color = 0x22c55e;
         emissiveColor = 0x16a34a;
         glowColor = 0x22c55e;
       } else {
-        // Default blue
         color = 0x4dabf7;
         emissiveColor = 0x2563eb;
         glowColor = 0x4dabf7;
       }
 
-      // Update sphere material
       (meshes.sphere.material as THREE.MeshStandardMaterial).color.setHex(color);
       (meshes.sphere.material as THREE.MeshStandardMaterial).emissive.setHex(emissiveColor);
-
-      // Update glow material
       (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(glowColor);
     });
-  }, [hoveredSensorId, sensors]); // This will trigger on CSV load but won't recreate the scene
+  }, [hoveredSensorId, sensors]);
 
-  // Scene creation - ONLY when gltfModel changes
+  // Update labels when data changes
+  useEffect(() => {
+    if (!sceneRef.current || !dataReady) return;
+
+    const { sensorMeshes } = sceneRef.current;
+
+    sensors.forEach((sensor) => {
+      const meshes = sensorMeshes.get(sensor.id);
+      if (!meshes || !sensor.currentData) return;
+
+      const sprite = meshes.sprite;
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      
+      if (context) {
+        canvas.width = 256;
+        canvas.height = 64;
+        
+        // Background
+        context.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        context.roundRect(0, 0, canvas.width, canvas.height, 8);
+        context.fill();
+        
+        // Text
+        context.fillStyle = '#1e40af';
+        context.font = 'bold 28px Arial';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        
+        let value = '';
+        let unit = '';
+        
+        switch (selectedMetric) {
+          case 'temperature':
+            value = sensor.currentData.temperature.toFixed(1);
+            unit = '°C';
+            break;
+          case 'humidity':
+            value = sensor.currentData.humidity.toFixed(1);
+            unit = '%';
+            break;
+          case 'absoluteHumidity':
+            value = sensor.currentData.absoluteHumidity.toFixed(2);
+            unit = 'g/m³';
+            break;
+          case 'dewPoint':
+            value = sensor.currentData.dewPoint.toFixed(1);
+            unit = '°C';
+            break;
+        }
+        
+        context.fillText(`${value}${unit}`, 128, 32);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        (sprite.material as THREE.SpriteMaterial).map = texture;
+        (sprite.material as THREE.SpriteMaterial).needsUpdate = true;
+      }
+    });
+  }, [dataReady, selectedMetric, currentTimestamp, sensors]);
+
+  // Handle container resize with zoom adjustment
+  useEffect(() => {
+    if (!containerRef.current || !sceneRef.current) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (!containerRef.current || !sceneRef.current) return;
+
+      const { renderer, camera, controls, boundingSphere } = sceneRef.current;
+      const newWidth = containerRef.current.clientWidth;
+      const newHeight = containerRef.current.clientHeight;
+
+      if (newWidth === 0 || newHeight === 0) return;
+
+      camera.aspect = newWidth / newHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(newWidth, newHeight);
+
+      // Adjust camera distance to keep model fully visible
+      const distance = boundingSphere.radius * 2.5;
+      const currentDistance = camera.position.length();
+      
+      if (Math.abs(currentDistance - distance) > 0.1) {
+        const direction = camera.position.clone().normalize();
+        camera.position.copy(direction.multiplyScalar(distance));
+        controls.update();
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  // Scene creation
   useLayoutEffect(() => {
     if (!containerRef.current) {
       return;
@@ -195,10 +287,12 @@ export const Scene3DViewer = () => {
     controls.maxPolarAngle = Math.PI / 1.5;
 
     // Map to store sensor meshes
-    const sensorMeshes = new Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh }>();
+    const sensorMeshes = new Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>();
 
     // Load GLTF Model
     const loader = new GLTFLoader();
+
+    let boundingSphere = new THREE.Sphere();
 
     loader.load(
       gltfModel,
@@ -280,12 +374,11 @@ export const Scene3DViewer = () => {
           glow.position.copy(originalPosition);
           sensorGroup.add(glow);
 
-          // Store meshes for later updates
-          sensorMeshes.set(sensor.id, { sphere, glow });
-
           // Label
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
+          let sprite: THREE.Sprite;
+          
           if (context) {
             canvas.width = 256;
             canvas.height = 64;
@@ -303,22 +396,23 @@ export const Scene3DViewer = () => {
               map: texture,
               transparent: true,
             });
-            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite = new THREE.Sprite(spriteMaterial);
             sprite.position.copy(originalPosition);
             sprite.position.y += 0.5 / scale;
             sprite.scale.set(1.2 / scale, 0.3 / scale, 1);
             sensorGroup.add(sprite);
+
+            // Store meshes for later updates
+            sensorMeshes.set(sensor.id, { sphere, glow, sprite });
           }
         });
         
         scene.add(sensorGroup);
         
         // Calculate bounding sphere for proper camera positioning
-        const boundingSphere = new THREE.Sphere();
         box.getBoundingSphere(boundingSphere);
         
         // Position camera to see the entire model with margin
-        // Use a larger distance multiplier to ensure full visibility during rotation
         const distance = boundingSphere.radius * 2.5;
         camera.position.set(distance, distance * 0.75, distance);
         camera.lookAt(0, 0, 0);
@@ -357,24 +451,13 @@ export const Scene3DViewer = () => {
       camera,
       controls,
       animationId: firstAnimationId,
-      sensorMeshes
+      sensorMeshes,
+      boundingSphere
     };
-
-    // Handle resize
-    const handleResize = () => {
-      const newWidth = container.clientWidth;
-      const newHeight = container.clientHeight;
-      if (newWidth === 0 || newHeight === 0) return;
-      camera.aspect = newWidth / newHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newWidth, newHeight);
-    };
-    window.addEventListener("resize", handleResize);
 
     // Cleanup
     return () => {
       clearTimeout(loadingTimeout);
-      window.removeEventListener("resize", handleResize);
       
       if (sceneRef.current) {
         const { renderer, scene, controls, animationId } = sceneRef.current;
@@ -399,7 +482,7 @@ export const Scene3DViewer = () => {
         sceneRef.current = null;
       }
     };
-  }, [gltfModel]); // ONLY depends on gltfModel, not sensors!
+  }, [gltfModel]);
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">

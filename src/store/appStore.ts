@@ -14,6 +14,8 @@ interface Sensor {
   };
 }
 
+type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint';
+
 interface AppState {
   // Auth
   isAuthenticated: boolean;
@@ -34,6 +36,10 @@ interface AppState {
   currentTimestamp: number;
   timeRange: [number, number] | null;
   
+  // Data Analysis
+  dataReady: boolean;
+  selectedMetric: MetricType;
+  
   // WebSocket
   wsConnected: boolean;
   
@@ -48,6 +54,8 @@ interface AppState {
   setPlaying: (playing: boolean) => void;
   setCurrentTimestamp: (timestamp: number | ((prev: number) => number)) => void;
   setTimeRange: (range: [number, number]) => void;
+  setDataReady: (ready: boolean) => void;
+  setSelectedMetric: (metric: MetricType) => void;
   setWsConnected: (connected: boolean) => void;
 }
 
@@ -61,6 +69,8 @@ export const useAppStore = create<AppState>((set) => ({
   isPlaying: false,
   currentTimestamp: 0,
   timeRange: null,
+  dataReady: false,
+  selectedMetric: 'temperature',
   wsConnected: false,
   
   setAuth: (token, machineId) => set({ isAuthenticated: true, token, machineId }),
@@ -83,5 +93,7 @@ export const useAppStore = create<AppState>((set) => ({
     currentTimestamp: typeof timestamp === 'function' ? timestamp(state.currentTimestamp) : timestamp
   })),
   setTimeRange: (range) => set({ timeRange: range }),
+  setDataReady: (ready) => set({ dataReady: ready }),
+  setSelectedMetric: (metric) => set({ selectedMetric: metric }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
 }));

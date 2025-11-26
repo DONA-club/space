@@ -8,16 +8,16 @@ import { Play, Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { showSuccess, showError } from '@/utils/toast';
 
-type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint';
-
 export const DataControlPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
   const mode = useAppStore((state) => state.mode);
   const setTimeRange = useAppStore((state) => state.setTimeRange);
   const setCurrentTimestamp = useAppStore((state) => state.setCurrentTimestamp);
-  const [selectedMetric, setSelectedMetric] = useState<MetricType>('temperature');
+  const selectedMetric = useAppStore((state) => state.selectedMetric);
+  const setSelectedMetric = useAppStore((state) => state.setSelectedMetric);
+  const dataReady = useAppStore((state) => state.dataReady);
+  const setDataReady = useAppStore((state) => state.setDataReady);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [dataReady, setDataReady] = useState(false);
 
   const allSensorsHaveCSV = sensors.length > 0 && sensors.every(s => s.csvFile);
 
@@ -140,7 +140,7 @@ export const DataControlPanel = () => {
 
             <div>
               <label className="text-sm font-medium mb-2 block">Métrique à afficher</label>
-              <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as MetricType)}>
+              <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
                 <TabsList className="grid grid-cols-2 gap-2 bg-white/50 dark:bg-black/50 h-auto p-1">
                   <TabsTrigger value="temperature" className="flex items-center gap-2 data-[state=active]:bg-red-100 dark:data-[state=active]:bg-red-900/30">
                     <Thermometer size={16} className="text-red-500" />
