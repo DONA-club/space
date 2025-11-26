@@ -35,7 +35,7 @@ export const SensorPanel = () => {
         {/* Header - Fixed */}
         <div className="flex items-center justify-between p-4 pb-3 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold">Capteurs SwitchBot</h2>
+            <h2 className="text-base font-semibold">Capteurs</h2>
             <Badge variant="outline" className="text-xs">
               {sensors.length}
             </Badge>
