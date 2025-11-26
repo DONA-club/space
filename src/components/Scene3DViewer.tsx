@@ -172,15 +172,13 @@ export const Scene3DViewer = () => {
         sensorGroup.scale.copy(gltf.scene.scale);
         
         sensors.forEach((sensor) => {
-          // Use original sensor positions (before transformation)
+          // Use original sensor positions WITHOUT any transformation
+          // The group will handle position and scale
           const originalPosition = new THREE.Vector3(
             sensor.position[0],
             sensor.position[1],
             sensor.position[2]
           );
-          
-          // Apply center offset to the original position
-          originalPosition.sub(center);
           
           // Sphere marker
           const geometry = new THREE.SphereGeometry(0.15, 32, 32);
@@ -230,8 +228,8 @@ export const Scene3DViewer = () => {
             });
             const sprite = new THREE.Sprite(spriteMaterial);
             sprite.position.copy(originalPosition);
-            sprite.position.y += 0.5 / scale; // Adjust label offset based on scale
-            sprite.scale.set(1.2 / scale, 0.3 / scale, 1); // Adjust label size based on scale
+            sprite.position.y += 0.5 / scale;
+            sprite.scale.set(1.2 / scale, 0.3 / scale, 1);
             sensorGroup.add(sprite);
           }
         });
