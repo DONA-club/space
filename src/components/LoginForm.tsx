@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -22,6 +24,7 @@ export const LoginForm = () => {
     try {
       const response = await authAPI.login({ username, password });
       localStorage.setItem('token', response.token);
+      localStorage.setItem('machineId', response.machineId);
       setAuth(response.token, response.machineId);
       showSuccess('Connexion réussie !');
     } catch (error) {

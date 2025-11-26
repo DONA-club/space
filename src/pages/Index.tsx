@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { LoginForm } from '@/components/LoginForm';
