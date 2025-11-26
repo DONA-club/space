@@ -10,6 +10,7 @@ import { Radio, History, LogOut } from 'lucide-react';
 import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
 import { FileUploadPanel } from './FileUploadPanel';
+import { DataControlPanel } from './DataControlPanel';
 
 export const Dashboard = () => {
   const mode = useAppStore((state) => state.mode);
@@ -113,14 +114,23 @@ export const Dashboard = () => {
             </div>
 
             {mode === 'replay' && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="flex-shrink-0"
-              >
-                <TimelineControl />
-              </motion.div>
+              <div className="flex-shrink-0 space-y-4">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <DataControlPanel />
+                </motion.div>
+                
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <TimelineControl />
+                </motion.div>
+              </div>
             )}
           </>
         )}
