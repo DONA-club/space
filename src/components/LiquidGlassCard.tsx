@@ -1,21 +1,23 @@
 "use client";
 
 import { motion } from 'framer-motion';
-import { ReactNode } from 'react';
+import { ReactNode, CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 
 interface LiquidGlassCardProps {
   children: ReactNode;
   className?: string;
   animate?: boolean;
+  style?: CSSProperties;
 }
 
-export const LiquidGlassCard = ({ children, className, animate = true }: LiquidGlassCardProps) => {
+export const LiquidGlassCard = ({ children, className, animate = true, style }: LiquidGlassCardProps) => {
   return (
     <motion.div
       initial={animate ? { opacity: 0, y: 20 } : {}}
       animate={animate ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.5 }}
+      style={style}
       className={cn(
         "relative overflow-hidden rounded-2xl",
         "bg-white/10 dark:bg-black/10",

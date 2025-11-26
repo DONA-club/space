@@ -93,10 +93,11 @@ export const Dashboard = () => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 }}
                 className="lg:col-span-2"
-                style={{ height: 'calc(100vh - 200px)', minHeight: '600px' }}
               >
-                <LiquidGlassCard className="p-4 w-full h-full">
-                  <Scene3DViewer />
+                <LiquidGlassCard className="p-4" style={{ height: 'calc(100vh - 200px)', minHeight: '600px' }}>
+                  <div className="w-full h-full">
+                    <Scene3DViewer />
+                  </div>
                 </LiquidGlassCard>
               </motion.div>
 
@@ -104,9 +105,10 @@ export const Dashboard = () => {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
-                style={{ height: 'calc(100vh - 200px)', minHeight: '600px' }}
               >
-                <SensorPanel />
+                <div style={{ height: 'calc(100vh - 200px)', minHeight: '600px' }}>
+                  <SensorPanel />
+                </div>
               </motion.div>
             </div>
 
