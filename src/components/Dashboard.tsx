@@ -28,11 +28,12 @@ export const Dashboard = () => {
   const showFileUpload = !gltfModel || sensors.length === 0;
 
   return (
-    <div className="min-h-screen p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900">
-      <div className="max-w-7xl mx-auto space-y-4">
+    <div className="h-screen overflow-hidden p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 flex flex-col">
+      <div className="max-w-7xl mx-auto w-full flex flex-col h-full gap-4">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
+          className="flex-shrink-0"
         >
           <LiquidGlassCard className="p-4">
             <div className="flex items-center justify-between">
@@ -81,21 +82,23 @@ export const Dashboard = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="max-w-2xl mx-auto"
+            className="max-w-2xl mx-auto flex-1 overflow-y-auto"
           >
             <FileUploadPanel />
           </motion.div>
         ) : (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: 'calc(100vh - 200px)', minHeight: '600px' }}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 }}
-                className="lg:col-span-2 h-full"
+                className="lg:col-span-2 h-full min-h-0"
               >
-                <LiquidGlassCard className="p-4 h-full">
-                  <Scene3DViewer />
+                <LiquidGlassCard className="p-4 h-full flex flex-col">
+                  <div className="flex-1 min-h-0">
+                    <Scene3DViewer />
+                  </div>
                 </LiquidGlassCard>
               </motion.div>
 
@@ -103,7 +106,7 @@ export const Dashboard = () => {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
-                className="h-full"
+                className="h-full min-h-0"
               >
                 <SensorPanel />
               </motion.div>
@@ -114,6 +117,7 @@ export const Dashboard = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
+                className="flex-shrink-0"
               >
                 <TimelineControl />
               </motion.div>

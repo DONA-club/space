@@ -30,7 +30,7 @@ export const LiquidGlassCard = ({ children, className, animate = true, style }: 
         className
       )}
     >
-      <div className="relative z-10">
+      <div className="relative z-10 h-full">
         {children}
       </div>
     </motion.div>
