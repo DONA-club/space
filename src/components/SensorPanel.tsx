@@ -1,15 +1,17 @@
 "use client";
 
+import { useState } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Upload, Thermometer, Droplets, AlertCircle, FileText, X } from 'lucide-react';
+import { Upload, Thermometer, Droplets, AlertCircle, FileText, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
   const mode = useAppStore((state) => state.mode);
   const setSensorCsv = useAppStore((state) => state.setSensorCsv);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const handleFileUpload = (sensorId: number, file: File) => {
     setSensorCsv(sensorId, file);
@@ -32,10 +34,20 @@ export const SensorPanel = () => {
       <div className="h-full flex flex-col">
         {/* Header - Fixed */}
         <div className="flex items-center justify-between p-4 pb-3 flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold">Capteurs SwitchBot</h2>
-          <Badge variant="outline" className="text-xs">
-            {sensors.length}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold">Capteurs SwitchBot</h2>
+            <Badge variant="outline" className="text-xs">
+              {sensors.length}
+            </Badge>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="h-8 w-8 p-0"
+          >
+            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </Button>
         </div>
         
         {sensors.length === 0 ? (
@@ -49,100 +61,102 @@ export const SensorPanel = () => {
         ) : (
           /* Scrollable Content */
           <div className="flex-1 overflow-hidden">
-            <div className="h-full overflow-y-auto p-3 space-y-2">
-              {sensors.map((sensor) => (
-                <div 
-                  key={sensor.id} 
-                  className="bg-white/10 dark:bg-black/10 backdrop-blur-xl backdrop-saturate-150 border border-white/20 dark:border-white/10 shadow-xl shadow-black/5 rounded-2xl p-3 hover:shadow-md transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
-                  onMouseEnter={() => handleSensorHover(sensor.id)}
-                  onMouseLeave={handleSensorLeave}
-                >
-                  <div className="space-y-2">
-                    {/* Header */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-xs truncate">{sensor.name}</h3>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400">ID: {sensor.id}</p>
-                      </div>
-                      <Badge 
-                        variant={sensor.currentData ? "default" : "secondary"}
-                        className="shrink-0 text-[10px] h-5 px-2"
-                      >
-                        {sensor.currentData ? (
-                          <span className="flex items-center gap-1">
-                            <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
-                            Actif
-                          </span>
-                        ) : (
-                          "Inactif"
-                        )}
-                      </Badge>
-                    </div>
-
-                    {/* Data */}
-                    {sensor.currentData && (
-                      <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-                        <div className="flex items-center gap-1.5 p-1.5 bg-red-50 dark:bg-red-900/20 rounded">
-                          <Thermometer size={12} className="text-red-500 shrink-0" />
-                          <div className="min-w-0">
-                            <div className="font-medium text-xs">{sensor.currentData.temperature.toFixed(1)}°C</div>
-                          </div>
+            {isExpanded && (
+              <div className="h-full overflow-y-auto p-3 space-y-2">
+                {sensors.map((sensor) => (
+                  <div 
+                    key={sensor.id} 
+                    className="bg-white/10 dark:bg-black/10 backdrop-blur-xl backdrop-saturate-150 border border-white/20 dark:border-white/10 shadow-xl shadow-black/5 rounded-2xl p-3 hover:shadow-md transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
+                    onMouseEnter={() => handleSensorHover(sensor.id)}
+                    onMouseLeave={handleSensorLeave}
+                  >
+                    <div className="space-y-2">
+                      {/* Header */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-xs truncate">{sensor.name}</h3>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400">ID: {sensor.id}</p>
                         </div>
-                        <div className="flex items-center gap-1.5 p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded">
-                          <Droplets size={12} className="text-blue-500 shrink-0" />
-                          <div className="min-w-0">
-                            <div className="font-medium text-xs">{sensor.currentData.humidity.toFixed(1)}%</div>
-                          </div>
-                        </div>
+                        <Badge 
+                          variant={sensor.currentData ? "default" : "secondary"}
+                          className="shrink-0 text-[10px] h-5 px-2"
+                        >
+                          {sensor.currentData ? (
+                            <span className="flex items-center gap-1">
+                              <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
+                              Actif
+                            </span>
+                          ) : (
+                            "Inactif"
+                          )}
+                        </Badge>
                       </div>
-                    )}
 
-                    {/* CSV Upload - Compact */}
-                    {mode === 'replay' && (
-                      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                        {!sensor.csvFile ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full h-7 text-[10px] bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-blue-200 dark:border-blue-800"
-                            onClick={() => {
-                              const input = document.createElement('input');
-                              input.type = 'file';
-                              input.accept = '.csv';
-                              input.onchange = (e) => {
-                                const file = (e.target as HTMLInputElement).files?.[0];
-                                if (file) handleFileUpload(sensor.id, file);
-                              };
-                              input.click();
-                            }}
-                          >
-                            <Upload size={10} className="mr-1" />
-                            CSV
-                          </Button>
-                        ) : (
-                          <div className="flex items-center gap-1.5 p-1.5 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
-                            <FileText size={12} className="text-green-600 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[10px] font-medium text-green-700 dark:text-green-400 truncate">
-                                {sensor.csvFile.name}
-                              </div>
+                      {/* Data */}
+                      {sensor.currentData && (
+                        <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                          <div className="flex items-center gap-1.5 p-1.5 bg-red-50 dark:bg-red-900/20 rounded">
+                            <Thermometer size={12} className="text-red-500 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="font-medium text-xs">{sensor.currentData.temperature.toFixed(1)}°C</div>
                             </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded">
+                            <Droplets size={12} className="text-blue-500 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="font-medium text-xs">{sensor.currentData.humidity.toFixed(1)}%</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CSV Upload - Compact */}
+                      {mode === 'replay' && (
+                        <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                          {!sensor.csvFile ? (
                             <Button
                               size="sm"
-                              variant="ghost"
-                              className="h-5 w-5 p-0 hover:bg-red-100 dark:hover:bg-red-900/20"
-                              onClick={() => clearCsv(sensor.id)}
+                              variant="outline"
+                              className="w-full h-7 text-[10px] bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-blue-200 dark:border-blue-800"
+                              onClick={() => {
+                                const input = document.createElement('input');
+                                input.type = 'file';
+                                input.accept = '.csv';
+                                input.onchange = (e) => {
+                                  const file = (e.target as HTMLInputElement).files?.[0];
+                                  if (file) handleFileUpload(sensor.id, file);
+                                };
+                                input.click();
+                              }}
                             >
-                              <X size={10} className="text-red-600" />
+                              <Upload size={10} className="mr-1" />
+                              CSV
                             </Button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          ) : (
+                            <div className="flex items-center gap-1.5 p-1.5 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
+                              <FileText size={12} className="text-green-600 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[10px] font-medium text-green-700 dark:text-green-400 truncate">
+                                  {sensor.csvFile.name}
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 w-5 p-0 hover:bg-red-100 dark:hover:bg-red-900/20"
+                                onClick={() => clearCsv(sensor.id)}
+                              >
+                                <X size={10} className="text-red-600" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -98,4 +98,20 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Rendre les textes non-sélectionnables par défaut */
+  * {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Permettre la sélection dans les inputs et textareas */
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+  }
 }

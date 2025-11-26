@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/appStore';
 import { Play, Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { showSuccess, showError } from '@/utils/toast';
 
 export const DataControlPanel = () => {
@@ -111,9 +112,14 @@ export const DataControlPanel = () => {
   return (
     <LiquidGlassCard className="p-4">
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold">Analyse des données</h3>
-          {allSensorsHaveCSV && !dataReady && (
+        {!allSensorsHaveCSV && (
+          <div className="text-sm text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+            📊 Chargez les fichiers CSV pour tous les capteurs pour commencer l'analyse
+          </div>
+        )}
+
+        {allSensorsHaveCSV && !dataReady && (
+          <div className="flex justify-center">
             <Button
               onClick={handleAnalyze}
               disabled={isAnalyzing}
@@ -121,54 +127,71 @@ export const DataControlPanel = () => {
               className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
             >
               <Play size={16} className="mr-2" />
-              {isAnalyzing ? 'Analyse...' : 'Lancer l\'analyse'}
+              {isAnalyzing ? 'Analyse en cours...' : 'Lancer l\'analyse'}
             </Button>
-          )}
-        </div>
-
-        {!allSensorsHaveCSV && (
-          <div className="text-sm text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-            📊 Chargez les fichiers CSV pour tous les capteurs pour commencer l'analyse
           </div>
         )}
 
         {dataReady && (
-          <div className="space-y-3">
-            <div className="text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-              ✓ Données prêtes ! Sélectionnez une métrique à visualiser
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-2 block">Métrique à afficher</label>
+          <div>
+            <label className="text-sm font-medium mb-2 block">Métrique à afficher</label>
+            <TooltipProvider>
               <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
                 <TabsList className="grid grid-cols-2 gap-2 bg-white/50 dark:bg-black/50 h-auto p-1">
-                  <TabsTrigger value="temperature" className="flex items-center gap-2 data-[state=active]:bg-red-100 dark:data-[state=active]:bg-red-900/30">
-                    <Thermometer size={16} className="text-red-500" />
-                    <span className="text-xs">Température</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="humidity" className="flex items-center gap-2 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30">
-                    <Droplets size={16} className="text-blue-500" />
-                    <span className="text-xs">Humidité Relative</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="absoluteHumidity" className="flex items-center gap-2 data-[state=active]:bg-cyan-100 dark:data-[state=active]:bg-cyan-900/30">
-                    <Wind size={16} className="text-cyan-500" />
-                    <span className="text-xs">Humidité Absolue</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="dewPoint" className="flex items-center gap-2 data-[state=active]:bg-purple-100 dark:data-[state=active]:bg-purple-900/30">
-                    <CloudRain size={16} className="text-purple-500" />
-                    <span className="text-xs">Point de rosée</span>
-                  </TabsTrigger>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="temperature" className="flex items-center gap-2 data-[state=active]:bg-red-100 dark:data-[state=active]:bg-red-900/30">
+                        <Thermometer size={16} className="text-red-500" />
+                        <span className="text-xs">Température</span>
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">Température</p>
+                      <p className="text-xs">Température ambiante (°C)</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="humidity" className="flex items-center gap-2 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30">
+                        <Droplets size={16} className="text-blue-500" />
+                        <span className="text-xs">Humidité Relative</span>
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">Humidité Relative</p>
+                      <p className="text-xs">Pourcentage d'humidité (%)</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="absoluteHumidity" className="flex items-center gap-2 data-[state=active]:bg-cyan-100 dark:data-[state=active]:bg-cyan-900/30">
+                        <Wind size={16} className="text-cyan-500" />
+                        <span className="text-xs">Humidité Absolue</span>
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">Humidité Absolue</p>
+                      <p className="text-xs">Quantité d'eau dans l'air (g/m³)</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="dewPoint" className="flex items-center gap-2 data-[state=active]:bg-purple-100 dark:data-[state=active]:bg-purple-900/30">
+                        <CloudRain size={16} className="text-purple-500" />
+                        <span className="text-xs">Point de rosée</span>
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">Point de rosée</p>
+                      <p className="text-xs">Température de condensation (°C)</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </TabsList>
               </Tabs>
-            </div>
-
-            <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1 bg-gray-50 dark:bg-gray-900/20 p-3 rounded-lg">
-              <p className="font-medium mb-2">📊 Métriques disponibles :</p>
-              <p>• <strong>Température</strong> : Température ambiante (°C)</p>
-              <p>• <strong>Humidité Relative</strong> : Pourcentage d'humidité (%)</p>
-              <p>• <strong>Humidité Absolue</strong> : Quantité d'eau dans l'air (g/m³)</p>
-              <p>• <strong>Point de rosée</strong> : Température de condensation (°C)</p>
-            </div>
+            </TooltipProvider>
           </div>
         )}
       </div>
