@@ -94,8 +94,10 @@ export const Dashboard = () => {
                 transition={{ delay: 0.1 }}
                 className="lg:col-span-2"
               >
-                <LiquidGlassCard className="p-4 h-[600px]">
-                  <Scene3DViewer />
+                <LiquidGlassCard className="p-4 min-h-[600px]">
+                  <div className="w-full h-[568px]">
+                    <Scene3DViewer />
+                  </div>
                 </LiquidGlassCard>
               </motion.div>
 
