@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Upload, Thermometer, Droplets, AlertCircle, FileText, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, Thermometer, Droplets, AlertCircle, FileText, X, ChevronDown, ChevronUp, FolderUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { showSuccess, showError } from '@/utils/toast';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
@@ -21,6 +22,51 @@ export const SensorPanel = () => {
     setSensorCsv(sensorId, null as any);
   };
 
+  const handleBulkUpload = async (files: FileList) => {
+    const fileArray = Array.from(files);
+    let matchedCount = 0;
+    let unmatchedFiles: string[] = [];
+
+    for (const file of fileArray) {
+      if (!file.name.endsWith('.csv')) continue;
+
+      // Extraire le nom sans l'extension
+      const fileNameWithoutExt = file.name.replace(/\.csv$/i, '');
+      
+      // Chercher un capteur correspondant
+      const matchingSensor = sensors.find(sensor => {
+        // Matching exact
+        if (sensor.name === fileNameWithoutExt) return true;
+        
+        // Matching insensible à la casse
+        if (sensor.name.toLowerCase() === fileNameWithoutExt.toLowerCase()) return true;
+        
+        // Matching avec espaces/tirets normalisés
+        const normalizedSensorName = sensor.name.replace(/[\s-_]/g, '').toLowerCase();
+        const normalizedFileName = fileNameWithoutExt.replace(/[\s-_]/g, '').toLowerCase();
+        if (normalizedSensorName === normalizedFileName) return true;
+        
+        return false;
+      });
+
+      if (matchingSensor) {
+        setSensorCsv(matchingSensor.id, file);
+        matchedCount++;
+      } else {
+        unmatchedFiles.push(file.name);
+      }
+    }
+
+    // Afficher le résultat
+    if (matchedCount > 0) {
+      showSuccess(`${matchedCount} fichier${matchedCount > 1 ? 's' : ''} CSV associé${matchedCount > 1 ? 's' : ''} automatiquement`);
+    }
+    
+    if (unmatchedFiles.length > 0) {
+      showError(`${unmatchedFiles.length} fichier${unmatchedFiles.length > 1 ? 's' : ''} non associé${unmatchedFiles.length > 1 ? 's' : ''}: ${unmatchedFiles.slice(0, 3).join(', ')}${unmatchedFiles.length > 3 ? '...' : ''}`);
+    }
+  };
+
   const handleSensorHover = (sensorId: number) => {
     window.dispatchEvent(new CustomEvent('sensorHover', { detail: { sensorId } }));
   };
@@ -28,6 +74,9 @@ export const SensorPanel = () => {
   const handleSensorLeave = () => {
     window.dispatchEvent(new CustomEvent('sensorLeave'));
   };
+
+  const sensorsWithCsv = sensors.filter(s => s.csvFile).length;
+  const allSensorsHaveCsv = sensors.length > 0 && sensorsWithCsv === sensors.length;
 
   return (
     <LiquidGlassCard className="h-full">
@@ -39,6 +88,14 @@ export const SensorPanel = () => {
             <Badge variant="outline" className="text-xs">
               {sensors.length}
             </Badge>
+            {mode === 'replay' && sensors.length > 0 && (
+              <Badge 
+                variant={allSensorsHaveCsv ? "default" : "secondary"} 
+                className="text-xs"
+              >
+                {sensorsWithCsv}/{sensors.length} CSV
+              </Badge>
+            )}
           </div>
           <Button
             size="sm"
@@ -61,6 +118,34 @@ export const SensorPanel = () => {
         ) : (
           /* Scrollable Content */
           <div className="flex-1 overflow-hidden">
+            {/* Bulk Upload Button */}
+            {mode === 'replay' && isExpanded && (
+              <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border-blue-300 dark:border-blue-700"
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.csv';
+                    input.multiple = true;
+                    input.onchange = (e) => {
+                      const files = (e.target as HTMLInputElement).files;
+                      if (files && files.length > 0) handleBulkUpload(files);
+                    };
+                    input.click();
+                  }}
+                >
+                  <FolderUp size={16} className="mr-2" />
+                  Charger plusieurs CSV
+                </Button>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-2 text-center">
+                  Les fichiers seront associés automatiquement par nom
+                </p>
+              </div>
+            )}
+
             {isExpanded && (
               <div className="h-full overflow-y-auto p-3 space-y-2">
                 {sensors.map((sensor) => (
