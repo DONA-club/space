@@ -9,7 +9,13 @@ import { AlertCircle } from "lucide-react";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const sceneRef = useRef<{
+    renderer: THREE.WebGLRenderer;
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
+    animationId: number;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
@@ -21,11 +27,28 @@ export const Scene3DViewer = () => {
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    // Cleanup previous renderer if exists
-    if (rendererRef.current) {
-      container.removeChild(rendererRef.current.domElement);
-      rendererRef.current.dispose();
-      rendererRef.current = null;
+    // Cleanup previous scene if exists
+    if (sceneRef.current) {
+      const { renderer, scene, controls, animationId } = sceneRef.current;
+      cancelAnimationFrame(animationId);
+      controls.dispose();
+      
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          if (Array.isArray(object.material)) {
+            object.material.forEach(material => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+      });
+      
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+      renderer.dispose();
+      sceneRef.current = null;
     }
 
     // Scene
@@ -47,7 +70,6 @@ export const Scene3DViewer = () => {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
 
     // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -73,12 +95,10 @@ export const Scene3DViewer = () => {
 
     // Load GLTF Model
     const loader = new GLTFLoader();
-    let modelLoaded = false;
 
     loader.load(
       gltfModel,
       (gltf) => {
-        modelLoaded = true;
         setError(null);
         
         // Center and scale the model
@@ -95,11 +115,13 @@ export const Scene3DViewer = () => {
         scene.add(gltf.scene);
       },
       (progress) => {
-        console.log('Loading progress:', (progress.loaded / progress.total * 100).toFixed(2) + '%');
+        if (progress.total > 0) {
+          console.log('Loading progress:', (progress.loaded / progress.total * 100).toFixed(2) + '%');
+        }
       },
-      (error) => {
-        console.error("Error loading GLTF:", error);
-        setError("Erreur lors du chargement du modèle 3D. Le fichier est peut-être corrompu.");
+      (err) => {
+        console.error("Error loading GLTF:", err);
+        setError("Le fichier GLTF référence des ressources externes manquantes (textures, .bin). Veuillez utiliser un fichier GLB autonome ou fournir tous les fichiers associés.");
       }
     );
 
@@ -143,13 +165,24 @@ export const Scene3DViewer = () => {
     scene.add(sensorGroup);
 
     // Animation loop
-    let animationId: number;
     const animate = () => {
-      animationId = requestAnimationFrame(animate);
+      const animationId = requestAnimationFrame(animate);
+      if (sceneRef.current) {
+        sceneRef.current.animationId = animationId;
+      }
       controls.update();
       renderer.render(scene, camera);
     };
-    animate();
+    const firstAnimationId = requestAnimationFrame(animate);
+
+    // Store scene reference
+    sceneRef.current = {
+      renderer,
+      scene,
+      camera,
+      controls,
+      animationId: firstAnimationId
+    };
 
     // Handle resize
     const handleResize = () => {
@@ -164,24 +197,29 @@ export const Scene3DViewer = () => {
     // Cleanup
     return () => {
       window.removeEventListener("resize", handleResize);
-      cancelAnimationFrame(animationId);
-      controls.dispose();
       
-      if (rendererRef.current && container.contains(rendererRef.current.domElement)) {
-        container.removeChild(rendererRef.current.domElement);
-      }
-      
-      renderer.dispose();
-      scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
-          object.geometry.dispose();
-          if (Array.isArray(object.material)) {
-            object.material.forEach(material => material.dispose());
-          } else {
-            object.material.dispose();
+      if (sceneRef.current) {
+        const { renderer, scene, controls, animationId } = sceneRef.current;
+        cancelAnimationFrame(animationId);
+        controls.dispose();
+        
+        scene.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            object.geometry.dispose();
+            if (Array.isArray(object.material)) {
+              object.material.forEach(material => material.dispose());
+            } else {
+              object.material.dispose();
+            }
           }
+        });
+        
+        if (container.contains(renderer.domElement)) {
+          container.removeChild(renderer.domElement);
         }
-      });
+        renderer.dispose();
+        sceneRef.current = null;
+      }
     };
   }, [gltfModel, sensors]);
 
@@ -197,14 +235,19 @@ export const Scene3DViewer = () => {
 
   if (error) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg">
-        <div className="text-center text-red-600 dark:text-red-400 p-6">
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg p-6">
+        <div className="text-center text-red-600 dark:text-red-400 max-w-md">
           <AlertCircle size={48} className="mx-auto mb-4" />
           <p className="font-medium mb-2">Erreur de chargement</p>
-          <p className="text-sm">{error}</p>
-          <p className="text-xs mt-4 text-gray-600 dark:text-gray-400">
-            Vérifiez que le fichier GLTF/GLB est valide et non corrompu
-          </p>
+          <p className="text-sm mb-4">{error}</p>
+          <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-black p-3 rounded">
+            <p className="font-medium mb-2">Solutions :</p>
+            <ul className="text-left space-y-1">
+              <li>• Utilisez un fichier <strong>GLB</strong> (format binaire autonome)</li>
+              <li>• Ou convertissez votre GLTF en GLB avec un outil en ligne</li>
+              <li>• Ou fournissez tous les fichiers .bin et textures associés</li>
+            </ul>
+          </div>
         </div>
       </div>
     );

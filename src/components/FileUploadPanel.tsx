@@ -31,6 +31,11 @@ export const FileUploadPanel = () => {
       showError('Le fichier est vide');
       return;
     }
+
+    // Avertir si c'est un GLTF
+    if (file.name.endsWith('.gltf')) {
+      showError('Les fichiers GLTF peuvent nécessiter des ressources externes. Privilégiez le format GLB.');
+    }
     
     setGlbFile(file);
     const url = URL.createObjectURL(file);
@@ -42,7 +47,6 @@ export const FileUploadPanel = () => {
   const parseNumber = (value: any): number => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
-      // Remplacer les virgules par des points pour le parsing
       return parseFloat(value.replace(',', '.'));
     }
     return 0;
@@ -56,11 +60,7 @@ export const FileUploadPanel = () => {
 
     try {
       let text = await file.text();
-      
-      // Remplacer les virgules par des points dans les valeurs numériques
-      // Pattern: cherche "x":valeur, "y":valeur, "z":valeur avec virgules
       text = text.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
-      
       const data = JSON.parse(text);
 
       if (!data.points || !Array.isArray(data.points)) {
@@ -72,7 +72,6 @@ export const FileUploadPanel = () => {
         const y = parseNumber(point.y);
         const z = parseNumber(point.z);
         
-        // Vérifier que les coordonnées sont valides
         if (isNaN(x) || isNaN(y) || isNaN(z)) {
           throw new Error(`Coordonnées invalides pour le point ${index + 1}`);
         }
@@ -106,7 +105,7 @@ export const FileUploadPanel = () => {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Box size={20} className="text-blue-600" />
-            <h3 className="font-medium">1. Modèle 3D (GLB/GLTF)</h3>
+            <h3 className="font-medium">1. Modèle 3D (GLB recommandé)</h3>
           </div>
           
           {glbFile ? (
@@ -199,8 +198,14 @@ export const FileUploadPanel = () => {
         <div className="text-xs text-gray-600 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
           <p className="font-medium mb-2 flex items-center gap-2">
             <AlertCircle size={14} />
-            Format JSON attendu :
+            Informations importantes :
           </p>
+          <ul className="space-y-1 mb-3">
+            <li>• <strong>GLB</strong> : Format binaire autonome (recommandé)</li>
+            <li>• <strong>GLTF</strong> : Peut nécessiter des fichiers externes (.bin, textures)</li>
+            <li>• Taille max : 50 MB</li>
+          </ul>
+          <p className="font-medium mb-1">Format JSON attendu :</p>
           <pre className="text-xs overflow-x-auto bg-white dark:bg-black p-2 rounded">
 {`{
   "points": [
@@ -209,12 +214,7 @@ export const FileUploadPanel = () => {
   ]
 }`}
           </pre>
-          <p className="mt-2 text-xs">
-            ✓ Supporte les virgules comme séparateurs décimaux
-          </p>
-          <p className="text-xs">
-            ✓ Taille max du modèle 3D : 50 MB
-          </p>
+          <p className="mt-2">✓ Supporte les virgules comme séparateurs décimaux</p>
         </div>
       </div>
     </LiquidGlassCard>
