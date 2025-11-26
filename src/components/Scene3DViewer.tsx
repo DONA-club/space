@@ -315,7 +315,7 @@ export const Scene3DViewer = () => {
   }, [gltfModel, sensors]);
 
   return (
-    <div ref={containerRef} className="w-full h-full min-h-[500px] rounded-lg overflow-hidden relative bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
+    <div ref={containerRef} className="w-full h-full flex items-center justify-center rounded-lg overflow-hidden relative bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
       {!gltfModel && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg">
           <div className="text-center text-gray-500 dark:text-gray-400">
