@@ -2,13 +2,14 @@
 
 import { motion } from 'framer-motion';
 import { LiquidGlassCard } from './LiquidGlassCard';
-import { Scene3D } from './Scene3D';
+import { Scene3DViewer } from './Scene3DViewer';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Radio, History, LogOut } from 'lucide-react';
 import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
+import { FileUploadPanel } from './FileUploadPanel';
 
 export const Dashboard = () => {
   const mode = useAppStore((state) => state.mode);
@@ -16,12 +17,15 @@ export const Dashboard = () => {
   const wsConnected = useAppStore((state) => state.wsConnected);
   const logout = useAppStore((state) => state.logout);
   const sensors = useAppStore((state) => state.sensors);
+  const gltfModel = useAppStore((state) => state.gltfModel);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('machineId');
     logout();
   };
+
+  const showFileUpload = !gltfModel || sensors.length === 0;
 
   return (
     <div className="min-h-screen p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900">
@@ -42,21 +46,23 @@ export const Dashboard = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <Tabs value={mode} onValueChange={(v) => setMode(v as 'live' | 'replay')}>
-                  <TabsList className="bg-white/50 dark:bg-black/50">
-                    <TabsTrigger value="replay" className="flex items-center gap-2">
-                      <History size={16} />
-                      Replay
-                    </TabsTrigger>
-                    <TabsTrigger value="live" className="flex items-center gap-2">
-                      <Radio size={16} />
-                      Live
-                      {wsConnected && (
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                      )}
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                {!showFileUpload && (
+                  <Tabs value={mode} onValueChange={(v) => setMode(v as 'live' | 'replay')}>
+                    <TabsList className="bg-white/50 dark:bg-black/50">
+                      <TabsTrigger value="replay" className="flex items-center gap-2">
+                        <History size={16} />
+                        Replay
+                      </TabsTrigger>
+                      <TabsTrigger value="live" className="flex items-center gap-2">
+                        <Radio size={16} />
+                        Live
+                        {wsConnected && (
+                          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        )}
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                )}
                 
                 <Button
                   variant="outline"
@@ -71,35 +77,47 @@ export const Dashboard = () => {
           </LiquidGlassCard>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-            className="lg:col-span-2"
-          >
-            <LiquidGlassCard className="p-4 h-[600px]">
-              <Scene3D />
-            </LiquidGlassCard>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <SensorPanel />
-          </motion.div>
-        </div>
-
-        {mode === 'replay' && (
+        {showFileUpload ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            className="max-w-2xl mx-auto"
           >
-            <TimelineControl />
+            <FileUploadPanel />
           </motion.div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+                className="lg:col-span-2"
+              >
+                <LiquidGlassCard className="p-4 h-[600px]">
+                  <Scene3DViewer />
+                </LiquidGlassCard>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <SensorPanel />
+              </motion.div>
+            </div>
+
+            {mode === 'replay' && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <TimelineControl />
+              </motion.div>
+            )}
+          </>
         )}
       </div>
     </div>
