@@ -9,7 +9,6 @@ import { showError } from '@/utils/toast';
 const Index = () => {
   const isAuthenticated = useAppStore((state) => state.isAuthenticated);
   const machineId = useAppStore((state) => state.machineId);
-  const setGltfModel = useAppStore((state) => state.setGltfModel);
   const setSensors = useAppStore((state) => state.setSensors);
   const setAuth = useAppStore((state) => state.setAuth);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,7 +31,6 @@ const Index = () => {
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      // Charger les positions des capteurs depuis le fichier JSON
       const response = await fetch('/45bdVoltaire_SalonVesta.points.json');
       
       if (!response.ok) {
@@ -52,10 +50,6 @@ const Index = () => {
       }));
       
       setSensors(sensors);
-      
-      // Le modèle 3D est maintenant représenté par une boîte simple
-      // Pour utiliser le vrai modèle GLTF, décommentez la ligne suivante:
-      // setGltfModel('/45bdVoltaire_SalonVesta.gltf');
       
     } catch (error) {
       console.error('Erreur lors du chargement:', error);

@@ -1,21 +1,18 @@
 "use client";
 
-import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { Scene3D } from './Scene3D';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Play, Pause, Upload, Radio, History, LogOut } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Radio, History, LogOut } from 'lucide-react';
 import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
 
 export const Dashboard = () => {
   const mode = useAppStore((state) => state.mode);
   const setMode = useAppStore((state) => state.setMode);
-  const isPlaying = useAppStore((state) => state.isPlaying);
-  const setPlaying = useAppStore((state) => state.setPlaying);
   const wsConnected = useAppStore((state) => state.wsConnected);
   const logout = useAppStore((state) => state.logout);
   const sensors = useAppStore((state) => state.sensors);
@@ -85,18 +82,7 @@ export const Dashboard = () => {
             className="lg:col-span-2"
           >
             <LiquidGlassCard className="p-4 h-[600px]">
-              {sensors.length > 0 ? (
-                <Scene3D />
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600 dark:text-gray-300">
-                      Chargement de la scène 3D...
-                    </p>
-                  </div>
-                </div>
-              )}
+              <Scene3D />
             </LiquidGlassCard>
           </motion.div>
 

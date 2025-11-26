@@ -18,9 +18,11 @@ const SensorMarker = ({ position, id, data, onClick }: SensorMarkerProps) => {
   const getColor = () => {
     if (!data) return '#3b82f6';
     const temp = data.temperature;
-    const hue = ((30 - temp) / 60) * 240;
+    const hue = Math.max(0, Math.min(240, ((30 - temp) / 60) * 240));
     return `hsl(${hue}, 100%, 50%)`;
   };
+
+  const color = getColor();
 
   return (
     <group position={position}>
@@ -32,8 +34,8 @@ const SensorMarker = ({ position, id, data, onClick }: SensorMarkerProps) => {
       >
         <sphereGeometry args={[0.1, 16, 16]} />
         <meshStandardMaterial 
-          color={getColor()} 
-          emissive={getColor()}
+          color={color} 
+          emissive={color}
           emissiveIntensity={0.5}
           transparent
           opacity={0.8}
@@ -52,7 +54,7 @@ const SensorMarker = ({ position, id, data, onClick }: SensorMarkerProps) => {
 
 const RoomBox = () => {
   return (
-    <>
+    <group>
       <mesh position={[0, 1, 0]}>
         <boxGeometry args={[6, 3, 4.5]} />
         <meshStandardMaterial 
@@ -69,7 +71,7 @@ const RoomBox = () => {
       </mesh>
       
       <gridHelper args={[10, 10, '#cccccc', '#eeeeee']} position={[0, -0.5, 0]} />
-    </>
+    </group>
   );
 };
 
@@ -90,7 +92,7 @@ const Scene = () => {
       <ambientLight intensity={0.5} />
       <directionalLight position={[10, 10, 5]} intensity={1} />
       <pointLight position={[-10, -10, -5]} intensity={0.5} />
-      <hemisphereLight color="#ffffff" groundColor="#444444" intensity={0.6} />
+      <hemisphereLight args={['#ffffff', '#444444', 0.6]} />
       
       <RoomBox />
       
@@ -108,6 +110,21 @@ const Scene = () => {
 };
 
 export const Scene3D = () => {
+  const sensors = useAppStore((state) => state.sensors);
+
+  if (sensors.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">
+            Chargement des capteurs...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full h-full">
       <Canvas>
