@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useAppStore } from "@/store/appStore";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -24,9 +24,9 @@ export const Scene3DViewer = () => {
   console.log('🎬 Scene3DViewer render - gltfModel:', gltfModel);
   console.log('🎬 Scene3DViewer render - sensors:', sensors);
 
-  useEffect(() => {
-    console.log('🔄 useEffect triggered - gltfModel:', gltfModel);
-    console.log('🔄 useEffect triggered - containerRef.current:', containerRef.current);
+  useLayoutEffect(() => {
+    console.log('🔄 useLayoutEffect triggered - gltfModel:', gltfModel);
+    console.log('🔄 useLayoutEffect triggered - containerRef.current:', containerRef.current);
 
     if (!containerRef.current) {
       console.warn('⚠️ Container ref is null');
