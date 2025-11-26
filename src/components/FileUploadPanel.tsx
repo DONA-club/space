@@ -3,45 +3,119 @@
 import { useState } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { Button } from '@/components/ui/button';
-import { Upload, FileJson, Box, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, FileJson, Box, CheckCircle2, AlertCircle, Package, X } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { showSuccess, showError } from '@/utils/toast';
 
 export const FileUploadPanel = () => {
   const [glbFile, setGlbFile] = useState<File | null>(null);
+  const [gltfFiles, setGltfFiles] = useState<File[]>([]);
   const [jsonFile, setJsonFile] = useState<File | null>(null);
   const [glbUrl, setGlbUrl] = useState<string | null>(null);
   const setGltfModel = useAppStore((state) => state.setGltfModel);
   const setSensors = useAppStore((state) => state.setSensors);
 
   const handleGlbUpload = async (file: File) => {
-    if (!file.name.endsWith('.glb') && !file.name.endsWith('.gltf')) {
-      showError('Veuillez sélectionner un fichier GLB ou GLTF');
+    if (!file.name.endsWith('.glb')) {
+      showError('Veuillez sélectionner un fichier GLB');
       return;
     }
 
-    // Vérifier la taille du fichier (max 50MB)
     if (file.size > 50 * 1024 * 1024) {
       showError('Le fichier est trop volumineux (max 50MB)');
       return;
     }
 
-    // Vérifier que le fichier n'est pas vide
     if (file.size === 0) {
       showError('Le fichier est vide');
       return;
     }
-
-    // Avertir si c'est un GLTF
-    if (file.name.endsWith('.gltf')) {
-      showError('Les fichiers GLTF peuvent nécessiter des ressources externes. Privilégiez le format GLB.');
+    
+    // Clear GLTF pack if exists
+    if (gltfFiles.length > 0) {
+      gltfFiles.forEach(f => {
+        const url = URL.createObjectURL(f);
+        URL.revokeObjectURL(url);
+      });
+      setGltfFiles([]);
     }
     
     setGlbFile(file);
     const url = URL.createObjectURL(file);
     setGlbUrl(url);
     setGltfModel(url);
-    showSuccess('Modèle 3D chargé avec succès');
+    showSuccess('Modèle 3D GLB chargé avec succès');
+  };
+
+  const handleGltfPackUpload = async (files: FileList) => {
+    const fileArray = Array.from(files);
+    
+    // Vérifier qu'il y a au moins un fichier GLTF
+    const gltfFile = fileArray.find(f => f.name.endsWith('.gltf'));
+    if (!gltfFile) {
+      showError('Le pack doit contenir au moins un fichier .gltf');
+      return;
+    }
+
+    // Clear GLB if exists
+    if (glbFile) {
+      if (glbUrl) URL.revokeObjectURL(glbUrl);
+      setGlbFile(null);
+      setGlbUrl(null);
+    }
+
+    // Créer des URLs pour tous les fichiers
+    const fileMap = new Map<string, string>();
+    fileArray.forEach(file => {
+      const url = URL.createObjectURL(file);
+      fileMap.set(file.name, url);
+    });
+
+    // Lire le fichier GLTF et modifier les références
+    try {
+      const gltfText = await gltfFile.text();
+      const gltfData = JSON.parse(gltfText);
+
+      // Remplacer les références aux fichiers externes par les blob URLs
+      if (gltfData.buffers) {
+        gltfData.buffers.forEach((buffer: any) => {
+          if (buffer.uri) {
+            const fileName = buffer.uri.split('/').pop();
+            if (fileMap.has(fileName)) {
+              buffer.uri = fileMap.get(fileName);
+            }
+          }
+        });
+      }
+
+      if (gltfData.images) {
+        gltfData.images.forEach((image: any) => {
+          if (image.uri) {
+            const fileName = image.uri.split('/').pop();
+            if (fileMap.has(fileName)) {
+              image.uri = fileMap.get(fileName);
+            }
+          }
+        });
+      }
+
+      // Créer un nouveau blob avec le GLTF modifié
+      const modifiedGltfBlob = new Blob([JSON.stringify(gltfData)], { type: 'application/json' });
+      const modifiedGltfUrl = URL.createObjectURL(modifiedGltfBlob);
+
+      setGltfFiles(fileArray);
+      setGltfModel(modifiedGltfUrl);
+      
+      const fileTypes = fileArray.map(f => {
+        const ext = f.name.split('.').pop()?.toUpperCase();
+        return ext;
+      }).filter((v, i, a) => a.indexOf(v) === i);
+      
+      showSuccess(`Pack GLTF chargé avec succès (${fileArray.length} fichiers: ${fileTypes.join(', ')})`);
+    } catch (error) {
+      showError('Erreur lors du traitement du pack GLTF');
+      console.error(error);
+    }
   };
 
   const parseNumber = (value: any): number => {
@@ -96,58 +170,113 @@ export const FileUploadPanel = () => {
     }
   };
 
+  const clearModel = () => {
+    if (glbUrl) URL.revokeObjectURL(glbUrl);
+    setGlbFile(null);
+    setGlbUrl(null);
+    setGltfFiles([]);
+    setGltfModel(null);
+  };
+
+  const hasModel = glbFile || gltfFiles.length > 0;
+
   return (
     <LiquidGlassCard className="p-6">
       <h2 className="text-xl font-semibold mb-6">Configuration initiale</h2>
       
       <div className="space-y-6">
-        {/* GLB Upload */}
+        {/* Model Upload */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Box size={20} className="text-blue-600" />
-            <h3 className="font-medium">1. Modèle 3D (GLB recommandé)</h3>
+            <h3 className="font-medium">1. Modèle 3D</h3>
           </div>
           
-          {glbFile ? (
-            <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <CheckCircle2 size={20} className="text-green-600" />
-              <div className="flex-1">
-                <span className="text-sm block">{glbFile.name}</span>
-                <span className="text-xs text-gray-500">
-                  {(glbFile.size / 1024 / 1024).toFixed(2)} MB
-                </span>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  if (glbUrl) URL.revokeObjectURL(glbUrl);
-                  setGlbFile(null);
-                  setGlbUrl(null);
-                  setGltfModel(null);
-                }}
-              >
-                Changer
-              </Button>
+          {hasModel ? (
+            <div className="space-y-2">
+              {glbFile && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <CheckCircle2 size={20} className="text-green-600" />
+                  <div className="flex-1">
+                    <span className="text-sm block font-medium">{glbFile.name}</span>
+                    <span className="text-xs text-gray-500">
+                      GLB • {(glbFile.size / 1024 / 1024).toFixed(2)} MB
+                    </span>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={clearModel}>
+                    <X size={14} />
+                  </Button>
+                </div>
+              )}
+              
+              {gltfFiles.length > 0 && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 size={20} className="text-green-600" />
+                    <span className="text-sm font-medium">Pack GLTF ({gltfFiles.length} fichiers)</span>
+                    <Button size="sm" variant="outline" onClick={clearModel} className="ml-auto">
+                      <X size={14} />
+                    </Button>
+                  </div>
+                  <div className="space-y-1">
+                    {gltfFiles.map((file, idx) => (
+                      <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                        {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.glb,.gltf';
-                input.onchange = (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0];
-                  if (file) handleGlbUpload(file);
-                };
-                input.click();
-              }}
-            >
-              <Upload size={16} className="mr-2" />
-              Charger le modèle 3D
-            </Button>
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.glb';
+                  input.onchange = (e) => {
+                    const file = (e.target as HTMLInputElement).files?.[0];
+                    if (file) handleGlbUpload(file);
+                  };
+                  input.click();
+                }}
+              >
+                <Upload size={16} className="mr-2" />
+                Charger un fichier GLB
+              </Button>
+              
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white dark:bg-gray-900 px-2 text-gray-500">ou</span>
+                </div>
+              </div>
+              
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.gltf,.bin,.jpg,.jpeg,.png';
+                  input.multiple = true;
+                  input.onchange = (e) => {
+                    const files = (e.target as HTMLInputElement).files;
+                    if (files && files.length > 0) handleGltfPackUpload(files);
+                  };
+                  input.click();
+                }}
+              >
+                <Package size={16} className="mr-2" />
+                Charger un pack GLTF (plusieurs fichiers)
+              </Button>
+            </div>
           )}
         </div>
 
@@ -170,7 +299,7 @@ export const FileUploadPanel = () => {
                   setSensors([]);
                 }}
               >
-                Changer
+                <X size={14} />
               </Button>
             </div>
           ) : (
@@ -198,12 +327,12 @@ export const FileUploadPanel = () => {
         <div className="text-xs text-gray-600 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
           <p className="font-medium mb-2 flex items-center gap-2">
             <AlertCircle size={14} />
-            Informations importantes :
+            Formats acceptés :
           </p>
           <ul className="space-y-1 mb-3">
-            <li>• <strong>GLB</strong> : Format binaire autonome (recommandé)</li>
-            <li>• <strong>GLTF</strong> : Peut nécessiter des fichiers externes (.bin, textures)</li>
-            <li>• Taille max : 50 MB</li>
+            <li>• <strong>GLB</strong> : Fichier unique autonome (recommandé)</li>
+            <li>• <strong>Pack GLTF</strong> : Fichier .gltf + .bin + textures (.jpg, .png)</li>
+            <li>• Taille max : 50 MB par fichier</li>
           </ul>
           <p className="font-medium mb-1">Format JSON attendu :</p>
           <pre className="text-xs overflow-x-auto bg-white dark:bg-black p-2 rounded">
