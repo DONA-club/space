@@ -26,7 +26,6 @@ export const Dashboard = () => {
   return (
     <div className="min-h-screen p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900">
       <div className="max-w-7xl mx-auto space-y-4">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -72,9 +71,7 @@ export const Dashboard = () => {
           </LiquidGlassCard>
         </motion.div>
 
-        {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* 3D Visualization */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -86,7 +83,6 @@ export const Dashboard = () => {
             </LiquidGlassCard>
           </motion.div>
 
-          {/* Sensor Panel */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -96,7 +92,6 @@ export const Dashboard = () => {
           </motion.div>
         </div>
 
-        {/* Timeline Control (Replay mode) */}
         {mode === 'replay' && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
