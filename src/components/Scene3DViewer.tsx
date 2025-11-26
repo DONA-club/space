@@ -164,22 +164,23 @@ export const Scene3DViewer = () => {
         
         scene.add(gltf.scene);
         
-        // Add sensor markers with the SAME transformations as the model
+        // Add sensor markers - apply transformations to the group itself
         const sensorGroup = new THREE.Group();
         
+        // Apply the same transformations to the sensor group
+        sensorGroup.position.copy(gltf.scene.position);
+        sensorGroup.scale.copy(gltf.scene.scale);
+        
         sensors.forEach((sensor) => {
-          // Apply the same transformations: center offset + scale
-          const adjustedPosition = new THREE.Vector3(
+          // Use original sensor positions (before transformation)
+          const originalPosition = new THREE.Vector3(
             sensor.position[0],
             sensor.position[1],
             sensor.position[2]
           );
           
-          // Subtract center (same as model)
-          adjustedPosition.sub(center);
-          
-          // Apply scale (same as model)
-          adjustedPosition.multiplyScalar(scale);
+          // Apply center offset to the original position
+          originalPosition.sub(center);
           
           // Sphere marker
           const geometry = new THREE.SphereGeometry(0.15, 32, 32);
@@ -191,7 +192,7 @@ export const Scene3DViewer = () => {
             roughness: 0.2,
           });
           const sphere = new THREE.Mesh(geometry, material);
-          sphere.position.copy(adjustedPosition);
+          sphere.position.copy(originalPosition);
           sphere.castShadow = true;
           sphere.receiveShadow = true;
           sensorGroup.add(sphere);
@@ -204,7 +205,7 @@ export const Scene3DViewer = () => {
             opacity: 0.3,
           });
           const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-          glow.position.copy(adjustedPosition);
+          glow.position.copy(originalPosition);
           sensorGroup.add(glow);
 
           // Label
@@ -228,9 +229,9 @@ export const Scene3DViewer = () => {
               transparent: true,
             });
             const sprite = new THREE.Sprite(spriteMaterial);
-            sprite.position.copy(adjustedPosition);
-            sprite.position.y += 0.5;
-            sprite.scale.set(1.2, 0.3, 1);
+            sprite.position.copy(originalPosition);
+            sprite.position.y += 0.5 / scale; // Adjust label offset based on scale
+            sprite.scale.set(1.2 / scale, 0.3 / scale, 1); // Adjust label size based on scale
             sensorGroup.add(sprite);
           }
         });
