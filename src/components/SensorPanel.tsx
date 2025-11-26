@@ -4,7 +4,6 @@ import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
 import { Upload, Thermometer, Droplets, AlertCircle, FileText } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
 export const SensorPanel = () => {
@@ -17,8 +16,8 @@ export const SensorPanel = () => {
   };
 
   return (
-    <LiquidGlassCard className="h-full flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between p-6 pb-4 shrink-0">
+    <LiquidGlassCard className="h-full flex flex-col">
+      <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
         <h2 className="text-lg font-semibold">Capteurs SwitchBot</h2>
         <Badge variant="outline" className="text-xs">
           {sensors.length} capteur{sensors.length > 1 ? 's' : ''}
@@ -34,8 +33,8 @@ export const SensorPanel = () => {
           </div>
         </div>
       ) : (
-        <ScrollArea className="flex-1 px-6 pb-6">
-          <div className="space-y-3 pr-4">
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="space-y-3 pr-2">
             {sensors.map((sensor) => (
               <LiquidGlassCard key={sensor.id} className="p-4 hover:shadow-lg transition-shadow">
                 <div className="space-y-3">
@@ -130,7 +129,7 @@ export const SensorPanel = () => {
               </LiquidGlassCard>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       )}
     </LiquidGlassCard>
   );

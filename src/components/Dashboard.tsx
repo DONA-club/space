@@ -87,15 +87,17 @@ export const Dashboard = () => {
           </motion.div>
         ) : (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: 'calc(100vh - 200px)', minHeight: '600px' }}>
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 }}
-                className="lg:col-span-2 h-[calc(100vh-200px)] min-h-[600px]"
+                className="lg:col-span-2 h-full"
               >
                 <LiquidGlassCard className="p-4 h-full">
-                  <Scene3DViewer />
+                  <div className="w-full h-full">
+                    <Scene3DViewer />
+                  </div>
                 </LiquidGlassCard>
               </motion.div>
 
@@ -103,7 +105,7 @@ export const Dashboard = () => {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
-                className="h-[calc(100vh-200px)] min-h-[600px]"
+                className="h-full"
               >
                 <SensorPanel />
               </motion.div>
