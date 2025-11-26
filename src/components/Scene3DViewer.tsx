@@ -42,7 +42,7 @@ export const Scene3DViewer = () => {
     };
   }, []);
 
-  // Update sensor colors based on hover and CSV status
+  // Update sensor colors - SEPARATED from scene creation
   useEffect(() => {
     if (!sceneRef.current) return;
 
@@ -84,8 +84,9 @@ export const Scene3DViewer = () => {
       // Update glow material
       (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(glowColor);
     });
-  }, [hoveredSensorId, sensors]);
+  }, [hoveredSensorId, sensors]); // This will trigger on CSV load but won't recreate the scene
 
+  // Scene creation - ONLY when gltfModel changes
   useLayoutEffect(() => {
     if (!containerRef.current) {
       return;
@@ -248,11 +249,16 @@ export const Scene3DViewer = () => {
             sensor.position[2]
           );
           
+          // Determine initial color based on CSV status
+          const hasCSV = !!sensor.csvFile;
+          const initialColor = hasCSV ? 0x22c55e : 0x4dabf7;
+          const initialEmissive = hasCSV ? 0x16a34a : 0x2563eb;
+          
           // Sphere marker
           const geometry = new THREE.SphereGeometry(0.15, 32, 32);
           const material = new THREE.MeshStandardMaterial({
-            color: 0x4dabf7,
-            emissive: 0x2563eb,
+            color: initialColor,
+            emissive: initialEmissive,
             emissiveIntensity: 0.4,
             metalness: 0.6,
             roughness: 0.2,
@@ -266,7 +272,7 @@ export const Scene3DViewer = () => {
           // Glow effect
           const glowGeometry = new THREE.SphereGeometry(0.2, 16, 16);
           const glowMaterial = new THREE.MeshBasicMaterial({
-            color: 0x4dabf7,
+            color: initialColor,
             transparent: true,
             opacity: 0.3,
           });
@@ -393,7 +399,7 @@ export const Scene3DViewer = () => {
         sceneRef.current = null;
       }
     };
-  }, [gltfModel, sensors]);
+  }, [gltfModel]); // ONLY depends on gltfModel, not sensors!
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
