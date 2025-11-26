@@ -13,7 +13,7 @@ export const TimelineControl = () => {
   const setCurrentTimestamp = useAppStore((state) => state.setCurrentTimestamp);
   const timeRange = useAppStore((state) => state.timeRange);
 
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [playbackSpeed, setPlaybackSpeed] = useState(60);
   const [rangeStart, setRangeStart] = useState<number | null>(null);
   const [rangeEnd, setRangeEnd] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState<'start' | 'end' | 'current' | null>(null);
@@ -50,8 +50,7 @@ export const TimelineControl = () => {
       day: '2-digit',
       month: '2-digit',
       hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      minute: '2-digit'
     });
   };
 
@@ -166,11 +165,11 @@ export const TimelineControl = () => {
               onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
               className="text-sm bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value={1}>Réelle</option>
-              <option value={10}>10x</option>
-              <option value={60}>60x</option>
-              <option value={1800}>1800x</option>
-              <option value={3600}>3600x</option>
+              <option value={60}>1 min/s</option>
+              <option value={120}>2x</option>
+              <option value={300}>5x</option>
+              <option value={600}>10x</option>
+              <option value={1800}>30x</option>
             </select>
           </div>
         </div>
