@@ -35,6 +35,7 @@ export const Scene3DViewer = () => {
 
     if (!gltfModel) {
       console.warn('⚠️ No GLTF model URL provided');
+      setLoading(false);
       return;
     }
 
@@ -325,57 +326,49 @@ export const Scene3DViewer = () => {
     };
   }, [gltfModel, sensors]);
 
-  if (!gltfModel) {
-    console.log('📭 Rendering: No model state');
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-lg">
-        <div className="text-center text-gray-500 dark:text-gray-400">
-          <p>Chargez un modèle 3D pour commencer</p>
-        </div>
-      </div>
-    );
-  }
+  console.log('🎨 Rendering component - loading:', loading, 'error:', error, 'gltfModel:', !!gltfModel);
 
-  if (loading) {
-    console.log('⏳ Rendering: Loading state');
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-lg">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-300">
-            Chargement du modèle 3D...
-          </p>
-          <p className="text-xs text-gray-500 mt-2">
-            Consultez la console pour plus de détails
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    console.log('❌ Rendering: Error state -', error);
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg p-6">
-        <div className="text-center text-red-600 dark:text-red-400 max-w-md">
-          <AlertCircle size={48} className="mx-auto mb-4" />
-          <p className="font-medium mb-2">Erreur de chargement</p>
-          <p className="text-sm mb-4">{error}</p>
-          <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-black p-3 rounded">
-            <p className="font-medium mb-2">Solutions :</p>
-            <ul className="text-left space-y-1">
-              <li>• Utilisez un fichier <strong>GLB</strong> (format binaire autonome)</li>
-              <li>• Vérifiez que tous les fichiers du pack sont présents</li>
-              <li>• Consultez la console du navigateur pour plus de détails</li>
-            </ul>
+  return (
+    <div ref={containerRef} className="w-full h-full rounded-lg overflow-hidden relative">
+      {!gltfModel && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-lg">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <p>Chargez un modèle 3D pour commencer</p>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  console.log('🎨 Rendering: Canvas container');
-  return (
-    <div ref={containerRef} className="w-full h-full rounded-lg overflow-hidden" />
+      )}
+      
+      {gltfModel && loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-lg z-10">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-300">
+              Chargement du modèle 3D...
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              Consultez la console pour plus de détails
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg p-6 z-10">
+          <div className="text-center text-red-600 dark:text-red-400 max-w-md">
+            <AlertCircle size={48} className="mx-auto mb-4" />
+            <p className="font-medium mb-2">Erreur de chargement</p>
+            <p className="text-sm mb-4">{error}</p>
+            <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-black p-3 rounded">
+              <p className="font-medium mb-2">Solutions :</p>
+              <ul className="text-left space-y-1">
+                <li>• Utilisez un fichier <strong>GLB</strong> (format binaire autonome)</li>
+                <li>• Vérifiez que tous les fichiers du pack sont présents</li>
+                <li>• Consultez la console du navigateur pour plus de détails</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
