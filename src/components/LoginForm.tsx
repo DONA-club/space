@@ -9,7 +9,8 @@ import { LiquidGlassCard } from './LiquidGlassCard';
 import { authAPI } from '@/services/api';
 import { useAppStore } from '@/store/appStore';
 import { showError, showSuccess } from '@/utils/toast';
-import { Lock, User } from 'lucide-react';
+import { Lock, User, Info } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export const LoginForm = () => {
   const [username, setUsername] = useState('');
@@ -34,6 +35,11 @@ export const LoginForm = () => {
     }
   };
 
+  const handleDemoLogin = () => {
+    setUsername('demo');
+    setPassword('demo123');
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900">
       <motion.div
@@ -51,6 +57,17 @@ export const LoginForm = () => {
               Jumeau Numérique & Data Science
             </p>
           </div>
+
+          <Alert className="mb-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+            <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertDescription className="text-sm text-blue-800 dark:text-blue-200">
+              <strong>Identifiants de démo :</strong>
+              <br />
+              Utilisateur : <code className="bg-white dark:bg-black px-1 rounded">demo</code>
+              <br />
+              Mot de passe : <code className="bg-white dark:bg-black px-1 rounded">demo123</code>
+            </AlertDescription>
+          </Alert>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
@@ -85,13 +102,24 @@ export const LoginForm = () => {
               />
             </div>
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-            >
-              {loading ? 'Connexion...' : 'Se connecter'}
-            </Button>
+            <div className="space-y-2">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
+                {loading ? 'Connexion...' : 'Se connecter'}
+              </Button>
+              
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDemoLogin}
+                className="w-full bg-white/50 dark:bg-black/50"
+              >
+                Remplir avec les identifiants démo
+              </Button>
+            </div>
           </form>
         </LiquidGlassCard>
       </motion.div>

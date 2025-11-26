@@ -18,10 +18,29 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Mock authentication
+const MOCK_USERS = [
+  { username: 'demo', password: 'demo123', machineId: 'salon-vesta-001' },
+  { username: 'admin', password: 'admin', machineId: 'salon-vesta-001' },
+];
+
 export const authAPI = {
   login: async (credentials: { username: string; password: string }) => {
-    const response = await api.post('/login', credentials);
-    return response.data;
+    // Simuler un délai réseau
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const user = MOCK_USERS.find(
+      u => u.username === credentials.username && u.password === credentials.password
+    );
+    
+    if (!user) {
+      throw new Error('Identifiants incorrects');
+    }
+    
+    return {
+      token: `mock-token-${Date.now()}`,
+      machineId: user.machineId,
+    };
   },
 };
 
