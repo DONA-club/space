@@ -95,8 +95,8 @@ export const Dashboard = () => {
                 transition={{ delay: 0.1 }}
                 className="lg:col-span-2 h-full min-h-0"
               >
-                <LiquidGlassCard className="p-4 h-full flex flex-col">
-                  <div className="flex-1 min-h-0">
+                <LiquidGlassCard className="p-4 h-full">
+                  <div className="relative w-full h-full">
                     <Scene3DViewer />
                   </div>
                 </LiquidGlassCard>

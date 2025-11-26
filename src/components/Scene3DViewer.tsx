@@ -37,6 +37,11 @@ export const Scene3DViewer = () => {
 
     console.log('Container dimensions:', width, height);
 
+    if (width === 0 || height === 0) {
+      console.warn('Container has zero dimensions, waiting...');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -278,6 +283,7 @@ export const Scene3DViewer = () => {
     const handleResize = () => {
       const newWidth = container.clientWidth;
       const newHeight = container.clientHeight;
+      if (newWidth === 0 || newHeight === 0) return;
       camera.aspect = newWidth / newHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(newWidth, newHeight);
@@ -315,7 +321,7 @@ export const Scene3DViewer = () => {
   }, [gltfModel, sensors]);
 
   return (
-    <div ref={containerRef} className="w-full h-full rounded-lg overflow-hidden relative bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
+    <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
       {!gltfModel && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg">
           <div className="text-center text-gray-500 dark:text-gray-400">
