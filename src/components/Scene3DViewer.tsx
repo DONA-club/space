@@ -35,6 +35,8 @@ export const Scene3DViewer = () => {
     const width = container.clientWidth;
     const height = container.clientHeight;
 
+    console.log('Container dimensions:', width, height);
+
     setLoading(true);
     setError(null);
 
@@ -313,9 +315,9 @@ export const Scene3DViewer = () => {
   }, [gltfModel, sensors]);
 
   return (
-    <div ref={containerRef} className="w-full h-full rounded-lg overflow-hidden relative">
+    <div ref={containerRef} className="w-full h-full min-h-[500px] rounded-lg overflow-hidden relative bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
       {!gltfModel && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-lg">
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg">
           <div className="text-center text-gray-500 dark:text-gray-400">
             <p>Chargez un modèle 3D pour commencer</p>
           </div>
@@ -323,7 +325,7 @@ export const Scene3DViewer = () => {
       )}
       
       {gltfModel && loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-lg z-10">
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg z-10">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600 dark:text-gray-300">
