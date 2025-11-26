@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, useEffect } from "react";
 import { useAppStore } from "@/store/appStore";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -15,11 +15,76 @@ export const Scene3DViewer = () => {
     camera: THREE.PerspectiveCamera;
     controls: OrbitControls;
     animationId: number;
+    sensorMeshes: Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh }>;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
+  const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
+
+  // Listen to hover events from SensorPanel
+  useEffect(() => {
+    const handleSensorHover = (event: CustomEvent) => {
+      setHoveredSensorId(event.detail.sensorId);
+    };
+
+    const handleSensorLeave = () => {
+      setHoveredSensorId(null);
+    };
+
+    window.addEventListener('sensorHover' as any, handleSensorHover);
+    window.addEventListener('sensorLeave' as any, handleSensorLeave);
+
+    return () => {
+      window.removeEventListener('sensorHover' as any, handleSensorHover);
+      window.removeEventListener('sensorLeave' as any, handleSensorLeave);
+    };
+  }, []);
+
+  // Update sensor colors based on hover and CSV status
+  useEffect(() => {
+    if (!sceneRef.current) return;
+
+    const { sensorMeshes } = sceneRef.current;
+
+    sensors.forEach((sensor) => {
+      const meshes = sensorMeshes.get(sensor.id);
+      if (!meshes) return;
+
+      const isHovered = hoveredSensorId === sensor.id;
+      const hasCSV = !!sensor.csvFile;
+
+      // Determine color
+      let color: number;
+      let emissiveColor: number;
+      let glowColor: number;
+
+      if (isHovered) {
+        // Purple when hovered
+        color = 0x9333ea;
+        emissiveColor = 0x7c3aed;
+        glowColor = 0x9333ea;
+      } else if (hasCSV) {
+        // Green when CSV loaded
+        color = 0x22c55e;
+        emissiveColor = 0x16a34a;
+        glowColor = 0x22c55e;
+      } else {
+        // Default blue
+        color = 0x4dabf7;
+        emissiveColor = 0x2563eb;
+        glowColor = 0x4dabf7;
+      }
+
+      // Update sphere material
+      (meshes.sphere.material as THREE.MeshStandardMaterial).color.setHex(color);
+      (meshes.sphere.material as THREE.MeshStandardMaterial).emissive.setHex(emissiveColor);
+
+      // Update glow material
+      (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(glowColor);
+    });
+  }, [hoveredSensorId, sensors]);
 
   useLayoutEffect(() => {
     if (!containerRef.current) {
@@ -34,8 +99,6 @@ export const Scene3DViewer = () => {
     const container = containerRef.current;
     const width = container.clientWidth;
     const height = container.clientHeight;
-
-    console.log('Container dimensions:', width, height);
 
     if (width === 0 || height === 0) {
       console.warn('Container has zero dimensions, waiting...');
@@ -81,7 +144,6 @@ export const Scene3DViewer = () => {
 
     // Camera
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-    camera.position.set(8, 6, 8);
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ 
@@ -131,6 +193,9 @@ export const Scene3DViewer = () => {
     controls.maxDistance = 50;
     controls.maxPolarAngle = Math.PI / 1.5;
 
+    // Map to store sensor meshes
+    const sensorMeshes = new Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh }>();
+
     // Load GLTF Model
     const loader = new GLTFLoader();
 
@@ -171,16 +236,12 @@ export const Scene3DViewer = () => {
         
         scene.add(gltf.scene);
         
-        // Add sensor markers - apply transformations to the group itself
+        // Add sensor markers
         const sensorGroup = new THREE.Group();
-        
-        // Apply the same transformations to the sensor group
         sensorGroup.position.copy(gltf.scene.position);
         sensorGroup.scale.copy(gltf.scene.scale);
         
         sensors.forEach((sensor) => {
-          // Use original sensor positions WITHOUT any transformation
-          // The group will handle position and scale
           const originalPosition = new THREE.Vector3(
             sensor.position[0],
             sensor.position[1],
@@ -213,6 +274,9 @@ export const Scene3DViewer = () => {
           glow.position.copy(originalPosition);
           sensorGroup.add(glow);
 
+          // Store meshes for later updates
+          sensorMeshes.set(sensor.id, { sphere, glow });
+
           // Label
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
@@ -243,11 +307,21 @@ export const Scene3DViewer = () => {
         
         scene.add(sensorGroup);
         
-        // Position camera to see the model
-        const distance = maxDim * 1.2;
+        // Calculate bounding sphere for proper camera positioning
+        const boundingSphere = new THREE.Sphere();
+        box.getBoundingSphere(boundingSphere);
+        
+        // Position camera to see the entire model with margin
+        // Use a larger distance multiplier to ensure full visibility during rotation
+        const distance = boundingSphere.radius * 2.5;
         camera.position.set(distance, distance * 0.75, distance);
         camera.lookAt(0, 0, 0);
         controls.target.set(0, 0, 0);
+        
+        // Set min/max distance based on bounding sphere
+        controls.minDistance = boundingSphere.radius * 1.2;
+        controls.maxDistance = boundingSphere.radius * 5;
+        
         controls.update();
       },
       undefined,
@@ -276,7 +350,8 @@ export const Scene3DViewer = () => {
       scene,
       camera,
       controls,
-      animationId: firstAnimationId
+      animationId: firstAnimationId,
+      sensorMeshes
     };
 
     // Handle resize

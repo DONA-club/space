@@ -19,6 +19,14 @@ export const SensorPanel = () => {
     setSensorCsv(sensorId, null as any);
   };
 
+  const handleSensorHover = (sensorId: number) => {
+    window.dispatchEvent(new CustomEvent('sensorHover', { detail: { sensorId } }));
+  };
+
+  const handleSensorLeave = () => {
+    window.dispatchEvent(new CustomEvent('sensorLeave'));
+  };
+
   return (
     <LiquidGlassCard className="h-full">
       <div className="h-full flex flex-col">
@@ -43,7 +51,12 @@ export const SensorPanel = () => {
           <div className="flex-1 overflow-hidden">
             <div className="h-full overflow-y-auto p-3 space-y-2">
               {sensors.map((sensor) => (
-                <div key={sensor.id} className="bg-white/10 dark:bg-black/10 backdrop-blur-xl backdrop-saturate-150 border border-white/20 dark:border-white/10 shadow-xl shadow-black/5 rounded-2xl p-3 hover:shadow-md transition-shadow">
+                <div 
+                  key={sensor.id} 
+                  className="bg-white/10 dark:bg-black/10 backdrop-blur-xl backdrop-saturate-150 border border-white/20 dark:border-white/10 shadow-xl shadow-black/5 rounded-2xl p-3 hover:shadow-md transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
+                  onMouseEnter={() => handleSensorHover(sensor.id)}
+                  onMouseLeave={handleSensorLeave}
+                >
                   <div className="space-y-2">
                     {/* Header */}
                     <div className="flex items-center justify-between gap-2">
