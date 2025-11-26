@@ -17,6 +17,7 @@ export const Scene3DViewer = () => {
     animationId: number;
     sensorMeshes: Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>;
     boundingSphere: THREE.Sphere;
+    sensorData: Map<number, Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>>;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,6 +46,60 @@ export const Scene3DViewer = () => {
       window.removeEventListener('sensorLeave' as any, handleSensorLeave);
     };
   }, []);
+
+  // Load CSV data when sensors change
+  useEffect(() => {
+    if (!sceneRef.current) return;
+
+    const loadSensorData = async () => {
+      const sensorData = new Map();
+
+      for (const sensor of sensors) {
+        if (!sensor.csvFile) continue;
+
+        try {
+          const text = await sensor.csvFile.text();
+          const lines = text.split('\n').filter(line => line.trim());
+          const dataLines = lines.slice(1);
+
+          const data = dataLines.map(line => {
+            const values = line.replace(/"/g, '').split(',');
+            if (values.length < 5) return null;
+
+            const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
+            const date = new Date(timestampStr.trim());
+
+            if (isNaN(date.getTime())) return null;
+
+            const temp = parseFloat(tempStr);
+            const hum = parseFloat(humStr);
+            const absHum = parseFloat(absHumStr);
+            const dpt = parseFloat(dptStr);
+
+            if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) return null;
+
+            return {
+              timestamp: date.getTime(),
+              temperature: temp,
+              humidity: hum,
+              absoluteHumidity: absHum,
+              dewPoint: dpt
+            };
+          }).filter(d => d !== null);
+
+          sensorData.set(sensor.id, data);
+        } catch (error) {
+          console.error(`Error loading CSV for sensor ${sensor.id}:`, error);
+        }
+      }
+
+      if (sceneRef.current) {
+        sceneRef.current.sensorData = sensorData;
+      }
+    };
+
+    loadSensorData();
+  }, [sensors]);
 
   // Update sensor colors
   useEffect(() => {
@@ -85,61 +140,81 @@ export const Scene3DViewer = () => {
 
   // Update labels when data changes
   useEffect(() => {
-    if (!sceneRef.current || !dataReady) return;
+    if (!sceneRef.current) return;
 
-    const { sensorMeshes } = sceneRef.current;
+    const { sensorMeshes, sensorData } = sceneRef.current;
 
     sensors.forEach((sensor) => {
       const meshes = sensorMeshes.get(sensor.id);
-      if (!meshes || !sensor.currentData) return;
+      if (!meshes) return;
 
       const sprite = meshes.sprite;
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
       
-      if (context) {
-        canvas.width = 256;
-        canvas.height = 64;
+      if (!context) return;
+
+      canvas.width = 256;
+      canvas.height = 64;
+      
+      // Background
+      context.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      context.roundRect(0, 0, canvas.width, canvas.height, 8);
+      context.fill();
+      
+      // Text
+      context.fillStyle = '#1e40af';
+      context.font = 'bold 28px Arial';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      
+      if (dataReady && sensorData.has(sensor.id)) {
+        // Find the closest data point to current timestamp
+        const data = sensorData.get(sensor.id)!;
         
-        // Background
-        context.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        context.roundRect(0, 0, canvas.width, canvas.height, 8);
-        context.fill();
+        // Find closest timestamp
+        let closestData = data[0];
+        let minDiff = Math.abs(data[0].timestamp - currentTimestamp);
         
-        // Text
-        context.fillStyle = '#1e40af';
-        context.font = 'bold 28px Arial';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
+        for (const point of data) {
+          const diff = Math.abs(point.timestamp - currentTimestamp);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestData = point;
+          }
+        }
         
         let value = '';
         let unit = '';
         
         switch (selectedMetric) {
           case 'temperature':
-            value = sensor.currentData.temperature.toFixed(1);
+            value = closestData.temperature.toFixed(1);
             unit = '°C';
             break;
           case 'humidity':
-            value = sensor.currentData.humidity.toFixed(1);
+            value = closestData.humidity.toFixed(1);
             unit = '%';
             break;
           case 'absoluteHumidity':
-            value = sensor.currentData.absoluteHumidity.toFixed(2);
+            value = closestData.absoluteHumidity.toFixed(2);
             unit = 'g/m³';
             break;
           case 'dewPoint':
-            value = sensor.currentData.dewPoint.toFixed(1);
+            value = closestData.dewPoint.toFixed(1);
             unit = '°C';
             break;
         }
         
         context.fillText(`${value}${unit}`, 128, 32);
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        (sprite.material as THREE.SpriteMaterial).map = texture;
-        (sprite.material as THREE.SpriteMaterial).needsUpdate = true;
+      } else {
+        // Show sensor name when no data
+        context.fillText(sensor.name, 128, 32);
       }
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      (sprite.material as THREE.SpriteMaterial).map = texture;
+      (sprite.material as THREE.SpriteMaterial).needsUpdate = true;
     });
   }, [dataReady, selectedMetric, currentTimestamp, sensors]);
 
@@ -156,19 +231,29 @@ export const Scene3DViewer = () => {
 
       if (newWidth === 0 || newHeight === 0) return;
 
+      // Update camera aspect ratio
       camera.aspect = newWidth / newHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(newWidth, newHeight);
 
-      // Adjust camera distance to keep model fully visible
-      const distance = boundingSphere.radius * 2.5;
-      const currentDistance = camera.position.length();
+      // Calculate optimal distance based on aspect ratio and bounding sphere
+      const fov = camera.fov * (Math.PI / 180);
+      const aspectRatio = newWidth / newHeight;
       
-      if (Math.abs(currentDistance - distance) > 0.1) {
-        const direction = camera.position.clone().normalize();
-        camera.position.copy(direction.multiplyScalar(distance));
-        controls.update();
-      }
+      // Use the smaller dimension to ensure the model fits
+      const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
+      const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
+      
+      const optimalDistance = Math.max(verticalFit, horizontalFit) * 1.5; // 1.5 for margin
+      
+      // Get current camera direction
+      const direction = camera.position.clone().normalize();
+      
+      // Set new position maintaining the direction
+      camera.position.copy(direction.multiplyScalar(optimalDistance));
+      camera.lookAt(0, 0, 0);
+      
+      controls.update();
     });
 
     resizeObserver.observe(containerRef.current);
@@ -288,6 +373,7 @@ export const Scene3DViewer = () => {
 
     // Map to store sensor meshes
     const sensorMeshes = new Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>();
+    const sensorData = new Map();
 
     // Load GLTF Model
     const loader = new GLTFLoader();
@@ -413,7 +499,12 @@ export const Scene3DViewer = () => {
         box.getBoundingSphere(boundingSphere);
         
         // Position camera to see the entire model with margin
-        const distance = boundingSphere.radius * 2.5;
+        const fov = camera.fov * (Math.PI / 180);
+        const aspectRatio = width / height;
+        const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
+        const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
+        const distance = Math.max(verticalFit, horizontalFit) * 1.5;
+        
         camera.position.set(distance, distance * 0.75, distance);
         camera.lookAt(0, 0, 0);
         controls.target.set(0, 0, 0);
@@ -452,7 +543,8 @@ export const Scene3DViewer = () => {
       controls,
       animationId: firstAnimationId,
       sensorMeshes,
-      boundingSphere
+      boundingSphere,
+      sensorData
     };
 
     // Cleanup
