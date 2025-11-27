@@ -6,9 +6,9 @@ import { LiquidGlassCard } from './LiquidGlassCard';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Label } from './ui/label';
-import { Loader2, Play, Download, Trash2, Info } from 'lucide-react';
+import { Loader2, Play, Download, Trash2, Info, Bug } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
-import { showSuccess } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
 
 interface InteriorVolumeSamplerProps {
   gltfUrl: string | null;
@@ -18,7 +18,7 @@ interface InteriorVolumeSamplerProps {
 export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: InteriorVolumeSamplerProps) => {
   const volumeData = useLoadVolumeGLB(gltfUrl);
   const [resolution, setResolution] = useState(0.175);
-  const [tolerance, setTolerance] = useState(3);
+  const [tolerance, setTolerance] = useState(2);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<InteriorPointCloudResult | null>(null);
@@ -29,6 +29,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
   const handleGenerate = async () => {
     if (!volumeData.mesh || !volumeData.geometry) {
       console.error('No mesh loaded');
+      showError('Aucun modèle 3D chargé');
       return;
     }
 
@@ -51,6 +52,16 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
 
       setResult(result);
       
+      if (result.totalInside === 0) {
+        showError('⚠️ Aucun point intérieur trouvé ! Essayez de diminuer la tolérance ou vérifiez la géométrie du modèle.');
+        return;
+      }
+      
+      if (result.filterPercentage > 95) {
+        showError(`⚠️ Filtrage trop agressif (${result.filterPercentage.toFixed(1)}%) ! Diminuez la tolérance.`);
+        return;
+      }
+      
       // Save to store for use in Scene3DViewer
       setFilteredPointCloud(result.points);
       showSuccess(`Point cloud filtré sauvegardé ! ${result.totalInside.toLocaleString()} points intérieurs (${result.filterPercentage.toFixed(1)}% filtrés)`);
@@ -60,6 +71,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
       }
     } catch (error) {
       console.error('Error generating interior point cloud:', error);
+      showError('Erreur lors de la génération du point cloud');
     } finally {
       setProcessing(false);
     }
@@ -167,10 +179,10 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
                     <p className="font-medium mb-1">Vote majoritaire multi-directionnel</p>
                     <p>Nombre minimum de directions (sur 6) qui doivent s'accorder pour considérer un point comme intérieur.</p>
                     <ul className="mt-2 space-y-1">
-                      <li>• 2/6 = 33% (très permissif)</li>
+                      <li>• 1/6 = 17% (ultra permissif)</li>
+                      <li>• 2/6 = 33% (très permissif) ⭐</li>
                       <li>• 3/6 = 50% (équilibré)</li>
                       <li>• 4/6 = 67% (strict)</li>
-                      <li>• 5/6 = 83% (très strict)</li>
                     </ul>
                   </div>
                 </div>
@@ -182,16 +194,16 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             <Slider
               value={[tolerance]}
               onValueChange={(v) => setTolerance(v[0])}
-              min={2}
-              max={5}
+              min={1}
+              max={4}
               step={1}
               disabled={processing}
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {tolerance === 2 && "Très permissif - garde plus de points"}
-              {tolerance === 3 && "Équilibré - recommandé (50% d'accord)"}
-              {tolerance === 4 && "Strict - filtre plus agressivement"}
-              {tolerance === 5 && "Très strict - garde uniquement les points certains"}
+              {tolerance === 1 && "Ultra permissif - garde presque tous les points"}
+              {tolerance === 2 && "Très permissif - recommandé pour géométries complexes ⭐"}
+              {tolerance === 3 && "Équilibré - 50% d'accord requis"}
+              {tolerance === 4 && "Strict - filtre agressivement"}
             </p>
           </div>
 
@@ -242,8 +254,24 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
       )}
 
       {result && (
-        <div className="space-y-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-          <h4 className="font-medium text-green-800 dark:text-green-300">✅ Point Cloud Généré & Appliqué</h4>
+        <div className={`space-y-3 p-4 rounded-lg border ${
+          result.totalInside === 0 
+            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+            : result.filterPercentage > 95
+            ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+            : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+        }`}>
+          <h4 className={`font-medium ${
+            result.totalInside === 0 
+              ? 'text-red-800 dark:text-red-300'
+              : result.filterPercentage > 95
+              ? 'text-yellow-800 dark:text-yellow-300'
+              : 'text-green-800 dark:text-green-300'
+          }`}>
+            {result.totalInside === 0 ? '❌ Aucun point trouvé' : 
+             result.filterPercentage > 95 ? '⚠️ Filtrage trop agressif' :
+             '✅ Point Cloud Généré & Appliqué'}
+          </h4>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
               <span className="text-gray-600 dark:text-gray-400">Points totaux:</span>
@@ -271,30 +299,47 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             </div>
           </div>
           
-          <Button
-            onClick={handleExport}
-            variant="outline"
-            size="sm"
-            className="w-full mt-2"
-          >
-            <Download size={14} className="mr-2" />
-            Exporter (JSON)
-          </Button>
+          {result.totalInside > 0 && (
+            <>
+              <Button
+                onClick={handleExport}
+                variant="outline"
+                size="sm"
+                className="w-full mt-2"
+              >
+                <Download size={14} className="mr-2" />
+                Exporter (JSON)
+              </Button>
+              
+              <p className="text-xs text-green-700 dark:text-green-400 text-center">
+                🎯 L'interpolation utilise maintenant ces points filtrés
+              </p>
+            </>
+          )}
           
-          <p className="text-xs text-green-700 dark:text-green-400 text-center">
-            🎯 L'interpolation utilise maintenant ces points filtrés
-          </p>
+          {(result.totalInside === 0 || result.filterPercentage > 95) && (
+            <div className="text-xs bg-white dark:bg-black p-2 rounded">
+              <p className="font-medium mb-1">💡 Solutions :</p>
+              <ul className="space-y-1">
+                <li>• Diminuez la tolérance à 1 ou 2</li>
+                <li>• Vérifiez que le modèle 3D est fermé (manifold)</li>
+                <li>• Consultez la console pour les détails de debug</li>
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
       <div className="text-xs text-gray-500 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-        <p className="font-medium mb-2">🔧 Technologie améliorée:</p>
+        <p className="font-medium mb-2 flex items-center gap-2">
+          <Bug size={14} />
+          Debug activé - Consultez la console
+        </p>
         <ul className="space-y-1">
-          <li>• <strong>BVH</strong> (three-mesh-bvh) pour raycasting accéléré</li>
-          <li>• <strong>Raycasting multi-directionnel</strong> (6 directions: ±X, ±Y, ±Z)</li>
-          <li>• <strong>Vote majoritaire</strong> pour robustesse accrue</li>
-          <li>• <strong>Web Worker</strong> pour traitement parallèle</li>
-          <li>• <strong>Even-Odd Rule</strong> pour test inside/outside</li>
+          <li>• <strong>BVH</strong> pour raycasting accéléré</li>
+          <li>• <strong>6 directions</strong> testées (±X, ±Y, ±Z)</li>
+          <li>• <strong>Vote majoritaire</strong> avec tolérance ajustable</li>
+          <li>• <strong>Logs détaillés</strong> des 10 premiers points</li>
         </ul>
       </div>
     </LiquidGlassCard>

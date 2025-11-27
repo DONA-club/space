@@ -28,6 +28,13 @@ interface ResultMessage {
   interiorPoints: Float32Array;
   totalProcessed: number;
   totalInside: number;
+  debugInfo?: {
+    sampleResults: Array<{
+      point: [number, number, number];
+      votes: number[];
+      decision: boolean;
+    }>;
+  };
 }
 
 // Reconstruct geometry with BVH in worker
@@ -49,14 +56,14 @@ function reconstructGeometry(geometryData: WorkerMessage['geometryData']): THREE
   return geometry;
 }
 
-// Test if a point is inside the mesh using multi-directional raycasting with majority vote
+// Test if a point is inside using a more robust approach
 function isPointInside(
   point: THREE.Vector3,
   mesh: THREE.Mesh,
   raycaster: THREE.Raycaster,
   tolerance: number = 2
-): boolean {
-  // Test in 6 directions: +X, -X, +Y, -Y, +Z, -Z
+): { inside: boolean; votes: number[] } {
+  // Test in 6 main directions
   const directions = [
     new THREE.Vector3(1, 0, 0),   // +X
     new THREE.Vector3(-1, 0, 0),  // -X
@@ -66,28 +73,37 @@ function isPointInside(
     new THREE.Vector3(0, 0, -1),  // -Z
   ];
   
+  const votes: number[] = [];
   let insideCount = 0;
   
   for (const direction of directions) {
     raycaster.set(point, direction);
     const intersects = raycaster.intersectObject(mesh, false);
     
+    const intersectionCount = intersects.length;
+    votes.push(intersectionCount);
+    
     // Even-odd rule: odd number of intersections = inside
-    if (intersects.length % 2 === 1) {
+    if (intersectionCount % 2 === 1) {
       insideCount++;
     }
   }
   
-  // Majority vote: if at least 'tolerance' directions say inside, consider it inside
-  // tolerance = 2 means at least 2 out of 6 directions must agree
-  // tolerance = 3 means at least 3 out of 6 directions must agree (50%)
-  // tolerance = 4 means at least 4 out of 6 directions must agree (majority)
-  return insideCount >= tolerance;
+  // If we have very few or no intersections in any direction, the point is likely outside
+  const totalIntersections = votes.reduce((sum, v) => sum + v, 0);
+  if (totalIntersections === 0) {
+    return { inside: false, votes };
+  }
+  
+  // Majority vote with tolerance
+  const inside = insideCount >= tolerance;
+  
+  return { inside, votes };
 }
 
 // Process points in batches
 self.onmessage = (e: MessageEvent<WorkerMessage>) => {
-  const { type, points, geometryData, batchSize = 2048, tolerance = 3 } = e.data;
+  const { type, points, geometryData, batchSize = 2048, tolerance = 2 } = e.data;
   
   if (type !== 'filter') return;
   
@@ -102,7 +118,14 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   const totalPoints = points.length / 3;
   const interiorPoints: number[] = [];
   
-  console.log(`🔍 Worker: Processing ${totalPoints.toLocaleString()} points with multi-directional raycasting...`);
+  // Debug: sample first 10 points
+  const debugSamples: Array<{
+    point: [number, number, number];
+    votes: number[];
+    decision: boolean;
+  }> = [];
+  
+  console.log(`🔍 Worker: Processing ${totalPoints.toLocaleString()} points...`);
   
   const startTime = performance.now();
   let lastProgressTime = startTime;
@@ -113,8 +136,18 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
     const z = points[i * 3 + 2];
     
     const point = new THREE.Vector3(x, y, z);
+    const result = isPointInside(point, mesh, raycaster, tolerance);
     
-    if (isPointInside(point, mesh, raycaster, tolerance)) {
+    // Collect debug info for first 10 points
+    if (i < 10) {
+      debugSamples.push({
+        point: [x, y, z],
+        votes: result.votes,
+        decision: result.inside,
+      });
+    }
+    
+    if (result.inside) {
       interiorPoints.push(x, y, z);
     }
     
@@ -138,18 +171,31 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   const duration = endTime - startTime;
   const filterPercentage = ((totalPoints - interiorPoints.length / 3) / totalPoints) * 100;
   
-  console.log(`✅ Worker: Multi-directional raycasting completed:`);
+  console.log(`✅ Worker: Filtering completed:`);
   console.log(`   - Total processed: ${totalPoints.toLocaleString()}`);
   console.log(`   - Points inside: ${(interiorPoints.length / 3).toLocaleString()}`);
   console.log(`   - Points filtered: ${(totalPoints - interiorPoints.length / 3).toLocaleString()}`);
   console.log(`   - Filter rate: ${filterPercentage.toFixed(1)}%`);
   console.log(`   - Duration: ${duration.toFixed(0)}ms`);
   
+  // Log debug samples
+  console.log('📊 Debug samples (first 10 points):');
+  debugSamples.forEach((sample, idx) => {
+    const insideVotes = sample.votes.filter((v, i) => v % 2 === 1).length;
+    console.log(`   Point ${idx}: [${sample.point.map(v => v.toFixed(3)).join(', ')}]`);
+    console.log(`      Intersections: [${sample.votes.join(', ')}]`);
+    console.log(`      Inside votes: ${insideVotes}/6`);
+    console.log(`      Decision: ${sample.decision ? 'INSIDE' : 'OUTSIDE'}`);
+  });
+  
   const result: ResultMessage = {
     type: 'result',
     interiorPoints: new Float32Array(interiorPoints),
     totalProcessed: totalPoints,
     totalInside: interiorPoints.length / 3,
+    debugInfo: {
+      sampleResults: debugSamples,
+    },
   };
   
   self.postMessage(result, { transfer: [result.interiorPoints.buffer] });
