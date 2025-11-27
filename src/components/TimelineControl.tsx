@@ -134,9 +134,34 @@ export const TimelineControl = () => {
   return (
     <LiquidGlassCard className="p-4">
       <div className="space-y-4">
-        {/* Top Controls Row */}
+        {/* Top Controls Row - Reorganized */}
         <div className="flex items-center justify-between gap-4">
-          {/* Playback controls */}
+          {/* Left: Playback speed */}
+          <TooltipPrimitive.Provider delayDuration={300}>
+            <TooltipPrimitive.Root>
+              <TooltipPrimitive.Trigger asChild>
+                <select
+                  value={playbackSpeed}
+                  onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                  className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={60}>1 min/s</option>
+                  <option value={120}>2x</option>
+                  <option value={300}>5x</option>
+                  <option value={600}>10x</option>
+                  <option value={1800}>30x</option>
+                </select>
+              </TooltipPrimitive.Trigger>
+              <TooltipPrimitive.Portal>
+                <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                  <p className="font-medium mb-1">Vitesse de lecture</p>
+                  <p>Contrôle la vitesse de défilement des données</p>
+                </TooltipPrimitive.Content>
+              </TooltipPrimitive.Portal>
+            </TooltipPrimitive.Root>
+          </TooltipPrimitive.Provider>
+
+          {/* Center: Playback controls + current time */}
           <div className="flex items-center gap-2">
             <TooltipPrimitive.Provider delayDuration={300}>
               <TooltipPrimitive.Root>
@@ -193,36 +218,12 @@ export const TimelineControl = () => {
               </TooltipPrimitive.Root>
             </TooltipPrimitive.Provider>
 
-            <div className="text-xs text-gray-600 dark:text-gray-300 font-medium ml-2 min-w-[100px]">
+            <div className="text-xs text-blue-600 dark:text-blue-400 font-medium ml-2">
               {formatTime(currentTimestamp)}
             </div>
-
-            <TooltipPrimitive.Provider delayDuration={300}>
-              <TooltipPrimitive.Root>
-                <TooltipPrimitive.Trigger asChild>
-                  <select
-                    value={playbackSpeed}
-                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                    className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value={60}>1 min/s</option>
-                    <option value={120}>2x</option>
-                    <option value={300}>5x</option>
-                    <option value={600}>10x</option>
-                    <option value={1800}>30x</option>
-                  </select>
-                </TooltipPrimitive.Trigger>
-                <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
-                    <p className="font-medium mb-1">Vitesse de lecture</p>
-                    <p>Contrôle la vitesse de défilement des données</p>
-                  </TooltipPrimitive.Content>
-                </TooltipPrimitive.Portal>
-              </TooltipPrimitive.Root>
-            </TooltipPrimitive.Provider>
           </div>
 
-          {/* Metric selector */}
+          {/* Right: Metric selector */}
           <TooltipPrimitive.Provider delayDuration={300}>
             <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
               <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-9 p-1 gap-1">
@@ -322,76 +323,64 @@ export const TimelineControl = () => {
             <span>{formatTime(rangeEnd)}</span>
           </div>
 
-          <TooltipPrimitive.Provider delayDuration={300}>
-            <TooltipPrimitive.Root>
-              <TooltipPrimitive.Trigger asChild>
-                <div 
-                  ref={timelineRef}
-                  className="relative h-12 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
+          <div 
+            ref={timelineRef}
+            className="relative h-12 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
+          >
+            {/* Day markers */}
+            {dayMarkers.map((marker, idx) => {
+              const pos = getPosition(marker);
+              return (
+                <div
+                  key={idx}
+                  className="absolute top-0 bottom-0 flex flex-col items-center"
+                  style={{ left: `${pos}%` }}
                 >
-                  {/* Day markers */}
-                  {dayMarkers.map((marker, idx) => {
-                    const pos = getPosition(marker);
-                    return (
-                      <div
-                        key={idx}
-                        className="absolute top-0 bottom-0 flex flex-col items-center"
-                        style={{ left: `${pos}%` }}
-                      >
-                        <div className="w-px h-full bg-gray-400/50"></div>
-                        <span className="absolute -bottom-5 text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                          {formatDate(marker)}
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                  {/* Selected range highlight */}
-                  <div
-                    className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm"
-                    style={{
-                      left: `${getPosition(rangeStart)}%`,
-                      width: `${getPosition(rangeEnd) - getPosition(rangeStart)}%`
-                    }}
-                  />
-
-                  {/* Range start handle */}
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
-                    style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-6px' }}
-                    onMouseDown={handleMouseDown('start')}
-                  >
-                    <div className="absolute inset-0 bg-white/20 rounded-full"></div>
-                  </div>
-
-                  {/* Range end handle */}
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
-                    style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-6px' }}
-                    onMouseDown={handleMouseDown('end')}
-                  >
-                    <div className="absolute inset-0 bg-white/20 rounded-full"></div>
-                  </div>
-
-                  {/* Current position cursor */}
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-yellow-400 to-orange-500 cursor-ew-resize shadow-lg"
-                    style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px' }}
-                    onMouseDown={handleMouseDown('current')}
-                  >
-                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
-                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
-                  </div>
+                  <div className="w-px h-full bg-gray-400/50"></div>
+                  <span className="absolute -bottom-5 text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    {formatDate(marker)}
+                  </span>
                 </div>
-              </TooltipPrimitive.Trigger>
-              <TooltipPrimitive.Portal>
-                <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
-                  <p className="font-medium mb-1">Timeline interactive</p>
-                  <p className="text-gray-300">🔵 Début • 🟣 Fin • 🟡 Position actuelle</p>
-                </TooltipPrimitive.Content>
-              </TooltipPrimitive.Portal>
-            </TooltipPrimitive.Root>
-          </TooltipPrimitive.Provider>
+              );
+            })}
+
+            {/* Selected range highlight */}
+            <div
+              className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm"
+              style={{
+                left: `${getPosition(rangeStart)}%`,
+                width: `${getPosition(rangeEnd) - getPosition(rangeStart)}%`
+              }}
+            />
+
+            {/* Range start handle */}
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
+              style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-6px' }}
+              onMouseDown={handleMouseDown('start')}
+            >
+              <div className="absolute inset-0 bg-white/20 rounded-full"></div>
+            </div>
+
+            {/* Range end handle */}
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
+              style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-6px' }}
+              onMouseDown={handleMouseDown('end')}
+            >
+              <div className="absolute inset-0 bg-white/20 rounded-full"></div>
+            </div>
+
+            {/* Current position cursor */}
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-yellow-400 to-orange-500 cursor-ew-resize shadow-lg"
+              style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px' }}
+              onMouseDown={handleMouseDown('current')}
+            >
+              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
+              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
+            </div>
+          </div>
         </div>
 
         {/* Info */}
