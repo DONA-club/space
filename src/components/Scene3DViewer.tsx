@@ -20,13 +20,13 @@ export const Scene3DViewer = () => {
     boundingSphere: THREE.Sphere;
     sensorData: Map<number, Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>>;
     interpolationMesh: THREE.Points | null;
-    modelBounds: { min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null;
     modelScale: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [modelLoaded, setModelLoaded] = useState(false);
-  const [modelBoundsReady, setModelBoundsReady] = useState(false); // NEW: Track when bounds are ready
+  // NEW: Store modelBounds in React state instead of ref
+  const [modelBounds, setModelBounds] = useState<{ min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null>(null);
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
   const dataReady = useAppStore((state) => state.dataReady);
@@ -229,10 +229,10 @@ export const Scene3DViewer = () => {
     });
   }, [dataReady, selectedMetric, currentTimestamp, sensors]);
 
-  // Update interpolation mesh - FIX: Use modelBoundsReady state
+  // Update interpolation mesh - FIX: Use modelBounds from state
   useEffect(() => {
     // Early exit if conditions not met
-    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBoundsReady) {
+    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds) {
       // Remove existing mesh if disabled
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
@@ -243,12 +243,7 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, sensorData, interpolationMesh, modelBounds, modelScale } = sceneRef.current;
-
-    if (!modelBounds) {
-      console.warn('⚠️ Model bounds not available yet (should not happen)');
-      return;
-    }
+    const { scene, sensorData, interpolationMesh, modelScale } = sceneRef.current;
 
     // Remove old mesh
     if (interpolationMesh) {
@@ -411,7 +406,7 @@ export const Scene3DViewer = () => {
     sceneRef.current.interpolationMesh = newMesh;
 
     console.log(`✨ Interpolation mesh created: ${gridValues.length} points, size: ${pointSize.toFixed(3)}`);
-  }, [dataReady, meshingEnabled, modelBoundsReady, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]); // FIX: Use modelBoundsReady instead of modelLoaded
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]);
 
   // Handle container resize with zoom adjustment
   useEffect(() => {
@@ -481,7 +476,7 @@ export const Scene3DViewer = () => {
     setLoading(true);
     setError(null);
     setModelLoaded(false);
-    setModelBoundsReady(false); // NEW: Reset bounds ready state
+    setModelBounds(null); // NEW: Reset bounds state
 
     const loadingTimeout = setTimeout(() => {
       setError('Le chargement du modèle a pris trop de temps. Vérifiez que tous les fichiers nécessaires sont présents.');
@@ -582,7 +577,6 @@ export const Scene3DViewer = () => {
     const loader = new GLTFLoader();
 
     let boundingSphere = new THREE.Sphere();
-    let modelBounds: { min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null = null;
     let modelScale = 1;
 
     loader.load(
@@ -627,15 +621,16 @@ export const Scene3DViewer = () => {
         modelScale = maxDim > 0 ? 10 / maxDim : 1;
         gltf.scene.scale.multiplyScalar(modelScale);
         
-        // Store scaled bounds for interpolation
-        modelBounds = {
+        // Store scaled bounds in React state
+        const scaledBounds = {
           min: originalBox.min.clone().sub(originalCenter).multiplyScalar(modelScale),
           max: originalBox.max.clone().sub(originalCenter).multiplyScalar(modelScale),
           center: new THREE.Vector3(0, 0, 0),
           size: originalSize.clone().multiplyScalar(modelScale)
         };
         
-        console.log('📦 Scaled model bounds:', modelBounds);
+        console.log('📦 Scaled model bounds:', scaledBounds);
+        setModelBounds(scaledBounds); // NEW: Set bounds in state
         
         scene.add(gltf.scene);
         
@@ -740,7 +735,6 @@ export const Scene3DViewer = () => {
         
         // Mark model as loaded
         setModelLoaded(true);
-        setModelBoundsReady(true); // NEW: Mark bounds as ready
         console.log('✅ Model bounds are now ready for interpolation');
       },
       undefined,
@@ -774,7 +768,6 @@ export const Scene3DViewer = () => {
       boundingSphere,
       sensorData,
       interpolationMesh: null,
-      modelBounds,
       modelScale
     };
 

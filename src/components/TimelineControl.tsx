@@ -134,8 +134,8 @@ export const TimelineControl = () => {
   return (
     <LiquidGlassCard className="p-4">
       <div className="space-y-4">
-        {/* Top Controls Row - Métriques à gauche, Vitesse à droite */}
-        <div className="flex items-center justify-between gap-4">
+        {/* Top Controls Row - Métriques à gauche, Boutons centrés absolument, Vitesse à droite */}
+        <div className="relative flex items-center justify-between gap-4">
           {/* Left: Metric selector */}
           <TooltipPrimitive.Provider delayDuration={300}>
             <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
@@ -227,8 +227,8 @@ export const TimelineControl = () => {
             </Tabs>
           </TooltipPrimitive.Provider>
 
-          {/* Center: Playback controls only */}
-          <div className="flex items-center gap-2">
+          {/* Center: Playback controls - Positioned absolutely */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
             <TooltipPrimitive.Provider delayDuration={300}>
               <TooltipPrimitive.Root>
                 <TooltipPrimitive.Trigger asChild>
