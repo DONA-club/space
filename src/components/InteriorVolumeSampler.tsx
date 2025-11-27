@@ -17,7 +17,7 @@ interface InteriorVolumeSamplerProps {
 
 export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: InteriorVolumeSamplerProps) => {
   const volumeData = useLoadVolumeGLB(gltfUrl);
-  const [resolution, setResolution] = useState(0.25);
+  const [resolution, setResolution] = useState(0.175);
   const [tolerance, setTolerance] = useState(3);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -142,14 +142,14 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label>Résolution (m)</Label>
-              <span className="text-sm font-medium text-blue-600">{resolution.toFixed(2)}</span>
+              <span className="text-sm font-medium text-blue-600">{resolution.toFixed(3)}</span>
             </div>
             <Slider
               value={[resolution]}
               onValueChange={(v) => setResolution(v[0])}
-              min={0.1}
-              max={1.0}
-              step={0.05}
+              min={0.15}
+              max={0.20}
+              step={0.005}
               disabled={processing}
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -263,7 +263,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             </div>
             <div>
               <span className="text-gray-600 dark:text-gray-400">Résolution:</span>
-              <span className="ml-2 font-medium">{resolution.toFixed(2)}m</span>
+              <span className="ml-2 font-medium">{resolution.toFixed(3)}m</span>
             </div>
             <div>
               <span className="text-gray-600 dark:text-gray-400">Tolérance:</span>
