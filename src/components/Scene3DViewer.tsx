@@ -5,10 +5,11 @@ import { useAppStore } from "@/store/appStore";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { AlertCircle } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 
-// Helper function to check if a point is inside a mesh
+// Helper function to check if a point is inside a mesh using raycasting
 function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Mesh): boolean {
   const raycaster = new THREE.Raycaster();
   const directions = [
@@ -30,6 +31,7 @@ function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Mesh): boolean {
     }
   }
 
+  // A point is inside if it intersects in at least 4 directions
   return intersectionCount >= 4;
 }
 
@@ -46,7 +48,7 @@ export const Scene3DViewer = () => {
     sensorData: Map<number, Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>>;
     interpolationMesh: THREE.Points | THREE.Group | THREE.Mesh | null;
     modelScale: number;
-    roomMesh: THREE.Mesh | null;
+    roomVolumeMesh: THREE.Mesh | null;
     modelGroup: THREE.Group | null;
     originalCenter: THREE.Vector3 | null;
   } | null>(null);
@@ -55,6 +57,7 @@ export const Scene3DViewer = () => {
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelBounds, setModelBounds] = useState<{ min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null>(null);
   const gltfModel = useAppStore((state) => state.gltfModel);
+  const roomVolume = useAppStore((state) => state.roomVolume);
   const sensors = useAppStore((state) => state.sensors);
   const dataReady = useAppStore((state) => state.dataReady);
   const selectedMetric = useAppStore((state) => state.selectedMetric);
@@ -88,6 +91,57 @@ export const Scene3DViewer = () => {
       window.removeEventListener('sensorLeave' as any, handleSensorLeave);
     };
   }, []);
+
+  // Load STL volume when roomVolume changes
+  useEffect(() => {
+    if (!sceneRef.current || !roomVolume) return;
+
+    const { scene, modelScale, originalCenter } = sceneRef.current;
+
+    console.log('🏠 Loading STL room volume...');
+
+    const stlLoader = new STLLoader();
+    stlLoader.load(
+      roomVolume,
+      (geometry) => {
+        console.log('✅ STL loaded successfully');
+        
+        // Create mesh from STL geometry
+        const material = new THREE.MeshBasicMaterial({
+          color: 0x00ff00,
+          transparent: true,
+          opacity: 0,
+          side: THREE.DoubleSide,
+        });
+        
+        const stlMesh = new THREE.Mesh(geometry, material);
+        
+        // Apply same transformations as the GLTF model
+        if (originalCenter) {
+          stlMesh.position.set(
+            -originalCenter.x * modelScale,
+            -originalCenter.y * modelScale,
+            -originalCenter.z * modelScale
+          );
+        }
+        stlMesh.scale.set(modelScale, modelScale, modelScale);
+        
+        // Don't add to scene (invisible helper for raycasting)
+        // But we need to update its matrix for raycasting to work
+        stlMesh.updateMatrixWorld(true);
+        
+        if (sceneRef.current) {
+          sceneRef.current.roomVolumeMesh = stlMesh;
+        }
+        
+        console.log('🏠 STL room volume mesh ready for raycasting');
+      },
+      undefined,
+      (error) => {
+        console.error('❌ Error loading STL:', error);
+      }
+    );
+  }, [roomVolume]);
 
   // Load CSV data when sensors change
   useEffect(() => {
@@ -283,7 +337,7 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, sensorData, interpolationMesh, modelScale, roomMesh, originalCenter } = sceneRef.current;
+    const { scene, sensorData, interpolationMesh, modelScale, roomVolumeMesh, originalCenter } = sceneRef.current;
 
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
@@ -307,7 +361,7 @@ export const Scene3DViewer = () => {
       }
     }
 
-    // Collect current sensor values (in SCENE coordinates - already transformed!)
+    // Collect current sensor values (in SCENE coordinates)
     const points: Point3D[] = [];
     
     sensors.forEach((sensor) => {
@@ -341,7 +395,7 @@ export const Scene3DViewer = () => {
           break;
       }
       
-      // Transform sensor positions to scene space (same as sensor spheres)
+      // Transform sensor positions to scene space
       const xScene = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
       const yScene = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
       const zScene = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
@@ -356,18 +410,55 @@ export const Scene3DViewer = () => {
 
     if (points.length === 0) return;
 
-    console.log('🎯 Sensor positions in scene space:', points.map(p => ({ x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2), value: p.value.toFixed(2) })));
+    console.log('🎯 Sensor positions:', points.map(p => ({ x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2), value: p.value.toFixed(2) })));
     console.log('📦 Model bounds:', modelBounds);
     console.log('🔧 Offsets:', { x: interpolationOffsetX, y: interpolationOffsetY, z: interpolationOffsetZ });
     
     const positions: number[] = [];
     const colors: number[] = [];
-    const values: number[] = [];
     
     const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
     const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
     const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
 
+    // First pass: filter grid points that are inside the room volume
+    const validGridPoints: { x: number; y: number; z: number }[] = [];
+    let totalPoints = 0;
+    let insidePoints = 0;
+    
+    console.log('🔍 Filtering grid points...');
+    
+    for (let i = 0; i < meshResolution; i++) {
+      for (let j = 0; j < meshResolution; j++) {
+        for (let k = 0; k < meshResolution; k++) {
+          totalPoints++;
+          const x = modelBounds.min.x + i * stepX + interpolationOffsetX;
+          const y = modelBounds.min.y + j * stepY + interpolationOffsetY;
+          const z = modelBounds.min.z + k * stepZ + interpolationOffsetZ;
+
+          // Check if point is inside the room volume
+          let inside = true;
+          if (roomVolumeMesh) {
+            const point = new THREE.Vector3(x, y, z);
+            inside = isPointInsideMesh(point, roomVolumeMesh);
+          }
+
+          if (inside) {
+            validGridPoints.push({ x, y, z });
+            insidePoints++;
+          }
+        }
+      }
+    }
+    
+    console.log(`✅ Filtered: ${insidePoints}/${totalPoints} points inside room volume (${((insidePoints/totalPoints)*100).toFixed(1)}%)`);
+
+    if (validGridPoints.length === 0) {
+      console.warn('⚠️ No valid grid points found inside room volume!');
+      return;
+    }
+
+    // Second pass: interpolate only for valid points
     let rbfInterpolator: RBFInterpolator | null = null;
     if (interpolationMethod === 'rbf') {
       rbfInterpolator = new RBFInterpolator(points, rbfKernel, 1.0);
@@ -376,39 +467,20 @@ export const Scene3DViewer = () => {
     let minValue = Infinity;
     let maxValue = -Infinity;
     
-    const gridValues: { x: number; y: number; z: number; value: number; inside: boolean }[] = [];
+    const gridValues: { x: number; y: number; z: number; value: number }[] = [];
     
-    // Calculate all values and find min/max
-    for (let i = 0; i < meshResolution; i++) {
-      for (let j = 0; j < meshResolution; j++) {
-        for (let k = 0; k < meshResolution; k++) {
-          const x = modelBounds.min.x + i * stepX + interpolationOffsetX;
-          const y = modelBounds.min.y + j * stepY + interpolationOffsetY;
-          const z = modelBounds.min.z + k * stepZ + interpolationOffsetZ;
-
-          // Check if point is inside the room mesh
-          let inside = true;
-          if (roomMesh) {
-            const point = new THREE.Vector3(x, y, z);
-            inside = isPointInsideMesh(point, roomMesh);
-          }
-
-          let value: number;
-          if (interpolationMethod === 'idw') {
-            value = interpolateIDW(points, { x, y, z }, idwPower);
-          } else {
-            value = rbfInterpolator!.interpolate({ x, y, z });
-          }
-
-          gridValues.push({ x, y, z, value, inside });
-          
-          if (inside) {
-            minValue = Math.min(minValue, value);
-            maxValue = Math.max(maxValue, value);
-          }
-        }
+    validGridPoints.forEach(({ x, y, z }) => {
+      let value: number;
+      if (interpolationMethod === 'idw') {
+        value = interpolateIDW(points, { x, y, z }, idwPower);
+      } else {
+        value = rbfInterpolator!.interpolate({ x, y, z });
       }
-    }
+
+      gridValues.push({ x, y, z, value });
+      minValue = Math.min(minValue, value);
+      maxValue = Math.max(maxValue, value);
+    });
 
     console.log(`📊 Value range for ${selectedMetric}: [${minValue.toFixed(2)}, ${maxValue.toFixed(2)}]`);
 
@@ -448,8 +520,7 @@ export const Scene3DViewer = () => {
 
     if (visualizationType === 'points') {
       // Points visualization
-      gridValues.forEach(({ x, y, z, value, inside }) => {
-        if (!inside) return;
+      gridValues.forEach(({ x, y, z, value }) => {
         positions.push(x, y, z);
         const color = getColorFromValue(value);
         colors.push(color.r, color.g, color.b);
@@ -479,41 +550,38 @@ export const Scene3DViewer = () => {
     } else if (visualizationType === 'vectors') {
       // Vector field visualization
       const vectorGroup = new THREE.Group();
-      const step = Math.max(2, Math.floor(meshResolution / 8)); // Fewer vectors for clarity
+      const step = Math.max(1, Math.floor(Math.cbrt(validGridPoints.length) / 8));
       
-      for (let i = 0; i < meshResolution; i += step) {
-        for (let j = 0; j < meshResolution; j += step) {
-          for (let k = 0; k < meshResolution; k += step) {
-            const idx = i * meshResolution * meshResolution + j * meshResolution + k;
-            const gridPoint = gridValues[idx];
-            if (!gridPoint || !gridPoint.inside) continue;
-
-            const { x, y, z, value } = gridPoint;
-            
-            // Calculate gradient (approximate)
-            const dx = i < meshResolution - step ? gridValues[idx + step * meshResolution * meshResolution]?.value || value : value;
-            const dy = j < meshResolution - step ? gridValues[idx + step * meshResolution]?.value || value : value;
-            const dz = k < meshResolution - step ? gridValues[idx + step]?.value || value : value;
-            
-            const gradient = new THREE.Vector3(dx - value, dy - value, dz - value);
-            const length = gradient.length();
-            
-            if (length > 0.001) {
-              gradient.normalize();
-              const arrowLength = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 2;
-              
-              const origin = new THREE.Vector3(x, y, z);
-              const arrowHelper = new THREE.ArrowHelper(
-                gradient,
-                origin,
-                arrowLength,
-                getColorFromValue(value).getHex(),
-                arrowLength * 0.3,
-                arrowLength * 0.2
-              );
-              vectorGroup.add(arrowHelper);
-            }
-          }
+      for (let idx = 0; idx < gridValues.length; idx += step) {
+        const gridPoint = gridValues[idx];
+        const { x, y, z, value } = gridPoint;
+        
+        // Calculate gradient (approximate)
+        const nextIdx = Math.min(idx + step, gridValues.length - 1);
+        const nextPoint = gridValues[nextIdx];
+        
+        const gradient = new THREE.Vector3(
+          nextPoint.x - x,
+          nextPoint.y - y,
+          nextPoint.z - z
+        );
+        
+        const length = gradient.length();
+        
+        if (length > 0.001) {
+          gradient.normalize();
+          const arrowLength = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 2;
+          
+          const origin = new THREE.Vector3(x, y, z);
+          const arrowHelper = new THREE.ArrowHelper(
+            gradient,
+            origin,
+            arrowLength,
+            getColorFromValue(value).getHex(),
+            arrowLength * 0.3,
+            arrowLength * 0.2
+          );
+          vectorGroup.add(arrowHelper);
         }
       }
       
@@ -521,7 +589,7 @@ export const Scene3DViewer = () => {
       console.log(`🎯 Created ${vectorGroup.children.length} vectors`);
       
     } else if (visualizationType === 'isosurface') {
-      // Isosurface visualization (multiple levels)
+      // Isosurface visualization
       const isosurfaceGroup = new THREE.Group();
       const numLevels = 5;
       
@@ -529,22 +597,13 @@ export const Scene3DViewer = () => {
         const isoValue = minValue + (maxValue - minValue) * (level + 1) / (numLevels + 1);
         const color = getColorFromValue(isoValue);
         
-        // Simple marching cubes approximation
         const vertices: number[] = [];
         
-        for (let i = 0; i < meshResolution - 1; i++) {
-          for (let j = 0; j < meshResolution - 1; j++) {
-            for (let k = 0; k < meshResolution - 1; k++) {
-              const idx = i * meshResolution * meshResolution + j * meshResolution + k;
-              const v = gridValues[idx];
-              if (!v || !v.inside) continue;
-              
-              if (Math.abs(v.value - isoValue) < (maxValue - minValue) / (numLevels * 2)) {
-                vertices.push(v.x, v.y, v.z);
-              }
-            }
+        gridValues.forEach(({ x, y, z, value }) => {
+          if (Math.abs(value - isoValue) < (maxValue - minValue) / (numLevels * 2)) {
+            vertices.push(x, y, z);
           }
-        }
+        });
         
         if (vertices.length > 0) {
           const geometry = new THREE.BufferGeometry();
@@ -568,10 +627,8 @@ export const Scene3DViewer = () => {
       
     } else { // mesh
       // Volumetric mesh visualization
-      gridValues.forEach(({ x, y, z, value, inside }) => {
-        if (!inside) return;
+      gridValues.forEach(({ x, y, z, value }) => {
         positions.push(x, y, z);
-        values.push(value);
         const color = getColorFromValue(value);
         colors.push(color.r, color.g, color.b);
       });
@@ -596,7 +653,7 @@ export const Scene3DViewer = () => {
     sceneRef.current.interpolationMesh = newMesh;
 
     console.log(`✅ Interpolation created (${visualizationType})`);
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, interpolationOffsetX, interpolationOffsetY, interpolationOffsetZ, sensors]);
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, interpolationOffsetX, interpolationOffsetY, interpolationOffsetZ, sensors, roomVolume]);
 
   // Handle container resize
   useEffect(() => {
@@ -770,7 +827,7 @@ export const Scene3DViewer = () => {
 
     let boundingSphere = new THREE.Sphere();
     let modelScale = 1;
-    let roomMesh: THREE.Mesh | null = null;
+    let roomVolumeMesh: THREE.Mesh | null = null;
     let modelGroup: THREE.Group | null = null;
     let originalCenter: THREE.Vector3 | null = null;
 
@@ -798,10 +855,6 @@ export const Scene3DViewer = () => {
             hasGeometry = true;
             child.castShadow = true;
             child.receiveShadow = true;
-            
-            if (!roomMesh) {
-              roomMesh = child;
-            }
           }
         });
         
@@ -952,7 +1005,7 @@ export const Scene3DViewer = () => {
       sensorData,
       interpolationMesh: null,
       modelScale,
-      roomMesh,
+      roomVolumeMesh,
       modelGroup,
       originalCenter
     };
