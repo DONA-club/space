@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { Button } from '@/components/ui/button';
-import { Upload, FileJson, Box, CheckCircle2, AlertCircle, Package, X } from 'lucide-react';
+import { Upload, FileJson, Box, CheckCircle2, AlertCircle, Package, X, Cuboid } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { showSuccess, showError } from '@/utils/toast';
 
@@ -11,9 +11,11 @@ export const FileUploadPanel = () => {
   const [glbFile, setGlbFile] = useState<File | null>(null);
   const [gltfFiles, setGltfFiles] = useState<File[]>([]);
   const [jsonFile, setJsonFile] = useState<File | null>(null);
+  const [stlFile, setStlFile] = useState<File | null>(null);
   const [glbUrl, setGlbUrl] = useState<string | null>(null);
   const setGltfModel = useAppStore((state) => state.setGltfModel);
   const setSensors = useAppStore((state) => state.setSensors);
+  const setRoomVolume = useAppStore((state) => state.setRoomVolume);
 
   const handleGlbUpload = async (file: File) => {
     if (!file.name.endsWith('.glb')) {
@@ -189,6 +191,28 @@ export const FileUploadPanel = () => {
     }
   };
 
+  const handleStlUpload = async (file: File) => {
+    if (!file.name.endsWith('.stl')) {
+      showError('Veuillez sélectionner un fichier STL');
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      showError('Le fichier est trop volumineux (max 50MB)');
+      return;
+    }
+
+    try {
+      const url = URL.createObjectURL(file);
+      setStlFile(file);
+      setRoomVolume(url);
+      showSuccess('Volume STL de la pièce chargé avec succès');
+    } catch (error) {
+      showError('Erreur lors du chargement du fichier STL');
+      console.error(error);
+    }
+  };
+
   const clearModel = () => {
     if (glbUrl) URL.revokeObjectURL(glbUrl);
     setGlbFile(null);
@@ -208,7 +232,7 @@ export const FileUploadPanel = () => {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Box size={20} className="text-blue-600" />
-            <h3 className="font-medium">1. Modèle 3D</h3>
+            <h3 className="font-medium">1. Modèle 3D (visuel)</h3>
           </div>
           
           {hasModel ? (
@@ -299,11 +323,59 @@ export const FileUploadPanel = () => {
           )}
         </div>
 
+        {/* STL Volume Upload */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Cuboid size={20} className="text-orange-600" />
+            <h3 className="font-medium">2. Volume de la pièce (STL)</h3>
+          </div>
+          
+          {stlFile ? (
+            <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <CheckCircle2 size={20} className="text-green-600" />
+              <div className="flex-1">
+                <span className="text-sm block font-medium">{stlFile.name}</span>
+                <span className="text-xs text-gray-500">
+                  STL • {(stlFile.size / 1024 / 1024).toFixed(2)} MB
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setStlFile(null);
+                  setRoomVolume(null);
+                }}
+              >
+                <X size={14} />
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.stl';
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (file) handleStlUpload(file);
+                };
+                input.click();
+              }}
+            >
+              <Upload size={16} className="mr-2" />
+              Charger le volume STL
+            </Button>
+          )}
+        </div>
+
         {/* JSON Upload */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <FileJson size={20} className="text-purple-600" />
-            <h3 className="font-medium">2. Positions des capteurs (JSON)</h3>
+            <h3 className="font-medium">3. Positions des capteurs (JSON)</h3>
           </div>
           
           {jsonFile ? (
@@ -349,8 +421,9 @@ export const FileUploadPanel = () => {
             Formats acceptés :
           </p>
           <ul className="space-y-1 mb-3">
-            <li>• <strong>GLB</strong> : Fichier unique autonome (recommandé)</li>
-            <li>• <strong>Pack GLTF</strong> : Fichier .gltf + .bin + textures (.jpg, .png)</li>
+            <li>• <strong>GLB/GLTF</strong> : Modèle 3D visuel de la pièce</li>
+            <li>• <strong>STL</strong> : Volume exact pour contraindre l'interpolation</li>
+            <li>• <strong>JSON</strong> : Positions des capteurs</li>
             <li>• Taille max : 50 MB par fichier</li>
           </ul>
           <p className="font-medium mb-1">Format JSON attendu :</p>

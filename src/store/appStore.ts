@@ -30,6 +30,7 @@ interface AppState {
   
   // 3D Model
   gltfModel: string | null;
+  roomVolume: string | null;
   
   // Sensors
   sensors: Sensor[];
@@ -58,7 +59,8 @@ interface AppState {
   setAuth: (token: string, machineId: string) => void;
   logout: () => void;
   setMode: (mode: 'live' | 'replay') => void;
-  setGltfModel: (model: string) => void;
+  setGltfModel: (model: string | null) => void;
+  setRoomVolume: (volume: string | null) => void;
   setSensors: (sensors: Sensor[]) => void;
   updateSensorData: (sensorId: number, data: any) => void;
   setSensorCsv: (sensorId: number, file: File) => void;
@@ -82,6 +84,7 @@ export const useAppStore = create<AppState>((set) => ({
   machineId: null,
   mode: 'replay',
   gltfModel: null,
+  roomVolume: null,
   sensors: [],
   isPlaying: false,
   currentTimestamp: 0,
@@ -100,6 +103,7 @@ export const useAppStore = create<AppState>((set) => ({
   logout: () => set({ isAuthenticated: false, token: null, machineId: null }),
   setMode: (mode) => set({ mode }),
   setGltfModel: (model) => set({ gltfModel: model }),
+  setRoomVolume: (volume) => set({ roomVolume: volume }),
   setSensors: (sensors) => set({ sensors }),
   updateSensorData: (sensorId, data) => set((state) => ({
     sensors: state.sensors.map(s => 
