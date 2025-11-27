@@ -6,11 +6,13 @@ import { Scene3DViewer } from './Scene3DViewer';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Radio, History, LogOut } from 'lucide-react';
+import { Radio, History, LogOut, Layers } from 'lucide-react';
 import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
 import { FileUploadPanel } from './FileUploadPanel';
 import { DataControlPanel } from './DataControlPanel';
+import { InteriorVolumeSampler } from './InteriorVolumeSampler';
+import { useState } from 'react';
 
 export const Dashboard = () => {
   const mode = useAppStore((state) => state.mode);
@@ -20,6 +22,7 @@ export const Dashboard = () => {
   const sensors = useAppStore((state) => state.sensors);
   const gltfModel = useAppStore((state) => state.gltfModel);
   const dataReady = useAppStore((state) => state.dataReady);
+  const [showVolumeSampler, setShowVolumeSampler] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -49,6 +52,18 @@ export const Dashboard = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {gltfModel && (
+                  <Button
+                    size="sm"
+                    variant={showVolumeSampler ? "default" : "outline"}
+                    onClick={() => setShowVolumeSampler(!showVolumeSampler)}
+                    className="bg-white/50 dark:bg-black/50"
+                  >
+                    <Layers size={16} className="mr-2" />
+                    Volume Sampler
+                  </Button>
+                )}
+                
                 {!showFileUpload && (
                   <Tabs value={mode} onValueChange={(v) => setMode(v as 'live' | 'replay')}>
                     <TabsList className="bg-white/50 dark:bg-black/50">
@@ -108,8 +123,16 @@ export const Dashboard = () => {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
-                className="h-full min-h-0"
+                className="h-full min-h-0 space-y-4 overflow-y-auto"
               >
+                {showVolumeSampler && (
+                  <InteriorVolumeSampler 
+                    gltfUrl={gltfModel}
+                    onPointCloudGenerated={(result) => {
+                      console.log('Point cloud generated:', result);
+                    }}
+                  />
+                )}
                 <SensorPanel />
               </motion.div>
             </div>
