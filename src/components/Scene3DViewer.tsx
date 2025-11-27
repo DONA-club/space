@@ -49,6 +49,7 @@ export const Scene3DViewer = () => {
     modelScale: number;
     roomMesh: THREE.Mesh | null;
     modelGroup: THREE.Group | null;
+    originalCenter: THREE.Vector3 | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -269,7 +270,7 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, sensorData, interpolationMesh, isosurfaceMesh, modelScale, roomMesh, modelGroup } = sceneRef.current;
+    const { scene, sensorData, interpolationMesh, isosurfaceMesh, modelScale, roomMesh, originalCenter } = sceneRef.current;
 
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
@@ -282,7 +283,7 @@ export const Scene3DViewer = () => {
       (isosurfaceMesh.material as THREE.Material).dispose();
     }
 
-    // Collect current sensor values
+    // Collect current sensor values (in ORIGINAL coordinates)
     const points: Point3D[] = [];
     
     sensors.forEach((sensor) => {
@@ -316,6 +317,7 @@ export const Scene3DViewer = () => {
           break;
       }
       
+      // Use ORIGINAL sensor positions (before transformation)
       points.push({
         x: sensor.position[0],
         y: sensor.position[1],
@@ -326,25 +328,27 @@ export const Scene3DViewer = () => {
 
     if (points.length === 0) return;
 
-    const bounds = {
-      minX: modelBounds.min.x,
-      maxX: modelBounds.max.x,
-      minY: modelBounds.min.y,
-      maxY: modelBounds.max.y,
-      minZ: modelBounds.min.z,
-      maxZ: modelBounds.max.z,
+    // Use ORIGINAL bounds (before centering and scaling)
+    // We need to reverse the transformation to get original bounds
+    const originalBounds = {
+      minX: (modelBounds.min.x / modelScale) + (originalCenter?.x || 0),
+      maxX: (modelBounds.max.x / modelScale) + (originalCenter?.x || 0),
+      minY: (modelBounds.min.y / modelScale) + (originalCenter?.y || 0),
+      maxY: (modelBounds.max.y / modelScale) + (originalCenter?.y || 0),
+      minZ: (modelBounds.min.z / modelScale) + (originalCenter?.z || 0),
+      maxZ: (modelBounds.max.z / modelScale) + (originalCenter?.z || 0),
     };
     
-    console.log('📦 Model bounds:', bounds);
+    console.log('📦 Original bounds for interpolation:', originalBounds);
     console.log('🎯 Selected metric:', selectedMetric);
     console.log('📊 Sensor values:', points.map(p => p.value));
     
     const positions: number[] = [];
     const colors: number[] = [];
     
-    const stepX = (bounds.maxX - bounds.minX) / (meshResolution - 1);
-    const stepY = (bounds.maxY - bounds.minY) / (meshResolution - 1);
-    const stepZ = (bounds.maxZ - bounds.minZ) / (meshResolution - 1);
+    const stepX = (originalBounds.maxX - originalBounds.minX) / (meshResolution - 1);
+    const stepY = (originalBounds.maxY - originalBounds.minY) / (meshResolution - 1);
+    const stepZ = (originalBounds.maxZ - originalBounds.minZ) / (meshResolution - 1);
 
     let rbfInterpolator: RBFInterpolator | null = null;
     if (interpolationMethod === 'rbf') {
@@ -356,29 +360,36 @@ export const Scene3DViewer = () => {
     
     const gridValues: { x: number; y: number; z: number; value: number; inside: boolean }[] = [];
     
-    // First pass: calculate all values and find min/max
+    // First pass: calculate all values in ORIGINAL space and find min/max
     for (let i = 0; i < meshResolution; i++) {
       for (let j = 0; j < meshResolution; j++) {
         for (let k = 0; k < meshResolution; k++) {
-          const x = bounds.minX + i * stepX;
-          const y = bounds.minY + j * stepY;
-          const z = bounds.minZ + k * stepZ;
+          // Position in ORIGINAL space
+          const xOrig = originalBounds.minX + i * stepX;
+          const yOrig = originalBounds.minY + j * stepY;
+          const zOrig = originalBounds.minZ + k * stepZ;
 
-          // Check if point is inside the room mesh
+          // Transform to scene space for inside test
+          const xScene = (xOrig - (originalCenter?.x || 0)) * modelScale;
+          const yScene = (yOrig - (originalCenter?.y || 0)) * modelScale;
+          const zScene = (zOrig - (originalCenter?.z || 0)) * modelScale;
+
+          // Check if point is inside the room mesh (in scene space)
           let inside = true;
           if (roomMesh) {
-            const point = new THREE.Vector3(x, y, z);
+            const point = new THREE.Vector3(xScene, yScene, zScene);
             inside = isPointInsideMesh(point, roomMesh);
           }
 
+          // Interpolate in ORIGINAL space
           let value: number;
           if (interpolationMethod === 'idw') {
-            value = interpolateIDW(points, { x, y, z }, idwPower);
+            value = interpolateIDW(points, { x: xOrig, y: yOrig, z: zOrig }, idwPower);
           } else {
-            value = rbfInterpolator!.interpolate({ x, y, z });
+            value = rbfInterpolator!.interpolate({ x: xOrig, y: yOrig, z: zOrig });
           }
 
-          gridValues.push({ x, y, z, value, inside });
+          gridValues.push({ x: xScene, y: yScene, z: zScene, value, inside });
           
           if (inside) {
             minValue = Math.min(minValue, value);
@@ -394,6 +405,7 @@ export const Scene3DViewer = () => {
     gridValues.forEach(({ x, y, z, value, inside }) => {
       if (!inside) return;
       
+      // Use scene space positions for rendering
       positions.push(x, y, z);
       
       // Normalize value to 0-1
@@ -406,31 +418,26 @@ export const Scene3DViewer = () => {
         case 'temperature':
           // Blue (cold) → Yellow → Red (hot)
           if (normalized < 0.5) {
-            // Blue to Yellow: Hue from 240° to 60°
-            const hue = 0.667 - (normalized * 2) * 0.417; // 0.667 = 240°, 0.167 = 60°
+            const hue = 0.667 - (normalized * 2) * 0.5;
             color.setHSL(hue, 1.0, 0.5);
           } else {
-            // Yellow to Red: Hue from 60° to 0°
             const hue = 0.167 - ((normalized - 0.5) * 2) * 0.167;
             color.setHSL(hue, 1.0, 0.5);
           }
           break;
           
         case 'humidity':
-          // Brown/Orange (dry) → Blue (humid)
-          const humHue = 0.05 + normalized * 0.55; // 0.05 = orange, 0.6 = blue
+          const humHue = 0.05 + normalized * 0.55;
           color.setHSL(humHue, 1.0, 0.5);
           break;
           
         case 'absoluteHumidity':
-          // Yellow (dry) → Cyan (humid)
-          const absHumHue = 0.15 + normalized * 0.35; // 0.15 = yellow, 0.5 = cyan
+          const absHumHue = 0.15 + normalized * 0.35;
           color.setHSL(absHumHue, 1.0, 0.5);
           break;
           
         case 'dewPoint':
-          // Purple (low) → Cyan (high)
-          const dpHue = 0.75 - normalized * 0.25; // 0.75 = purple, 0.5 = cyan
+          const dpHue = 0.75 - normalized * 0.25;
           color.setHSL(dpHue, 1.0, 0.5);
           break;
       }
@@ -458,21 +465,17 @@ export const Scene3DViewer = () => {
       sizeAttenuation: true,
       blending: THREE.NormalBlending,
       depthWrite: false,
-      map: createCircleTexture(), // Round points
+      map: createCircleTexture(),
     });
 
     const newMesh = new THREE.Points(geometry, material);
     
-    // Apply same transformations as model
-    if (modelGroup) {
-      newMesh.position.copy(modelGroup.position);
-      newMesh.scale.copy(modelGroup.scale);
-    }
+    // NO transformation needed - positions are already in scene space
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
 
-    console.log(`✅ Interpolation mesh created with ${positions.length / 3} points`);
+    console.log(`✅ Interpolation mesh created with ${positions.length / 3} points, aligned with model`);
   }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]);
 
   // Handle container resize
@@ -639,6 +642,7 @@ export const Scene3DViewer = () => {
     let modelScale = 1;
     let roomMesh: THREE.Mesh | null = null;
     let modelGroup: THREE.Group | null = null;
+    let originalCenter: THREE.Vector3 | null = null;
 
     loader.load(
       gltfModel,
@@ -648,7 +652,7 @@ export const Scene3DViewer = () => {
         setLoading(false);
         
         const originalBox = new THREE.Box3().setFromObject(gltf.scene);
-        const originalCenter = originalBox.getCenter(new THREE.Vector3());
+        originalCenter = originalBox.getCenter(new THREE.Vector3());
         const originalSize = originalBox.getSize(new THREE.Vector3());
         
         console.log('📦 Original model bounds:', {
@@ -820,7 +824,8 @@ export const Scene3DViewer = () => {
       isosurfaceMesh: null,
       modelScale,
       roomMesh,
-      modelGroup
+      modelGroup,
+      originalCenter
     };
 
     return () => {
