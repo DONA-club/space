@@ -9,6 +9,7 @@ import { Label } from './ui/label';
 import { Loader2, Play, Download, Trash2, Info, Bug } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { showSuccess, showError } from '@/utils/toast';
+import { Switch } from './ui/switch';
 
 interface InteriorVolumeSamplerProps {
   gltfUrl: string | null;
@@ -19,6 +20,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
   const volumeData = useLoadVolumeGLB(gltfUrl);
   const meshResolution = useAppStore((state) => state.meshResolution);
   const [tolerance, setTolerance] = useState(2);
+  const [invertLogic, setInvertLogic] = useState(true); // NEW: true = air volume
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<InteriorPointCloudResult | null>(null);
@@ -27,7 +29,6 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
   const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
 
   // Calculate resolution from meshResolution (inverse relationship)
-  // meshResolution 10 = 0.5m, 20 = 0.25m, 30 = 0.17m, 40 = 0.125m, 50 = 0.1m
   const resolution = volumeData.bounds 
     ? Math.max(
         volumeData.bounds.max.x - volumeData.bounds.min.x,
@@ -54,6 +55,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
         {
           resolution,
           tolerance,
+          invertLogic, // NEW: pass the invert flag
           onProgress: (processed, total, percentage) => {
             setProgress(percentage);
           },
@@ -63,12 +65,12 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
       setResult(result);
       
       if (result.totalInside === 0) {
-        showError('⚠️ Aucun point intérieur trouvé ! Essayez de diminuer la tolérance ou vérifiez la géométrie du modèle.');
+        showError('⚠️ Aucun point intérieur trouvé ! Essayez de changer la tolérance ou le mode de détection.');
         return;
       }
       
       if (result.filterPercentage > 95) {
-        showError(`⚠️ Filtrage trop agressif (${result.filterPercentage.toFixed(1)}%) ! Diminuez la tolérance.`);
+        showError(`⚠️ Filtrage trop agressif (${result.filterPercentage.toFixed(1)}%) ! Ajustez les paramètres.`);
         return;
       }
       
@@ -102,6 +104,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
         totalPoints: result.totalInside,
         resolution,
         tolerance,
+        invertLogic,
         filterPercentage: result.filterPercentage,
         timestamp: new Date().toISOString(),
       },
@@ -180,6 +183,36 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
               <span className="text-blue-600 dark:text-blue-400">Points estimés:</span>
               <span className="font-medium text-blue-800 dark:text-blue-200">~{estimatedPoints.toLocaleString()}</span>
             </div>
+          </div>
+
+          {/* NEW: Mode selector */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Label>Mode de détection</Label>
+                <div className="group relative">
+                  <Info size={14} className="text-gray-400 cursor-help" />
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-50">
+                    <p className="font-medium mb-1">Volume d'air vs Volume solide</p>
+                    <p className="mb-2"><strong>Volume d'air (recommandé) :</strong> Détecte l'espace habitable entre les murs</p>
+                    <p><strong>Volume solide :</strong> Détecte l'intérieur des objets 3D</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Solide</span>
+                <Switch
+                  checked={invertLogic}
+                  onCheckedChange={setInvertLogic}
+                />
+                <span className="text-xs font-medium text-blue-600">Volume d'air</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {invertLogic 
+                ? "✅ Détecte le volume d'air habitable (espace entre les murs)" 
+                : "⚠️ Détecte l'intérieur des objets solides (cavités dans les murs)"}
+            </p>
           </div>
 
           <div>
@@ -307,8 +340,8 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
               <span className="ml-2 font-medium">{resolution.toFixed(3)}m</span>
             </div>
             <div>
-              <span className="text-gray-600 dark:text-gray-400">Tolérance:</span>
-              <span className="ml-2 font-medium">{tolerance}/6 ({tolerancePercentage.toFixed(0)}%)</span>
+              <span className="text-gray-600 dark:text-gray-400">Mode:</span>
+              <span className="ml-2 font-medium">{invertLogic ? '🌬️ Air' : '🧱 Solide'}</span>
             </div>
           </div>
           
@@ -334,8 +367,9 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             <div className="text-xs bg-white dark:bg-black p-2 rounded">
               <p className="font-medium mb-1">💡 Solutions :</p>
               <ul className="space-y-1">
-                <li>• Diminuez la tolérance à 1 ou 2</li>
-                <li>• Vérifiez que le modèle 3D est fermé (manifold)</li>
+                <li>• Essayez de changer le mode de détection (Air ↔ Solide)</li>
+                <li>• Ajustez la tolérance (1-4)</li>
+                <li>• Vérifiez que le modèle 3D est correctement orienté</li>
                 <li>• Consultez la console pour les détails de debug</li>
               </ul>
             </div>
@@ -349,11 +383,11 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
           Filtrage volumétrique intelligent
         </p>
         <ul className="space-y-1">
-          <li>• <strong>Résolution synchronisée</strong> avec l'interpolation</li>
+          <li>• <strong>Mode Volume d'air :</strong> Détecte l'espace habitable entre les surfaces</li>
+          <li>• <strong>Mode Volume solide :</strong> Détecte l'intérieur des objets 3D</li>
           <li>• <strong>BVH</strong> pour raycasting accéléré</li>
           <li>• <strong>6 directions</strong> testées (±X, ±Y, ±Z)</li>
           <li>• <strong>Vote majoritaire</strong> avec tolérance ajustable</li>
-          <li>• <strong>Logs détaillés</strong> dans la console (F12)</li>
         </ul>
       </div>
     </LiquidGlassCard>

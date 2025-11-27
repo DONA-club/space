@@ -14,6 +14,7 @@ interface WorkerMessage {
   };
   batchSize?: number;
   tolerance?: number;
+  invertLogic?: boolean; // NEW: pour inverser la logique
 }
 
 interface ProgressMessage {
@@ -61,7 +62,8 @@ function isPointInside(
   point: THREE.Vector3,
   mesh: THREE.Mesh,
   raycaster: THREE.Raycaster,
-  tolerance: number = 2
+  tolerance: number = 2,
+  invertLogic: boolean = false
 ): { inside: boolean; votes: number[] } {
   // Test in 6 main directions
   const directions = [
@@ -84,15 +86,29 @@ function isPointInside(
     votes.push(intersectionCount);
     
     // Even-odd rule: odd number of intersections = inside
-    if (intersectionCount % 2 === 1) {
+    const isInsideThisDirection = intersectionCount % 2 === 1;
+    
+    // INVERT LOGIC if requested (for air volume detection)
+    const finalDecision = invertLogic ? !isInsideThisDirection : isInsideThisDirection;
+    
+    if (finalDecision) {
       insideCount++;
     }
   }
   
-  // If we have very few or no intersections in any direction, the point is likely outside
+  // If we have very few or no intersections in any direction, handle specially
   const totalIntersections = votes.reduce((sum, v) => sum + v, 0);
-  if (totalIntersections === 0) {
-    return { inside: false, votes };
+  
+  if (invertLogic) {
+    // For air volume: if no intersections at all, point is outside the room entirely
+    if (totalIntersections === 0) {
+      return { inside: false, votes };
+    }
+  } else {
+    // For solid volume: if no intersections, point is outside
+    if (totalIntersections === 0) {
+      return { inside: false, votes };
+    }
   }
   
   // Majority vote with tolerance
@@ -103,12 +119,13 @@ function isPointInside(
 
 // Process points in batches
 self.onmessage = (e: MessageEvent<WorkerMessage>) => {
-  const { type, points, geometryData, batchSize = 2048, tolerance = 2 } = e.data;
+  const { type, points, geometryData, batchSize = 2048, tolerance = 2, invertLogic = false } = e.data;
   
   if (type !== 'filter') return;
   
   console.log('🔧 Worker: Reconstructing geometry with BVH...');
   console.log(`🎯 Worker: Using tolerance = ${tolerance}/6 (${((tolerance/6)*100).toFixed(0)}% agreement required)`);
+  console.log(`🔄 Worker: Invert logic = ${invertLogic} (${invertLogic ? 'AIR VOLUME' : 'SOLID VOLUME'})`);
   
   const geometry = reconstructGeometry(geometryData);
   const mesh = new THREE.Mesh(geometry);
@@ -136,7 +153,7 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
     const z = points[i * 3 + 2];
     
     const point = new THREE.Vector3(x, y, z);
-    const result = isPointInside(point, mesh, raycaster, tolerance);
+    const result = isPointInside(point, mesh, raycaster, tolerance, invertLogic);
     
     // Collect debug info for first 10 points
     if (i < 10) {
@@ -181,10 +198,13 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   // Log debug samples
   console.log('📊 Debug samples (first 10 points):');
   debugSamples.forEach((sample, idx) => {
-    const insideVotes = sample.votes.filter((v, i) => v % 2 === 1).length;
+    const insideVotes = sample.votes.filter((v, i) => {
+      const isOdd = v % 2 === 1;
+      return invertLogic ? !isOdd : isOdd;
+    }).length;
     console.log(`   Point ${idx}: [${sample.point.map(v => v.toFixed(3)).join(', ')}]`);
     console.log(`      Intersections: [${sample.votes.join(', ')}]`);
-    console.log(`      Inside votes: ${insideVotes}/6`);
+    console.log(`      Inside votes: ${insideVotes}/6 ${invertLogic ? '(inverted)' : ''}`);
     console.log(`      Decision: ${sample.decision ? 'INSIDE' : 'OUTSIDE'}`);
   });
   

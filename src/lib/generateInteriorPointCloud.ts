@@ -4,6 +4,7 @@ import { generateGridFromBounds } from './generateGrid';
 export interface InteriorPointCloudOptions {
   resolution?: number;
   tolerance?: number;
+  invertLogic?: boolean; // NEW: true = volume d'air, false = volume solide
   onProgress?: (processed: number, total: number, percentage: number) => void;
 }
 
@@ -19,11 +20,12 @@ export async function generateInteriorPointCloud(
   bounds: THREE.Box3,
   options: InteriorPointCloudOptions = {}
 ): Promise<InteriorPointCloudResult> {
-  const { resolution = 0.25, tolerance = 3, onProgress } = options;
+  const { resolution = 0.25, tolerance = 3, invertLogic = true, onProgress } = options;
   
   console.log('🚀 Starting interior point cloud generation...');
   console.log(`📐 Resolution: ${resolution}m`);
   console.log(`🎯 Tolerance: ${tolerance}/6 directions (${((tolerance/6)*100).toFixed(0)}% agreement)`);
+  console.log(`🔄 Invert logic: ${invertLogic} (${invertLogic ? 'AIR VOLUME' : 'SOLID VOLUME'})`);
   
   // Step 1: Generate grid
   const gridPoints = generateGridFromBounds(bounds, resolution);
@@ -84,6 +86,7 @@ export async function generateInteriorPointCloud(
         points: gridPoints,
         geometryData,
         tolerance,
+        invertLogic, // NEW: pass the invert flag
       },
       [gridPoints.buffer]
     );
