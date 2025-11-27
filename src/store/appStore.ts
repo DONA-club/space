@@ -17,6 +17,7 @@ interface Sensor {
 type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint';
 type InterpolationMethod = 'idw' | 'rbf';
 type RBFKernel = 'gaussian' | 'multiquadric' | 'inverse_multiquadric' | 'thin_plate_spline';
+type VisualizationType = 'points' | 'vectors' | 'isosurface' | 'mesh';
 
 interface AppState {
   // Auth
@@ -48,6 +49,7 @@ interface AppState {
   rbfKernel: RBFKernel;
   idwPower: number;
   meshResolution: number;
+  visualizationType: VisualizationType;
   
   // WebSocket
   wsConnected: boolean;
@@ -70,6 +72,7 @@ interface AppState {
   setRbfKernel: (kernel: RBFKernel) => void;
   setIdwPower: (power: number) => void;
   setMeshResolution: (resolution: number) => void;
+  setVisualizationType: (type: VisualizationType) => void;
   setWsConnected: (connected: boolean) => void;
 }
 
@@ -90,6 +93,7 @@ export const useAppStore = create<AppState>((set) => ({
   rbfKernel: 'multiquadric',
   idwPower: 2,
   meshResolution: 20,
+  visualizationType: 'points',
   wsConnected: false,
   
   setAuth: (token, machineId) => set({ isAuthenticated: true, token, machineId }),
@@ -119,5 +123,6 @@ export const useAppStore = create<AppState>((set) => ({
   setRbfKernel: (kernel) => set({ rbfKernel: kernel }),
   setIdwPower: (power) => set({ idwPower: power }),
   setMeshResolution: (resolution) => set({ meshResolution: resolution }),
+  setVisualizationType: (type) => set({ visualizationType: type }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
 }));
