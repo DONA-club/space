@@ -30,7 +30,6 @@ function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Mesh): boolean {
     }
   }
 
-  // If the point intersects in most directions, it's likely inside
   return intersectionCount >= 4;
 }
 
@@ -49,6 +48,7 @@ export const Scene3DViewer = () => {
     isosurfaceMesh: THREE.Mesh | null;
     modelScale: number;
     roomMesh: THREE.Mesh | null;
+    modelGroup: THREE.Group | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -195,12 +195,10 @@ export const Scene3DViewer = () => {
       canvas.width = 256;
       canvas.height = 64;
       
-      // Background
       context.fillStyle = 'rgba(255, 255, 255, 0.95)';
       context.roundRect(0, 0, canvas.width, canvas.height, 8);
       context.fill();
       
-      // Text
       context.fillStyle = '#1e40af';
       context.font = 'bold 28px Arial';
       context.textAlign = 'center';
@@ -271,9 +269,8 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, sensorData, interpolationMesh, isosurfaceMesh, modelScale, roomMesh } = sceneRef.current;
+    const { scene, sensorData, interpolationMesh, isosurfaceMesh, modelScale, roomMesh, modelGroup } = sceneRef.current;
 
-    // Remove old meshes
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
       interpolationMesh.geometry.dispose();
@@ -338,7 +335,9 @@ export const Scene3DViewer = () => {
       maxZ: modelBounds.max.z,
     };
     
-    console.log('📦 Using model bounds for interpolation:', bounds);
+    console.log('📦 Model bounds:', bounds);
+    console.log('🎯 Selected metric:', selectedMetric);
+    console.log('📊 Sensor values:', points.map(p => p.value));
     
     const positions: number[] = [];
     const colors: number[] = [];
@@ -389,68 +388,91 @@ export const Scene3DViewer = () => {
       }
     }
 
-    console.log(`📊 Value range: [${minValue.toFixed(2)}, ${maxValue.toFixed(2)}]`);
+    console.log(`📊 Value range for ${selectedMetric}: [${minValue.toFixed(2)}, ${maxValue.toFixed(2)}]`);
 
     // Second pass: create geometry with enhanced colors (only for points inside)
     gridValues.forEach(({ x, y, z, value, inside }) => {
-      if (!inside) return; // Skip points outside the room
+      if (!inside) return;
       
       positions.push(x, y, z);
       
       // Normalize value to 0-1
       const normalized = (value - minValue) / (maxValue - minValue);
       
-      // Enhanced color gradient with high saturation
+      // Enhanced color gradient with HIGH saturation
       const color = new THREE.Color();
       
       switch (selectedMetric) {
         case 'temperature':
-          // Blue (cold) to Red (hot) with high saturation
+          // Blue (cold) → Yellow → Red (hot)
           if (normalized < 0.5) {
-            // Blue to Yellow
-            color.setHSL(0.6 - normalized * 0.6, 1.0, 0.5);
+            // Blue to Yellow: Hue from 240° to 60°
+            const hue = 0.667 - (normalized * 2) * 0.417; // 0.667 = 240°, 0.167 = 60°
+            color.setHSL(hue, 1.0, 0.5);
           } else {
-            // Yellow to Red
-            color.setHSL(0.15 - (normalized - 0.5) * 0.3, 1.0, 0.5);
+            // Yellow to Red: Hue from 60° to 0°
+            const hue = 0.167 - ((normalized - 0.5) * 2) * 0.167;
+            color.setHSL(hue, 1.0, 0.5);
           }
           break;
+          
         case 'humidity':
-        case 'absoluteHumidity':
-          // Brown/Orange (dry) to Deep Blue (humid)
-          color.setHSL(0.05 + normalized * 0.55, 0.95, 0.45);
+          // Brown/Orange (dry) → Blue (humid)
+          const humHue = 0.05 + normalized * 0.55; // 0.05 = orange, 0.6 = blue
+          color.setHSL(humHue, 1.0, 0.5);
           break;
+          
+        case 'absoluteHumidity':
+          // Yellow (dry) → Cyan (humid)
+          const absHumHue = 0.15 + normalized * 0.35; // 0.15 = yellow, 0.5 = cyan
+          color.setHSL(absHumHue, 1.0, 0.5);
+          break;
+          
         case 'dewPoint':
-          // Purple (low) to Cyan (high) with high saturation
-          color.setHSL(0.75 - normalized * 0.25, 1.0, 0.5);
+          // Purple (low) → Cyan (high)
+          const dpHue = 0.75 - normalized * 0.25; // 0.75 = purple, 0.5 = cyan
+          color.setHSL(dpHue, 1.0, 0.5);
           break;
       }
       
       colors.push(color.r, color.g, color.b);
     });
 
+    console.log(`✨ Created ${positions.length / 3} interpolation points (inside room only)`);
+
     // Create point cloud geometry
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
-    // Smaller, more refined points
+    // Smaller points
     const avgDim = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3;
-    const pointSize = avgDim / meshResolution * 0.8; // Reduced from 1.5 to 0.8
+    const pointSize = avgDim / meshResolution * 0.5;
 
+    // Material with round points and transparency
     const material = new THREE.PointsMaterial({
       size: pointSize,
       vertexColors: true,
       transparent: true,
-      opacity: 0.7, // Slightly more opaque
+      opacity: 0.5,
       sizeAttenuation: true,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
+      depthWrite: false,
+      map: createCircleTexture(), // Round points
     });
 
     const newMesh = new THREE.Points(geometry, material);
+    
+    // Apply same transformations as model
+    if (modelGroup) {
+      newMesh.position.copy(modelGroup.position);
+      newMesh.scale.copy(modelGroup.scale);
+    }
+    
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
 
-    console.log(`✨ Interpolation mesh created: ${positions.length / 3} points (filtered to room volume), size: ${pointSize.toFixed(3)}`);
+    console.log(`✅ Interpolation mesh created with ${positions.length / 3} points`);
   }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]);
 
   // Handle container resize
@@ -616,6 +638,7 @@ export const Scene3DViewer = () => {
     let boundingSphere = new THREE.Sphere();
     let modelScale = 1;
     let roomMesh: THREE.Mesh | null = null;
+    let modelGroup: THREE.Group | null = null;
 
     loader.load(
       gltfModel,
@@ -642,7 +665,6 @@ export const Scene3DViewer = () => {
             child.castShadow = true;
             child.receiveShadow = true;
             
-            // Store the first mesh as room mesh for point-in-mesh testing
             if (!roomMesh) {
               roomMesh = child;
             }
@@ -670,6 +692,7 @@ export const Scene3DViewer = () => {
         console.log('📦 Scaled model bounds:', scaledBounds);
         setModelBounds(scaledBounds);
         
+        modelGroup = gltf.scene;
         scene.add(gltf.scene);
         
         const sensorGroup = new THREE.Group();
@@ -763,7 +786,7 @@ export const Scene3DViewer = () => {
         controls.update();
         
         setModelLoaded(true);
-        console.log('✅ Model loaded with room mesh for volume detection');
+        console.log('✅ Model loaded successfully');
       },
       undefined,
       (err) => {
@@ -796,7 +819,8 @@ export const Scene3DViewer = () => {
       interpolationMesh: null,
       isosurfaceMesh: null,
       modelScale,
-      roomMesh
+      roomMesh,
+      modelGroup
     };
 
     return () => {
@@ -880,3 +904,25 @@ export const Scene3DViewer = () => {
     </div>
   );
 };
+
+// Helper function to create a circular texture for round points
+function createCircleTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  
+  const context = canvas.getContext('2d');
+  if (!context) return new THREE.Texture();
+  
+  const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 64, 64);
+  
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
