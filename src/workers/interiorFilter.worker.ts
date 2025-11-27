@@ -14,7 +14,7 @@ interface WorkerMessage {
   };
   batchSize?: number;
   tolerance?: number;
-  invertLogic?: boolean; // NEW: pour inverser la logique
+  invertLogic?: boolean;
 }
 
 interface ProgressMessage {
@@ -35,6 +35,16 @@ interface ResultMessage {
       votes: number[];
       decision: boolean;
     }>;
+    geometryBounds?: {
+      min: [number, number, number];
+      max: [number, number, number];
+      center: [number, number, number];
+    };
+    gridBounds?: {
+      min: [number, number, number];
+      max: [number, number, number];
+      center: [number, number, number];
+    };
   };
 }
 
@@ -128,11 +138,67 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   console.log(`🔄 Worker: Invert logic = ${invertLogic} (${invertLogic ? 'AIR VOLUME' : 'SOLID VOLUME'})`);
   
   const geometry = reconstructGeometry(geometryData);
+  
+  // NEW: Compute and log geometry bounds
+  geometry.computeBoundingBox();
+  const geomBox = geometry.boundingBox!;
+  const geomCenter = new THREE.Vector3();
+  geomBox.getCenter(geomCenter);
+  
+  console.log('📦 Geometry bounds:', {
+    min: [geomBox.min.x.toFixed(2), geomBox.min.y.toFixed(2), geomBox.min.z.toFixed(2)],
+    max: [geomBox.max.x.toFixed(2), geomBox.max.y.toFixed(2), geomBox.max.z.toFixed(2)],
+    center: [geomCenter.x.toFixed(2), geomCenter.y.toFixed(2), geomCenter.z.toFixed(2)],
+  });
+  
+  // NEW: Compute grid bounds
+  const totalPoints = points.length / 3;
+  let gridMinX = Infinity, gridMinY = Infinity, gridMinZ = Infinity;
+  let gridMaxX = -Infinity, gridMaxY = -Infinity, gridMaxZ = -Infinity;
+  
+  for (let i = 0; i < totalPoints; i++) {
+    const x = points[i * 3];
+    const y = points[i * 3 + 1];
+    const z = points[i * 3 + 2];
+    
+    gridMinX = Math.min(gridMinX, x);
+    gridMinY = Math.min(gridMinY, y);
+    gridMinZ = Math.min(gridMinZ, z);
+    gridMaxX = Math.max(gridMaxX, x);
+    gridMaxY = Math.max(gridMaxY, y);
+    gridMaxZ = Math.max(gridMaxZ, z);
+  }
+  
+  const gridCenter = new THREE.Vector3(
+    (gridMinX + gridMaxX) / 2,
+    (gridMinY + gridMaxY) / 2,
+    (gridMinZ + gridMaxZ) / 2
+  );
+  
+  console.log('📊 Grid bounds:', {
+    min: [gridMinX.toFixed(2), gridMinY.toFixed(2), gridMinZ.toFixed(2)],
+    max: [gridMaxX.toFixed(2), gridMaxY.toFixed(2), gridMaxZ.toFixed(2)],
+    center: [gridCenter.x.toFixed(2), gridCenter.y.toFixed(2), gridCenter.z.toFixed(2)],
+  });
+  
+  // NEW: Check if grid and geometry overlap
+  const overlap = !(
+    gridMaxX < geomBox.min.x || gridMinX > geomBox.max.x ||
+    gridMaxY < geomBox.min.y || gridMinY > geomBox.max.y ||
+    gridMaxZ < geomBox.min.z || gridMinZ > geomBox.max.z
+  );
+  
+  console.log(`🔍 Grid and geometry overlap: ${overlap ? '✅ YES' : '❌ NO'}`);
+  
+  if (!overlap) {
+    console.error('❌ CRITICAL: Grid and geometry do NOT overlap! All points will be rejected.');
+    console.error('   This means the grid is positioned outside the model entirely.');
+  }
+  
   const mesh = new THREE.Mesh(geometry);
   const raycaster = new THREE.Raycaster();
   raycaster.firstHitOnly = false;
   
-  const totalPoints = points.length / 3;
   const interiorPoints: number[] = [];
   
   // Debug: sample first 10 points
@@ -215,6 +281,16 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
     totalInside: interiorPoints.length / 3,
     debugInfo: {
       sampleResults: debugSamples,
+      geometryBounds: {
+        min: [geomBox.min.x, geomBox.min.y, geomBox.min.z],
+        max: [geomBox.max.x, geomBox.max.y, geomBox.max.z],
+        center: [geomCenter.x, geomCenter.y, geomCenter.z],
+      },
+      gridBounds: {
+        min: [gridMinX, gridMinY, gridMinZ],
+        max: [gridMaxX, gridMaxY, gridMaxZ],
+        center: [gridCenter.x, gridCenter.y, gridCenter.z],
+      },
     },
   };
   
