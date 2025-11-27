@@ -44,8 +44,7 @@ export const Scene3DViewer = () => {
     sensorMeshes: Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>;
     boundingSphere: THREE.Sphere;
     sensorData: Map<number, Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>>;
-    interpolationMesh: THREE.Points | null;
-    isosurfaceMesh: THREE.Mesh | null;
+    interpolationMesh: THREE.Points | THREE.Group | THREE.Mesh | null;
     modelScale: number;
     roomMesh: THREE.Mesh | null;
     modelGroup: THREE.Group | null;
@@ -65,6 +64,7 @@ export const Scene3DViewer = () => {
   const rbfKernel = useAppStore((state) => state.rbfKernel);
   const idwPower = useAppStore((state) => state.idwPower);
   const meshResolution = useAppStore((state) => state.meshResolution);
+  const visualizationType = useAppStore((state) => state.visualizationType);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
 
   // Listen to hover events from SensorPanel
@@ -252,38 +252,59 @@ export const Scene3DViewer = () => {
     });
   }, [dataReady, selectedMetric, currentTimestamp, sensors]);
 
-  // Update interpolation mesh with volumetric visualization
+  // Update interpolation mesh with different visualization types
   useEffect(() => {
     if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
-        sceneRef.current.interpolationMesh.geometry.dispose();
-        (sceneRef.current.interpolationMesh.material as THREE.PointsMaterial).dispose();
+        if (sceneRef.current.interpolationMesh instanceof THREE.Points) {
+          sceneRef.current.interpolationMesh.geometry.dispose();
+          (sceneRef.current.interpolationMesh.material as THREE.PointsMaterial).dispose();
+        } else if (sceneRef.current.interpolationMesh instanceof THREE.Mesh) {
+          sceneRef.current.interpolationMesh.geometry.dispose();
+          (sceneRef.current.interpolationMesh.material as THREE.Material).dispose();
+        } else if (sceneRef.current.interpolationMesh instanceof THREE.Group) {
+          sceneRef.current.interpolationMesh.traverse((child) => {
+            if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+              child.geometry.dispose();
+              if (Array.isArray(child.material)) {
+                child.material.forEach(m => m.dispose());
+              } else {
+                child.material.dispose();
+              }
+            }
+          });
+        }
         sceneRef.current.interpolationMesh = null;
-      }
-      if (sceneRef.current?.isosurfaceMesh) {
-        sceneRef.current.scene.remove(sceneRef.current.isosurfaceMesh);
-        sceneRef.current.isosurfaceMesh.geometry.dispose();
-        (sceneRef.current.isosurfaceMesh.material as THREE.Material).dispose();
-        sceneRef.current.isosurfaceMesh = null;
       }
       return;
     }
 
-    const { scene, sensorData, interpolationMesh, isosurfaceMesh, modelScale, roomMesh, originalCenter } = sceneRef.current;
+    const { scene, sensorData, interpolationMesh, modelScale, roomMesh, originalCenter } = sceneRef.current;
 
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
-      interpolationMesh.geometry.dispose();
-      (interpolationMesh.material as THREE.PointsMaterial).dispose();
-    }
-    if (isosurfaceMesh) {
-      scene.remove(isosurfaceMesh);
-      isosurfaceMesh.geometry.dispose();
-      (isosurfaceMesh.material as THREE.Material).dispose();
+      if (interpolationMesh instanceof THREE.Points) {
+        interpolationMesh.geometry.dispose();
+        (interpolationMesh.material as THREE.PointsMaterial).dispose();
+      } else if (interpolationMesh instanceof THREE.Mesh) {
+        interpolationMesh.geometry.dispose();
+        (interpolationMesh.material as THREE.Material).dispose();
+      } else if (interpolationMesh instanceof THREE.Group) {
+        interpolationMesh.traverse((child) => {
+          if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+            child.geometry.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach(m => m.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+      }
     }
 
-    // Collect current sensor values (in ORIGINAL coordinates)
+    // Collect current sensor values (in SCENE coordinates - already transformed!)
     const points: Point3D[] = [];
     
     sensors.forEach((sensor) => {
@@ -317,38 +338,31 @@ export const Scene3DViewer = () => {
           break;
       }
       
-      // Use ORIGINAL sensor positions (before transformation)
+      // Transform sensor positions to scene space (same as sensor spheres)
+      const xScene = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
+      const yScene = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
+      const zScene = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
+      
       points.push({
-        x: sensor.position[0],
-        y: sensor.position[1],
-        z: sensor.position[2],
+        x: xScene,
+        y: yScene,
+        z: zScene,
         value
       });
     });
 
     if (points.length === 0) return;
 
-    // Use ORIGINAL bounds (before centering and scaling)
-    // We need to reverse the transformation to get original bounds
-    const originalBounds = {
-      minX: (modelBounds.min.x / modelScale) + (originalCenter?.x || 0),
-      maxX: (modelBounds.max.x / modelScale) + (originalCenter?.x || 0),
-      minY: (modelBounds.min.y / modelScale) + (originalCenter?.y || 0),
-      maxY: (modelBounds.max.y / modelScale) + (originalCenter?.y || 0),
-      minZ: (modelBounds.min.z / modelScale) + (originalCenter?.z || 0),
-      maxZ: (modelBounds.max.z / modelScale) + (originalCenter?.z || 0),
-    };
-    
-    console.log('📦 Original bounds for interpolation:', originalBounds);
-    console.log('🎯 Selected metric:', selectedMetric);
-    console.log('📊 Sensor values:', points.map(p => p.value));
+    console.log('🎯 Sensor positions in scene space:', points.map(p => ({ x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2), value: p.value.toFixed(2) })));
+    console.log('📦 Model bounds:', modelBounds);
     
     const positions: number[] = [];
     const colors: number[] = [];
+    const values: number[] = [];
     
-    const stepX = (originalBounds.maxX - originalBounds.minX) / (meshResolution - 1);
-    const stepY = (originalBounds.maxY - originalBounds.minY) / (meshResolution - 1);
-    const stepZ = (originalBounds.maxZ - originalBounds.minZ) / (meshResolution - 1);
+    const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
+    const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
+    const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
 
     let rbfInterpolator: RBFInterpolator | null = null;
     if (interpolationMethod === 'rbf') {
@@ -360,36 +374,29 @@ export const Scene3DViewer = () => {
     
     const gridValues: { x: number; y: number; z: number; value: number; inside: boolean }[] = [];
     
-    // First pass: calculate all values in ORIGINAL space and find min/max
+    // Calculate all values and find min/max
     for (let i = 0; i < meshResolution; i++) {
       for (let j = 0; j < meshResolution; j++) {
         for (let k = 0; k < meshResolution; k++) {
-          // Position in ORIGINAL space
-          const xOrig = originalBounds.minX + i * stepX;
-          const yOrig = originalBounds.minY + j * stepY;
-          const zOrig = originalBounds.minZ + k * stepZ;
+          const x = modelBounds.min.x + i * stepX;
+          const y = modelBounds.min.y + j * stepY;
+          const z = modelBounds.min.z + k * stepZ;
 
-          // Transform to scene space for inside test
-          const xScene = (xOrig - (originalCenter?.x || 0)) * modelScale;
-          const yScene = (yOrig - (originalCenter?.y || 0)) * modelScale;
-          const zScene = (zOrig - (originalCenter?.z || 0)) * modelScale;
-
-          // Check if point is inside the room mesh (in scene space)
+          // Check if point is inside the room mesh
           let inside = true;
           if (roomMesh) {
-            const point = new THREE.Vector3(xScene, yScene, zScene);
+            const point = new THREE.Vector3(x, y, z);
             inside = isPointInsideMesh(point, roomMesh);
           }
 
-          // Interpolate in ORIGINAL space
           let value: number;
           if (interpolationMethod === 'idw') {
-            value = interpolateIDW(points, { x: xOrig, y: yOrig, z: zOrig }, idwPower);
+            value = interpolateIDW(points, { x, y, z }, idwPower);
           } else {
-            value = rbfInterpolator!.interpolate({ x: xOrig, y: yOrig, z: zOrig });
+            value = rbfInterpolator!.interpolate({ x, y, z });
           }
 
-          gridValues.push({ x: xScene, y: yScene, z: zScene, value, inside });
+          gridValues.push({ x, y, z, value, inside });
           
           if (inside) {
             minValue = Math.min(minValue, value);
@@ -401,22 +408,13 @@ export const Scene3DViewer = () => {
 
     console.log(`📊 Value range for ${selectedMetric}: [${minValue.toFixed(2)}, ${maxValue.toFixed(2)}]`);
 
-    // Second pass: create geometry with enhanced colors (only for points inside)
-    gridValues.forEach(({ x, y, z, value, inside }) => {
-      if (!inside) return;
-      
-      // Use scene space positions for rendering
-      positions.push(x, y, z);
-      
-      // Normalize value to 0-1
+    // Helper function to get color from value
+    const getColorFromValue = (value: number): THREE.Color => {
       const normalized = (value - minValue) / (maxValue - minValue);
-      
-      // Enhanced color gradient with HIGH saturation
       const color = new THREE.Color();
       
       switch (selectedMetric) {
         case 'temperature':
-          // Blue (cold) → Yellow → Red (hot)
           if (normalized < 0.5) {
             const hue = 0.667 - (normalized * 2) * 0.5;
             color.setHSL(hue, 1.0, 0.5);
@@ -425,58 +423,176 @@ export const Scene3DViewer = () => {
             color.setHSL(hue, 1.0, 0.5);
           }
           break;
-          
         case 'humidity':
           const humHue = 0.05 + normalized * 0.55;
           color.setHSL(humHue, 1.0, 0.5);
           break;
-          
         case 'absoluteHumidity':
           const absHumHue = 0.15 + normalized * 0.35;
           color.setHSL(absHumHue, 1.0, 0.5);
           break;
-          
         case 'dewPoint':
           const dpHue = 0.75 - normalized * 0.25;
           color.setHSL(dpHue, 1.0, 0.5);
           break;
       }
       
-      colors.push(color.r, color.g, color.b);
-    });
+      return color;
+    };
 
-    console.log(`✨ Created ${positions.length / 3} interpolation points (inside room only)`);
+    let newMesh: THREE.Points | THREE.Group | THREE.Mesh;
 
-    // Create point cloud geometry
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    if (visualizationType === 'points') {
+      // Points visualization
+      gridValues.forEach(({ x, y, z, value, inside }) => {
+        if (!inside) return;
+        positions.push(x, y, z);
+        const color = getColorFromValue(value);
+        colors.push(color.r, color.g, color.b);
+      });
 
-    // Smaller points
-    const avgDim = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3;
-    const pointSize = avgDim / meshResolution * 0.5;
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
-    // Material with round points and transparency
-    const material = new THREE.PointsMaterial({
-      size: pointSize,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.5,
-      sizeAttenuation: true,
-      blending: THREE.NormalBlending,
-      depthWrite: false,
-      map: createCircleTexture(),
-    });
+      const avgDim = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3;
+      const pointSize = avgDim / meshResolution * 0.5;
 
-    const newMesh = new THREE.Points(geometry, material);
-    
-    // NO transformation needed - positions are already in scene space
+      const material = new THREE.PointsMaterial({
+        size: pointSize,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.6,
+        sizeAttenuation: true,
+        blending: THREE.NormalBlending,
+        depthWrite: false,
+        map: createCircleTexture(),
+      });
+
+      newMesh = new THREE.Points(geometry, material);
+      console.log(`✨ Created ${positions.length / 3} points`);
+      
+    } else if (visualizationType === 'vectors') {
+      // Vector field visualization
+      const vectorGroup = new THREE.Group();
+      const step = Math.max(2, Math.floor(meshResolution / 8)); // Fewer vectors for clarity
+      
+      for (let i = 0; i < meshResolution; i += step) {
+        for (let j = 0; j < meshResolution; j += step) {
+          for (let k = 0; k < meshResolution; k += step) {
+            const idx = i * meshResolution * meshResolution + j * meshResolution + k;
+            const gridPoint = gridValues[idx];
+            if (!gridPoint || !gridPoint.inside) continue;
+
+            const { x, y, z, value } = gridPoint;
+            
+            // Calculate gradient (approximate)
+            const dx = i < meshResolution - step ? gridValues[idx + step * meshResolution * meshResolution]?.value || value : value;
+            const dy = j < meshResolution - step ? gridValues[idx + step * meshResolution]?.value || value : value;
+            const dz = k < meshResolution - step ? gridValues[idx + step]?.value || value : value;
+            
+            const gradient = new THREE.Vector3(dx - value, dy - value, dz - value);
+            const length = gradient.length();
+            
+            if (length > 0.001) {
+              gradient.normalize();
+              const arrowLength = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 2;
+              
+              const origin = new THREE.Vector3(x, y, z);
+              const arrowHelper = new THREE.ArrowHelper(
+                gradient,
+                origin,
+                arrowLength,
+                getColorFromValue(value).getHex(),
+                arrowLength * 0.3,
+                arrowLength * 0.2
+              );
+              vectorGroup.add(arrowHelper);
+            }
+          }
+        }
+      }
+      
+      newMesh = vectorGroup;
+      console.log(`🎯 Created ${vectorGroup.children.length} vectors`);
+      
+    } else if (visualizationType === 'isosurface') {
+      // Isosurface visualization (multiple levels)
+      const isosurfaceGroup = new THREE.Group();
+      const numLevels = 5;
+      
+      for (let level = 0; level < numLevels; level++) {
+        const isoValue = minValue + (maxValue - minValue) * (level + 1) / (numLevels + 1);
+        const color = getColorFromValue(isoValue);
+        
+        // Simple marching cubes approximation
+        const vertices: number[] = [];
+        
+        for (let i = 0; i < meshResolution - 1; i++) {
+          for (let j = 0; j < meshResolution - 1; j++) {
+            for (let k = 0; k < meshResolution - 1; k++) {
+              const idx = i * meshResolution * meshResolution + j * meshResolution + k;
+              const v = gridValues[idx];
+              if (!v || !v.inside) continue;
+              
+              if (Math.abs(v.value - isoValue) < (maxValue - minValue) / (numLevels * 2)) {
+                vertices.push(v.x, v.y, v.z);
+              }
+            }
+          }
+        }
+        
+        if (vertices.length > 0) {
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+          
+          const material = new THREE.PointsMaterial({
+            size: (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 0.8,
+            color: color,
+            transparent: true,
+            opacity: 0.4,
+            sizeAttenuation: true,
+          });
+          
+          const points = new THREE.Points(geometry, material);
+          isosurfaceGroup.add(points);
+        }
+      }
+      
+      newMesh = isosurfaceGroup;
+      console.log(`📊 Created ${numLevels} isosurface levels`);
+      
+    } else { // mesh
+      // Volumetric mesh visualization
+      gridValues.forEach(({ x, y, z, value, inside }) => {
+        if (!inside) return;
+        positions.push(x, y, z);
+        values.push(value);
+        const color = getColorFromValue(value);
+        colors.push(color.r, color.g, color.b);
+      });
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+      const material = new THREE.PointsMaterial({
+        size: (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 1.2,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.3,
+        sizeAttenuation: true,
+      });
+
+      newMesh = new THREE.Points(geometry, material);
+      console.log(`🔷 Created volumetric mesh with ${positions.length / 3} points`);
+    }
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
 
-    console.log(`✅ Interpolation mesh created with ${positions.length / 3} points, aligned with model`);
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]);
+    console.log(`✅ Interpolation created (${visualizationType})`);
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors]);
 
   // Handle container resize
   useEffect(() => {
@@ -548,20 +664,30 @@ export const Scene3DViewer = () => {
     }, 30000);
 
     if (sceneRef.current) {
-      const { renderer, scene, controls, animationId, interpolationMesh, isosurfaceMesh } = sceneRef.current;
+      const { renderer, scene, controls, animationId, interpolationMesh } = sceneRef.current;
       cancelAnimationFrame(animationId);
       controls.dispose();
       
       if (interpolationMesh) {
         scene.remove(interpolationMesh);
-        interpolationMesh.geometry.dispose();
-        (interpolationMesh.material as THREE.PointsMaterial).dispose();
-      }
-      
-      if (isosurfaceMesh) {
-        scene.remove(isosurfaceMesh);
-        isosurfaceMesh.geometry.dispose();
-        (isosurfaceMesh.material as THREE.Material).dispose();
+        if (interpolationMesh instanceof THREE.Points) {
+          interpolationMesh.geometry.dispose();
+          (interpolationMesh.material as THREE.PointsMaterial).dispose();
+        } else if (interpolationMesh instanceof THREE.Mesh) {
+          interpolationMesh.geometry.dispose();
+          (interpolationMesh.material as THREE.Material).dispose();
+        } else if (interpolationMesh instanceof THREE.Group) {
+          interpolationMesh.traverse((child) => {
+            if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+              child.geometry.dispose();
+              if (Array.isArray(child.material)) {
+                child.material.forEach(m => m.dispose());
+              } else {
+                child.material.dispose();
+              }
+            }
+          });
+        }
       }
       
       scene.traverse((object) => {
@@ -821,7 +947,6 @@ export const Scene3DViewer = () => {
       boundingSphere,
       sensorData,
       interpolationMesh: null,
-      isosurfaceMesh: null,
       modelScale,
       roomMesh,
       modelGroup,
@@ -832,20 +957,30 @@ export const Scene3DViewer = () => {
       clearTimeout(loadingTimeout);
       
       if (sceneRef.current) {
-        const { renderer, scene, controls, animationId, interpolationMesh, isosurfaceMesh } = sceneRef.current;
+        const { renderer, scene, controls, animationId, interpolationMesh } = sceneRef.current;
         cancelAnimationFrame(animationId);
         controls.dispose();
         
         if (interpolationMesh) {
           scene.remove(interpolationMesh);
-          interpolationMesh.geometry.dispose();
-          (interpolationMesh.material as THREE.PointsMaterial).dispose();
-        }
-        
-        if (isosurfaceMesh) {
-          scene.remove(isosurfaceMesh);
-          isosurfaceMesh.geometry.dispose();
-          (isosurfaceMesh.material as THREE.Material).dispose();
+          if (interpolationMesh instanceof THREE.Points) {
+            interpolationMesh.geometry.dispose();
+            (interpolationMesh.material as THREE.PointsMaterial).dispose();
+          } else if (interpolationMesh instanceof THREE.Mesh) {
+            interpolationMesh.geometry.dispose();
+            (interpolationMesh.material as THREE.Material).dispose();
+          } else if (interpolationMesh instanceof THREE.Group) {
+            interpolationMesh.traverse((child) => {
+              if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+                child.geometry.dispose();
+                if (Array.isArray(child.material)) {
+                  child.material.forEach(m => m.dispose());
+                } else {
+                  child.material.dispose();
+                }
+              }
+            });
+          }
         }
         
         scene.traverse((object) => {
