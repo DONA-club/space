@@ -5,7 +5,6 @@ import { useAppStore } from "@/store/appStore";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { AlertCircle } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 
@@ -43,17 +42,14 @@ export const Scene3DViewer = () => {
     sensorData: Map<number, Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>>;
     interpolationMesh: THREE.Points | THREE.Group | THREE.Mesh | null;
     modelScale: number;
-    roomVolumeMesh: THREE.Mesh | null;
     modelGroup: THREE.Group | null;
     originalCenter: THREE.Vector3 | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [modelLoaded, setModelLoaded] = useState(false);
-  const [stlLoaded, setStlLoaded] = useState(false);
   const [modelBounds, setModelBounds] = useState<{ min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null>(null);
   const gltfModel = useAppStore((state) => state.gltfModel);
-  const roomVolume = useAppStore((state) => state.roomVolume);
   const sensors = useAppStore((state) => state.sensors);
   const dataReady = useAppStore((state) => state.dataReady);
   const selectedMetric = useAppStore((state) => state.selectedMetric);
@@ -83,71 +79,6 @@ export const Scene3DViewer = () => {
       window.removeEventListener('sensorLeave' as any, handleSensorLeave);
     };
   }, []);
-
-  useEffect(() => {
-    if (!sceneRef.current || !roomVolume) return;
-
-    const { modelScale, originalCenter } = sceneRef.current;
-
-    console.log('🏠 Loading STL room volume...');
-    setStlLoaded(false);
-
-    const stlLoader = new STLLoader();
-    stlLoader.load(
-      roomVolume,
-      (geometry) => {
-        console.log('✅ STL geometry loaded');
-        console.log('   - Vertices:', geometry.attributes.position.count);
-        console.log('   - Triangles:', geometry.attributes.position.count / 3);
-        
-        geometry.computeVertexNormals();
-        
-        const material = new THREE.MeshBasicMaterial({
-          color: 0x00ff00,
-          transparent: true,
-          opacity: 0,
-          side: THREE.DoubleSide,
-        });
-        
-        const stlMesh = new THREE.Mesh(geometry, material);
-        
-        if (originalCenter) {
-          stlMesh.position.set(
-            -originalCenter.x * modelScale,
-            -originalCenter.y * modelScale,
-            -originalCenter.z * modelScale
-          );
-        }
-        stlMesh.scale.set(modelScale, modelScale, modelScale);
-        
-        stlMesh.updateMatrix();
-        stlMesh.updateMatrixWorld(true);
-        
-        const stlBox = new THREE.Box3().setFromObject(stlMesh);
-        console.log('   - STL Bounds:', {
-          min: stlBox.min,
-          max: stlBox.max,
-          size: stlBox.getSize(new THREE.Vector3())
-        });
-        
-        if (sceneRef.current) {
-          sceneRef.current.roomVolumeMesh = stlMesh;
-        }
-        
-        setStlLoaded(true);
-        console.log('🏠 STL room volume mesh ready (but using GLTF for filtering)');
-      },
-      (progress) => {
-        if (progress.total > 0) {
-          console.log('STL loading progress:', (progress.loaded / progress.total * 100).toFixed(0) + '%');
-        }
-      },
-      (error) => {
-        console.error('❌ Error loading STL:', error);
-        setStlLoaded(false);
-      }
-    );
-  }, [roomVolume]);
 
   useEffect(() => {
     if (!sceneRef.current) return;
@@ -846,7 +777,6 @@ export const Scene3DViewer = () => {
 
     let boundingSphere = new THREE.Sphere();
     let modelScale = 1;
-    let roomVolumeMesh: THREE.Mesh | null = null;
     let modelGroup: THREE.Group | null = null;
     let originalCenter: THREE.Vector3 | null = null;
 
@@ -991,6 +921,13 @@ export const Scene3DViewer = () => {
         
         controls.update();
         
+        // Store modelGroup in sceneRef BEFORE setting modelLoaded
+        if (sceneRef.current) {
+          sceneRef.current.modelGroup = modelGroup;
+          sceneRef.current.modelScale = modelScale;
+          sceneRef.current.originalCenter = originalCenter;
+        }
+        
         setModelLoaded(true);
         console.log('✅ Model loaded successfully - ready for volume filtering');
       },
@@ -1024,9 +961,8 @@ export const Scene3DViewer = () => {
       sensorData,
       interpolationMesh: null,
       modelScale,
-      roomVolumeMesh,
-      modelGroup,
-      originalCenter
+      modelGroup: null, // Will be set when model loads
+      originalCenter: null, // Will be set when model loads
     };
 
     return () => {
