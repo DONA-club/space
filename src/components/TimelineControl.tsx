@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Play, Pause, SkipBack, SkipForward, Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 
 export const TimelineControl = () => {
   const isPlaying = useAppStore((state) => state.isPlaying);
@@ -138,9 +138,9 @@ export const TimelineControl = () => {
         <div className="flex items-center justify-between gap-4">
           {/* Playback controls */}
           <div className="flex items-center gap-2">
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
+            <TooltipPrimitive.Provider delayDuration={300}>
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
                   <Button
                     size="sm"
                     variant="outline"
@@ -149,14 +149,16 @@ export const TimelineControl = () => {
                   >
                     <SkipBack size={14} />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={5}>
-                  <p className="text-xs">Retour au début</p>
-                </TooltipContent>
-              </Tooltip>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                    Retour au début
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
                   <Button
                     size="sm"
                     onClick={() => setPlaying(!isPlaying)}
@@ -164,14 +166,16 @@ export const TimelineControl = () => {
                   >
                     {isPlaying ? <Pause size={14} /> : <Play size={14} />}
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={5}>
-                  <p className="text-xs">{isPlaying ? 'Pause' : 'Lecture'}</p>
-                </TooltipContent>
-              </Tooltip>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                    {isPlaying ? 'Pause' : 'Lecture'}
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
                   <Button
                     size="sm"
                     variant="outline"
@@ -180,20 +184,22 @@ export const TimelineControl = () => {
                   >
                     <SkipForward size={14} />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={5}>
-                  <p className="text-xs">Aller à la fin</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                    Aller à la fin
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
+            </TooltipPrimitive.Provider>
 
             <div className="text-xs text-gray-600 dark:text-gray-300 font-medium ml-2 min-w-[100px]">
               {formatTime(currentTimestamp)}
             </div>
 
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
+            <TooltipPrimitive.Provider delayDuration={300}>
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
                   <select
                     value={playbackSpeed}
                     onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
@@ -205,85 +211,107 @@ export const TimelineControl = () => {
                     <option value={600}>10x</option>
                     <option value={1800}>30x</option>
                   </select>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={5}>
-                  <p className="text-xs font-medium mb-1">Vitesse de lecture</p>
-                  <p className="text-xs">Contrôle la vitesse de défilement des données</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                    <p className="font-medium mb-1">Vitesse de lecture</p>
+                    <p>Contrôle la vitesse de défilement des données</p>
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
+            </TooltipPrimitive.Provider>
           </div>
 
           {/* Metric selector */}
-          <TooltipProvider delayDuration={300}>
+          <TooltipPrimitive.Provider delayDuration={300}>
             <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
-              <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 p-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
+              <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-9 p-1 gap-1">
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
                     <TabsTrigger 
                       value="temperature" 
-                      className="flex items-center gap-1 h-6 px-2 data-[state=active]:bg-red-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
+                      className="relative flex items-center gap-1.5 h-7 px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                     >
-                      <Thermometer size={14} className={selectedMetric === 'temperature' ? 'text-white' : 'text-red-500'} />
-                      <span className="text-xs font-medium">T°</span>
+                      {selectedMetric === 'temperature' && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-md"></div>
+                      )}
+                      <Thermometer size={14} className={selectedMetric === 'temperature' ? 'text-red-600 relative z-10' : 'text-red-500 relative z-10'} />
+                      <span className={`text-xs font-medium relative z-10 ${selectedMetric === 'temperature' ? 'text-red-700 dark:text-red-500' : ''}`}>T°</span>
                     </TabsTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={5}>
-                    <p className="text-xs font-medium mb-1">Température (°C)</p>
-                    <p className="text-xs text-gray-400">Mesure la chaleur de l'air ambiant</p>
-                  </TooltipContent>
-                </Tooltip>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                      <p className="font-medium mb-1">Température (°C)</p>
+                      <p className="text-gray-300">Mesure la chaleur de l'air ambiant</p>
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
                     <TabsTrigger 
                       value="humidity" 
-                      className="flex items-center gap-1 h-6 px-2 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
+                      className="relative flex items-center gap-1.5 h-7 px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                     >
-                      <Droplets size={14} className={selectedMetric === 'humidity' ? 'text-white' : 'text-blue-500'} />
-                      <span className="text-xs font-medium">HR</span>
+                      {selectedMetric === 'humidity' && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-blue-600/20 rounded-md"></div>
+                      )}
+                      <Droplets size={14} className={selectedMetric === 'humidity' ? 'text-blue-600 relative z-10' : 'text-blue-500 relative z-10'} />
+                      <span className={`text-xs font-medium relative z-10 ${selectedMetric === 'humidity' ? 'text-blue-700 dark:text-blue-500' : ''}`}>HR</span>
                     </TabsTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={5}>
-                    <p className="text-xs font-medium mb-1">Humidité Relative (%)</p>
-                    <p className="text-xs text-gray-400">Pourcentage de vapeur d'eau dans l'air</p>
-                  </TooltipContent>
-                </Tooltip>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                      <p className="font-medium mb-1">Humidité Relative (%)</p>
+                      <p className="text-gray-300">Pourcentage de vapeur d'eau dans l'air</p>
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
                     <TabsTrigger 
                       value="absoluteHumidity" 
-                      className="flex items-center gap-1 h-6 px-2 data-[state=active]:bg-cyan-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
+                      className="relative flex items-center gap-1.5 h-7 px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                     >
-                      <Wind size={14} className={selectedMetric === 'absoluteHumidity' ? 'text-white' : 'text-cyan-500'} />
-                      <span className="text-xs font-medium">HA</span>
+                      {selectedMetric === 'absoluteHumidity' && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 rounded-md"></div>
+                      )}
+                      <Wind size={14} className={selectedMetric === 'absoluteHumidity' ? 'text-cyan-600 relative z-10' : 'text-cyan-500 relative z-10'} />
+                      <span className={`text-xs font-medium relative z-10 ${selectedMetric === 'absoluteHumidity' ? 'text-cyan-700 dark:text-cyan-500' : ''}`}>HA</span>
                     </TabsTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={5}>
-                    <p className="text-xs font-medium mb-1">Humidité Absolue (g/m³)</p>
-                    <p className="text-xs text-gray-400">Quantité réelle d'eau dans l'air</p>
-                  </TooltipContent>
-                </Tooltip>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                      <p className="font-medium mb-1">Humidité Absolue (g/m³)</p>
+                      <p className="text-gray-300">Quantité réelle d'eau dans l'air</p>
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
                     <TabsTrigger 
                       value="dewPoint" 
-                      className="flex items-center gap-1 h-6 px-2 data-[state=active]:bg-purple-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
+                      className="relative flex items-center gap-1.5 h-7 px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                     >
-                      <CloudRain size={14} className={selectedMetric === 'dewPoint' ? 'text-white' : 'text-purple-500'} />
-                      <span className="text-xs font-medium">PR</span>
+                      {selectedMetric === 'dewPoint' && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-purple-600/20 rounded-md"></div>
+                      )}
+                      <CloudRain size={14} className={selectedMetric === 'dewPoint' ? 'text-purple-600 relative z-10' : 'text-purple-500 relative z-10'} />
+                      <span className={`text-xs font-medium relative z-10 ${selectedMetric === 'dewPoint' ? 'text-purple-700 dark:text-purple-500' : ''}`}>PR</span>
                     </TabsTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={5}>
-                    <p className="text-xs font-medium mb-1">Point de Rosée (°C)</p>
-                    <p className="text-xs text-gray-400">Température de condensation</p>
-                  </TooltipContent>
-                </Tooltip>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                      <p className="font-medium mb-1">Point de Rosée (°C)</p>
+                      <p className="text-gray-300">Température de condensation</p>
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
               </TabsList>
             </Tabs>
-          </TooltipProvider>
+          </TooltipPrimitive.Provider>
         </div>
 
         {/* Timeline */}
@@ -294,9 +322,9 @@ export const TimelineControl = () => {
             <span>{formatTime(rangeEnd)}</span>
           </div>
 
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
+          <TooltipPrimitive.Provider delayDuration={300}>
+            <TooltipPrimitive.Root>
+              <TooltipPrimitive.Trigger asChild>
                 <div 
                   ref={timelineRef}
                   className="relative h-12 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
@@ -355,13 +383,15 @@ export const TimelineControl = () => {
                     <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
                   </div>
                 </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={5}>
-                <p className="text-xs font-medium mb-1">Timeline interactive</p>
-                <p className="text-xs text-gray-400">🔵 Début • 🟣 Fin • 🟡 Position actuelle</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              </TooltipPrimitive.Trigger>
+              <TooltipPrimitive.Portal>
+                <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                  <p className="font-medium mb-1">Timeline interactive</p>
+                  <p className="text-gray-300">🔵 Début • 🟣 Fin • 🟡 Position actuelle</p>
+                </TooltipPrimitive.Content>
+              </TooltipPrimitive.Portal>
+            </TooltipPrimitive.Root>
+          </TooltipPrimitive.Provider>
         </div>
 
         {/* Info */}
