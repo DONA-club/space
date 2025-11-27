@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
@@ -265,9 +265,9 @@ export const SensorPanel = () => {
                     <Grid3x3 size={16} className="text-purple-600" />
                     <h3 className="font-medium text-sm">Interpolation</h3>
                   </div>
-                  <TooltipProvider delayDuration={300}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+                  <TooltipPrimitive.Provider delayDuration={300}>
+                    <TooltipPrimitive.Root>
+                      <TooltipPrimitive.Trigger asChild>
                         <div>
                           <Switch
                             id="meshing-toggle"
@@ -276,54 +276,71 @@ export const SensorPanel = () => {
                             className="scale-75"
                           />
                         </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" sideOffset={5}>
-                        <p className="text-xs font-medium mb-1">Interpolation spatiale 3D</p>
-                        <p className="text-xs text-gray-400">Crée un champ continu entre les capteurs</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                      </TooltipPrimitive.Trigger>
+                      <TooltipPrimitive.Portal>
+                        <TooltipPrimitive.Content side="left" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                          <p className="font-medium mb-1">Interpolation spatiale 3D</p>
+                          <p className="text-gray-300">Crée un champ continu entre les capteurs</p>
+                          <p className="text-gray-300 mt-1">Visualise les gradients de température/humidité</p>
+                        </TooltipPrimitive.Content>
+                      </TooltipPrimitive.Portal>
+                    </TooltipPrimitive.Root>
+                  </TooltipPrimitive.Provider>
                 </div>
 
                 {meshingEnabled && (
                   <div className="space-y-3">
-                    <TooltipProvider delayDuration={300}>
+                    <TooltipPrimitive.Provider delayDuration={300}>
                       <Tabs value={interpolationMethod} onValueChange={(v) => setInterpolationMethod(v as any)}>
-                        <TabsList className="grid grid-cols-2 bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 p-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
+                        <TabsList className="grid grid-cols-2 bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 p-1 gap-1">
+                          <TooltipPrimitive.Root>
+                            <TooltipPrimitive.Trigger asChild>
                               <TabsTrigger 
                                 value="idw" 
-                                className="flex items-center gap-1 text-xs h-6 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
+                                className="relative flex items-center gap-1 text-xs h-6 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                               >
-                                <Zap size={12} className={interpolationMethod === 'idw' ? 'text-white' : ''} />
-                                IDW
+                                {interpolationMethod === 'idw' && (
+                                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-blue-600/20 rounded-md"></div>
+                                )}
+                                <Zap size={12} className={interpolationMethod === 'idw' ? 'text-blue-600 relative z-10' : 'text-blue-500 relative z-10'} />
+                                <span className={`relative z-10 ${interpolationMethod === 'idw' ? 'text-blue-700 dark:text-blue-500 font-medium' : ''}`}>IDW</span>
                               </TabsTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" sideOffset={5}>
-                              <p className="text-xs font-medium mb-1">Inverse Distance Weighting</p>
-                              <p className="text-xs text-gray-400">✓ Rapide et efficace</p>
-                            </TooltipContent>
-                          </Tooltip>
+                            </TooltipPrimitive.Trigger>
+                            <TooltipPrimitive.Portal>
+                              <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                                <p className="font-medium mb-1">Inverse Distance Weighting</p>
+                                <p className="text-gray-300">✓ Rapide et efficace</p>
+                                <p className="text-gray-300">✓ Méthode de Shepard (1968)</p>
+                                <p className="text-gray-300 mt-1">Les points proches ont plus d'influence</p>
+                              </TooltipPrimitive.Content>
+                            </TooltipPrimitive.Portal>
+                          </TooltipPrimitive.Root>
 
-                          <Tooltip>
-                            <TooltipTrigger asChild>
+                          <TooltipPrimitive.Root>
+                            <TooltipPrimitive.Trigger asChild>
                               <TabsTrigger 
                                 value="rbf" 
-                                className="flex items-center gap-1 text-xs h-6 data-[state=active]:bg-purple-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
+                                className="relative flex items-center gap-1 text-xs h-6 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                               >
-                                <Waves size={12} className={interpolationMethod === 'rbf' ? 'text-white' : ''} />
-                                RBF
+                                {interpolationMethod === 'rbf' && (
+                                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-purple-600/20 rounded-md"></div>
+                                )}
+                                <Waves size={12} className={interpolationMethod === 'rbf' ? 'text-purple-600 relative z-10' : 'text-purple-500 relative z-10'} />
+                                <span className={`relative z-10 ${interpolationMethod === 'rbf' ? 'text-purple-700 dark:text-purple-500 font-medium' : ''}`}>RBF</span>
                               </TabsTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" sideOffset={5}>
-                              <p className="text-xs font-medium mb-1">Radial Basis Functions</p>
-                              <p className="text-xs text-gray-400">✓ Surfaces très lisses</p>
-                            </TooltipContent>
-                          </Tooltip>
+                            </TooltipPrimitive.Trigger>
+                            <TooltipPrimitive.Portal>
+                              <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                                <p className="font-medium mb-1">Radial Basis Functions</p>
+                                <p className="text-gray-300">✓ Surfaces très lisses</p>
+                                <p className="text-gray-300">✓ Interpolation exacte</p>
+                                <p className="text-gray-300 mt-1">Plus coûteux en calcul</p>
+                              </TooltipPrimitive.Content>
+                            </TooltipPrimitive.Portal>
+                          </TooltipPrimitive.Root>
                         </TabsList>
                       </Tabs>
-                    </TooltipProvider>
+                    </TooltipPrimitive.Provider>
 
                     {interpolationMethod === 'idw' && (
                       <div className="space-y-1">
@@ -331,9 +348,9 @@ export const SensorPanel = () => {
                           <Label className="text-xs">Exposant (p)</Label>
                           <span className="text-xs font-medium text-blue-600">{idwPower}</span>
                         </div>
-                        <TooltipProvider delayDuration={300}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
+                        <TooltipPrimitive.Provider delayDuration={300}>
+                          <TooltipPrimitive.Root>
+                            <TooltipPrimitive.Trigger asChild>
                               <div>
                                 <Slider
                                   value={[idwPower]}
@@ -344,22 +361,26 @@ export const SensorPanel = () => {
                                   className="w-full"
                                 />
                               </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" sideOffset={5}>
-                              <p className="text-xs font-medium mb-1">Exposant de pondération</p>
-                              <p className="text-xs text-gray-400">p=2 : Standard (recommandé)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                            </TooltipPrimitive.Trigger>
+                            <TooltipPrimitive.Portal>
+                              <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                                <p className="font-medium mb-1">Exposant de pondération</p>
+                                <p className="text-gray-300">p=1 : Influence linéaire</p>
+                                <p className="text-gray-300">p=2 : Standard (recommandé)</p>
+                                <p className="text-gray-300">p=5 : Influence très locale</p>
+                              </TooltipPrimitive.Content>
+                            </TooltipPrimitive.Portal>
+                          </TooltipPrimitive.Root>
+                        </TooltipPrimitive.Provider>
                       </div>
                     )}
 
                     {interpolationMethod === 'rbf' && (
                       <div className="space-y-1">
                         <Label className="text-xs">Kernel</Label>
-                        <TooltipProvider delayDuration={300}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
+                        <TooltipPrimitive.Provider delayDuration={300}>
+                          <TooltipPrimitive.Root>
+                            <TooltipPrimitive.Trigger asChild>
                               <select
                                 value={rbfKernel}
                                 onChange={(e) => setRbfKernel(e.target.value as any)}
@@ -370,13 +391,17 @@ export const SensorPanel = () => {
                                 <option value="inverse_multiquadric">Inverse Multiquadric</option>
                                 <option value="thin_plate_spline">Thin Plate Spline</option>
                               </select>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" sideOffset={5}>
-                              <p className="text-xs font-medium mb-1">Fonction de base radiale</p>
-                              <p className="text-xs text-gray-400">Multiquadric : Équilibré (recommandé)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                            </TooltipPrimitive.Trigger>
+                            <TooltipPrimitive.Portal>
+                              <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                                <p className="font-medium mb-1">Fonction de base radiale</p>
+                                <p className="text-gray-300">Multiquadric : Équilibré (recommandé)</p>
+                                <p className="text-gray-300">Gaussienne : Très lisse</p>
+                                <p className="text-gray-300">Thin Plate : Surfaces naturelles</p>
+                              </TooltipPrimitive.Content>
+                            </TooltipPrimitive.Portal>
+                          </TooltipPrimitive.Root>
+                        </TooltipPrimitive.Provider>
                       </div>
                     )}
 
@@ -385,9 +410,9 @@ export const SensorPanel = () => {
                         <Label className="text-xs">Résolution</Label>
                         <span className="text-xs font-medium text-purple-600">{meshResolution}³</span>
                       </div>
-                      <TooltipProvider delayDuration={300}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
+                      <TooltipPrimitive.Provider delayDuration={300}>
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
                             <div>
                               <Slider
                                 value={[meshResolution]}
@@ -398,13 +423,18 @@ export const SensorPanel = () => {
                                 className="w-full"
                               />
                             </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" sideOffset={5}>
-                            <p className="text-xs font-medium mb-1">Résolution de la grille 3D</p>
-                            <p className="text-xs text-gray-400">Actuel: {Math.pow(meshResolution, 3).toLocaleString()} points</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                              <p className="font-medium mb-1">Résolution de la grille 3D</p>
+                              <p className="text-gray-300">10³ : Rapide, moins détaillé</p>
+                              <p className="text-gray-300">20³ : Équilibré (recommandé)</p>
+                              <p className="text-gray-300">40³ : Très détaillé, plus lent</p>
+                              <p className="text-gray-300 mt-1">Actuel: {Math.pow(meshResolution, 3).toLocaleString()} points</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+                      </TooltipPrimitive.Provider>
                     </div>
                   </div>
                 )}

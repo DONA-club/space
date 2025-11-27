@@ -228,8 +228,9 @@ export const Scene3DViewer = () => {
     });
   }, [dataReady, selectedMetric, currentTimestamp, sensors]);
 
-  // Update interpolation mesh
+  // Update interpolation mesh - FIX: Add all dependencies
   useEffect(() => {
+    // Early exit if conditions not met
     if (!sceneRef.current || !dataReady || !meshingEnabled || !modelLoaded) {
       // Remove existing mesh if disabled
       if (sceneRef.current?.interpolationMesh) {
@@ -409,7 +410,7 @@ export const Scene3DViewer = () => {
     sceneRef.current.interpolationMesh = newMesh;
 
     console.log(`✨ Interpolation mesh created: ${gridValues.length} points, size: ${pointSize.toFixed(3)}`);
-  }, [dataReady, meshingEnabled, modelLoaded, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]);
+  }, [dataReady, meshingEnabled, modelLoaded, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]); // FIX: Added all dependencies
 
   // Handle container resize with zoom adjustment
   useEffect(() => {
@@ -806,7 +807,7 @@ export const Scene3DViewer = () => {
         sceneRef.current = null;
       }
     };
-  }, [gltfModel]);
+  }, [gltfModel, sensors]); // FIX: Added sensors to dependencies
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
