@@ -37,23 +37,39 @@ export function useLoadVolumeGLB(url: string | null): VolumeData {
       return;
     }
 
+    console.log('🔄 Starting GLB load for volume sampling...');
     setData(prev => ({ ...prev, loading: true, error: null }));
 
     const loader = new GLTFLoader();
+    const loadStartTime = performance.now();
 
     loader.load(
       url,
       (gltf) => {
+        const loadEndTime = performance.now();
+        console.log(`✅ GLB loaded in ${(loadEndTime - loadStartTime).toFixed(0)}ms`);
+        
         // Find the main mesh
         let mainMesh: THREE.Mesh | null = null;
+        let meshCount = 0;
         
+        console.log('🔍 Scanning scene for meshes...');
         gltf.scene.traverse((child) => {
-          if (child instanceof THREE.Mesh && !mainMesh) {
-            mainMesh = child;
+          if (child instanceof THREE.Mesh) {
+            meshCount++;
+            if (!mainMesh) {
+              mainMesh = child;
+              console.log(`   Found main mesh: ${child.name || 'unnamed'}`);
+              console.log(`   Vertices: ${child.geometry.attributes.position.count.toLocaleString()}`);
+              console.log(`   Triangles: ${child.geometry.index ? (child.geometry.index.count / 3).toLocaleString() : 'N/A'}`);
+            }
           }
         });
 
+        console.log(`📊 Total meshes in scene: ${meshCount}`);
+
         if (!mainMesh) {
+          console.error('❌ No mesh found in GLB file');
           setData(prev => ({
             ...prev,
             loading: false,
@@ -67,13 +83,27 @@ export function useLoadVolumeGLB(url: string | null): VolumeData {
         // Compute BVH for accelerated raycasting
         if (!geometry.boundsTree) {
           console.log('🔧 Computing BVH for mesh...');
-          const startTime = performance.now();
-          geometry.computeBoundsTree();
-          const endTime = performance.now();
-          console.log(`✅ BVH computed in ${(endTime - startTime).toFixed(0)}ms`);
+          const bvhStartTime = performance.now();
+          
+          try {
+            geometry.computeBoundsTree();
+            const bvhEndTime = performance.now();
+            console.log(`✅ BVH computed in ${(bvhEndTime - bvhStartTime).toFixed(0)}ms`);
+          } catch (error) {
+            console.error('❌ Error computing BVH:', error);
+            setData(prev => ({
+              ...prev,
+              loading: false,
+              error: 'Failed to compute BVH',
+            }));
+            return;
+          }
+        } else {
+          console.log('✅ BVH already exists');
         }
 
         // Compute bounding box
+        console.log('📦 Computing bounding box...');
         geometry.computeBoundingBox();
         const bounds = geometry.boundingBox!.clone();
 
@@ -83,11 +113,15 @@ export function useLoadVolumeGLB(url: string | null): VolumeData {
           bounds.applyMatrix4(mainMesh.matrixWorld);
         }
 
+        const size = bounds.getSize(new THREE.Vector3());
         console.log('📦 Volume bounds:', {
-          min: bounds.min.toArray(),
-          max: bounds.max.toArray(),
-          size: bounds.getSize(new THREE.Vector3()).toArray(),
+          min: bounds.min.toArray().map(v => v.toFixed(2)),
+          max: bounds.max.toArray().map(v => v.toFixed(2)),
+          size: size.toArray().map(v => v.toFixed(2)),
         });
+
+        const totalTime = performance.now() - loadStartTime;
+        console.log(`✅ Volume data ready in ${totalTime.toFixed(0)}ms total`);
 
         setData({
           mesh: mainMesh,
@@ -97,9 +131,14 @@ export function useLoadVolumeGLB(url: string | null): VolumeData {
           error: null,
         });
       },
-      undefined,
+      (progress) => {
+        if (progress.lengthComputable) {
+          const percentComplete = (progress.loaded / progress.total) * 100;
+          console.log(`📥 Loading GLB: ${percentComplete.toFixed(0)}%`);
+        }
+      },
       (error) => {
-        console.error('Error loading GLB:', error);
+        console.error('❌ Error loading GLB:', error);
         setData(prev => ({
           ...prev,
           loading: false,

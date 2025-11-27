@@ -20,7 +20,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
   const volumeData = useLoadVolumeGLB(gltfUrl);
   const meshResolution = useAppStore((state) => state.meshResolution);
   const [tolerance, setTolerance] = useState(2);
-  const [invertLogic, setInvertLogic] = useState(true); // NEW: true = air volume
+  const [invertLogic, setInvertLogic] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<InteriorPointCloudResult | null>(null);
@@ -28,7 +28,6 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
   const setFilteredPointCloud = useAppStore((state) => state.setFilteredPointCloud);
   const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
 
-  // Calculate resolution from meshResolution (inverse relationship)
   const resolution = volumeData.bounds 
     ? Math.max(
         volumeData.bounds.max.x - volumeData.bounds.min.x,
@@ -55,7 +54,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
         {
           resolution,
           tolerance,
-          invertLogic, // NEW: pass the invert flag
+          invertLogic,
           onProgress: (processed, total, percentage) => {
             setProgress(percentage);
           },
@@ -74,7 +73,6 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
         return;
       }
       
-      // Save to store for use in Scene3DViewer
       setFilteredPointCloud(result.points);
       showSuccess(`Point cloud filtré sauvegardé ! ${result.totalInside.toLocaleString()} points intérieurs (${result.filterPercentage.toFixed(1)}% filtrés)`);
       
@@ -132,9 +130,17 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
   if (volumeData.loading) {
     return (
       <LiquidGlassCard className="p-6">
-        <div className="flex items-center gap-3">
-          <Loader2 className="animate-spin" size={20} />
-          <span>Chargement du modèle GLB...</span>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Loader2 className="animate-spin" size={20} />
+            <span>Chargement du modèle GLB...</span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Calcul du BVH pour le raycasting accéléré...
+          </p>
+          <p className="text-xs text-blue-600 dark:text-blue-400">
+            💡 Consultez la console (F12) pour voir la progression détaillée
+          </p>
         </div>
       </LiquidGlassCard>
     );
@@ -185,7 +191,6 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             </div>
           </div>
 
-          {/* NEW: Mode selector */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
