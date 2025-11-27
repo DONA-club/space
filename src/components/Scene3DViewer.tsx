@@ -13,21 +13,39 @@ const INTERPOLATION_OFFSET_X = 0;
 const INTERPOLATION_OFFSET_Y = 0.6;
 const INTERPOLATION_OFFSET_Z = 0.9;
 
-// Helper function to check if a point is inside a mesh
-// Returns TRUE if point is inside (odd number of intersections)
+// Helper function to check if a point is inside a mesh with high precision
+// Uses multiple raycasting directions for better accuracy
 function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean {
   const raycaster = new THREE.Raycaster();
   raycaster.firstHitOnly = false;
   
-  // Use a single direction (positive X) and count intersections
-  const direction = new THREE.Vector3(1, 0, 0);
-  raycaster.set(point, direction);
+  // Test with multiple directions for better accuracy
+  const directions = [
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(-1, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(0, -1, 0),
+    new THREE.Vector3(0, 0, 1),
+    new THREE.Vector3(0, 0, -1),
+  ];
   
-  const intersects = raycaster.intersectObject(mesh, true);
+  let insideCount = 0;
+  let totalTests = 0;
   
-  // If odd number of intersections, point is INSIDE
-  // If even number (including 0), point is OUTSIDE
-  return intersects.length % 2 === 1;
+  for (const direction of directions) {
+    raycaster.set(point, direction);
+    const intersects = raycaster.intersectObject(mesh, true);
+    
+    // Odd number of intersections = inside
+    if (intersects.length % 2 === 1) {
+      insideCount++;
+    }
+    totalTests++;
+  }
+  
+  // Point is inside if majority of tests say it's inside
+  // This helps eliminate false positives from grazing rays
+  return insideCount > totalTests / 2;
 }
 
 export const Scene3DViewer = () => {
@@ -361,16 +379,17 @@ export const Scene3DViewer = () => {
     let removedPoints = 0;
     let cacheHits = 0;
     
-    console.log('🔍 Starting NOR filtering (Bounding Box - GLB Volume)...');
+    console.log('🔍 Starting HIGH-PRECISION NOR filtering (Bounding Box - GLB Volume)...');
     console.log('   - Resolution:', meshResolution);
     console.log('   - Step sizes:', { x: stepX.toFixed(3), y: stepY.toFixed(3), z: stepZ.toFixed(3) });
+    console.log('   - Using 6-direction raycasting for better accuracy');
     
     const useFiltering = !!modelGroup;
     console.log('   - Filtering enabled:', useFiltering);
     
     if (useFiltering) {
-      console.log('   - ✅ Using NOR logic: Keep points NOT in GLB');
-      console.log('   - 💡 Bounding box points - GLB volume = Air space');
+      console.log('   - ✅ Using multi-directional raycasting for precision');
+      console.log('   - 💡 Testing 6 directions per point (±X, ±Y, ±Z)');
       console.log('   - Cache size:', volumeCache.size);
       
       // Test a few sample points first
@@ -381,14 +400,11 @@ export const Scene3DViewer = () => {
         new THREE.Vector3((modelBounds.min.x + modelBounds.max.x) / 2, (modelBounds.min.y + modelBounds.max.y) / 2, (modelBounds.min.z + modelBounds.max.z) / 2),
       ];
       
-      console.log('   - Testing NOR logic with GLB:');
+      console.log('   - Testing multi-directional raycasting:');
       testPoints.forEach((tp, idx) => {
         const insideGLB = isPointInsideMesh(tp, modelGroup!);
-        const keepPoint = !insideGLB; // NOR: keep if NOT in GLB
-        const raycaster = new THREE.Raycaster();
-        raycaster.set(tp, new THREE.Vector3(1, 0, 0));
-        const intersects = raycaster.intersectObject(modelGroup!, true);
-        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${insideGLB ? 'IN GLB ✗' : 'NOT IN GLB ✓'} -> ${keepPoint ? 'KEEP' : 'REMOVE'} (${intersects.length} intersections)`);
+        const keepPoint = !insideGLB;
+        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${insideGLB ? 'IN GLB ✗' : 'NOT IN GLB ✓'} -> ${keepPoint ? 'KEEP' : 'REMOVE'}`);
       });
     } else {
       console.log('   - ⚠️ No filtering (GLB not available) - keeping all points');
@@ -406,8 +422,8 @@ export const Scene3DViewer = () => {
 
           let keepPoint = true;
           if (useFiltering) {
-            // Create cache key (round to 2 decimals for cache efficiency)
-            const cacheKey = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
+            // Create cache key with higher precision for better accuracy
+            const cacheKey = `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
             
             let insideGLB: boolean;
             if (volumeCache.has(cacheKey)) {
@@ -435,9 +451,10 @@ export const Scene3DViewer = () => {
     
     const filterTime = performance.now() - startTime;
     const filterPercentage = totalPoints > 0 ? ((keptPoints/totalPoints)*100).toFixed(1) : '0';
-    console.log(`✅ NOR Filtering complete: ${keptPoints}/${totalPoints} points KEPT (${filterPercentage}%), ${removedPoints} removed`);
+    console.log(`✅ HIGH-PRECISION NOR Filtering complete: ${keptPoints}/${totalPoints} points KEPT (${filterPercentage}%), ${removedPoints} removed`);
     console.log(`   - Time: ${filterTime.toFixed(0)}ms`);
     console.log(`   - Cache hits: ${cacheHits}/${totalPoints} (${(cacheHits/totalPoints*100).toFixed(1)}%)`);
+    console.log(`   - Average time per point: ${(filterTime/totalPoints).toFixed(2)}ms`);
 
     if (validGridPoints.length === 0) {
       console.warn('⚠️ No valid grid points found after NOR filtering!');
@@ -631,7 +648,7 @@ export const Scene3DViewer = () => {
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
 
-    console.log(`✅ Interpolation created (${visualizationType}) with NOR filtering`);
+    console.log(`✅ Interpolation created (${visualizationType}) with HIGH-PRECISION NOR filtering`);
   }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded]);
 
   useEffect(() => {
@@ -957,7 +974,7 @@ export const Scene3DViewer = () => {
         }
         
         setModelLoaded(true);
-        console.log('✅ Model loaded - NOR filtering ready (Bounding Box - GLB)');
+        console.log('✅ Model loaded - HIGH-PRECISION NOR filtering ready (Bounding Box - GLB)');
       },
       undefined,
       (err) => {
