@@ -25,6 +25,7 @@ export const Scene3DViewer = () => {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [modelLoaded, setModelLoaded] = useState(false);
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
   const dataReady = useAppStore((state) => state.dataReady);
@@ -229,7 +230,7 @@ export const Scene3DViewer = () => {
 
   // Update interpolation mesh
   useEffect(() => {
-    if (!sceneRef.current || !dataReady || !meshingEnabled) {
+    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelLoaded) {
       // Remove existing mesh if disabled
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
@@ -308,7 +309,7 @@ export const Scene3DViewer = () => {
       maxZ: modelBounds.max.z,
     };
     
-    console.log('📦 Model bounds:', bounds);
+    console.log('📦 Using model bounds for interpolation:', bounds);
     console.log('📏 Model scale:', modelScale);
     
     // Create interpolation grid
@@ -408,7 +409,7 @@ export const Scene3DViewer = () => {
     sceneRef.current.interpolationMesh = newMesh;
 
     console.log(`✨ Interpolation mesh created: ${gridValues.length} points, size: ${pointSize.toFixed(3)}`);
-  }, [dataReady, meshingEnabled, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]);
+  }, [dataReady, meshingEnabled, modelLoaded, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]);
 
   // Handle container resize with zoom adjustment
   useEffect(() => {
@@ -477,6 +478,7 @@ export const Scene3DViewer = () => {
 
     setLoading(true);
     setError(null);
+    setModelLoaded(false);
 
     const loadingTimeout = setTimeout(() => {
       setError('Le chargement du modèle a pris trop de temps. Vérifiez que tous les fichiers nécessaires sont présents.');
@@ -732,6 +734,9 @@ export const Scene3DViewer = () => {
         controls.maxDistance = boundingSphere.radius * 5;
         
         controls.update();
+        
+        // Mark model as loaded
+        setModelLoaded(true);
       },
       undefined,
       (err) => {

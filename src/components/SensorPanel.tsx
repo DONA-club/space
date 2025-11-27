@@ -280,7 +280,6 @@ export const SensorPanel = () => {
                       <TooltipContent side="left" sideOffset={5}>
                         <p className="text-xs font-medium mb-1">Interpolation spatiale 3D</p>
                         <p className="text-xs text-gray-400">Crée un champ continu entre les capteurs</p>
-                        <p className="text-xs text-gray-400 mt-1">Visualise les gradients de température/humidité</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -290,12 +289,12 @@ export const SensorPanel = () => {
                   <div className="space-y-3">
                     <TooltipProvider delayDuration={300}>
                       <Tabs value={interpolationMethod} onValueChange={(v) => setInterpolationMethod(v as any)}>
-                        <TabsList className="grid grid-cols-2 bg-white/50 dark:bg-black/50 h-8">
+                        <TabsList className="grid grid-cols-2 bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 p-1">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <TabsTrigger 
                                 value="idw" 
-                                className="flex items-center gap-1 text-xs h-7 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-blue-700 dark:data-[state=active]:border-blue-400"
+                                className="flex items-center gap-1 text-xs h-6 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
                               >
                                 <Zap size={12} className={interpolationMethod === 'idw' ? 'text-white' : ''} />
                                 IDW
@@ -304,8 +303,6 @@ export const SensorPanel = () => {
                             <TooltipContent side="top" sideOffset={5}>
                               <p className="text-xs font-medium mb-1">Inverse Distance Weighting</p>
                               <p className="text-xs text-gray-400">✓ Rapide et efficace</p>
-                              <p className="text-xs text-gray-400">✓ Méthode de Shepard (1968)</p>
-                              <p className="text-xs text-gray-400 mt-1">Les points proches ont plus d'influence</p>
                             </TooltipContent>
                           </Tooltip>
 
@@ -313,7 +310,7 @@ export const SensorPanel = () => {
                             <TooltipTrigger asChild>
                               <TabsTrigger 
                                 value="rbf" 
-                                className="flex items-center gap-1 text-xs h-7 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-purple-700 dark:data-[state=active]:border-purple-400"
+                                className="flex items-center gap-1 text-xs h-6 data-[state=active]:bg-purple-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
                               >
                                 <Waves size={12} className={interpolationMethod === 'rbf' ? 'text-white' : ''} />
                                 RBF
@@ -322,8 +319,6 @@ export const SensorPanel = () => {
                             <TooltipContent side="top" sideOffset={5}>
                               <p className="text-xs font-medium mb-1">Radial Basis Functions</p>
                               <p className="text-xs text-gray-400">✓ Surfaces très lisses</p>
-                              <p className="text-xs text-gray-400">✓ Interpolation exacte</p>
-                              <p className="text-xs text-gray-400 mt-1">Plus coûteux en calcul</p>
                             </TooltipContent>
                           </Tooltip>
                         </TabsList>
@@ -352,9 +347,7 @@ export const SensorPanel = () => {
                             </TooltipTrigger>
                             <TooltipContent side="top" sideOffset={5}>
                               <p className="text-xs font-medium mb-1">Exposant de pondération</p>
-                              <p className="text-xs text-gray-400">p=1 : Influence linéaire</p>
                               <p className="text-xs text-gray-400">p=2 : Standard (recommandé)</p>
-                              <p className="text-xs text-gray-400">p=5 : Influence très locale</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -381,8 +374,6 @@ export const SensorPanel = () => {
                             <TooltipContent side="top" sideOffset={5}>
                               <p className="text-xs font-medium mb-1">Fonction de base radiale</p>
                               <p className="text-xs text-gray-400">Multiquadric : Équilibré (recommandé)</p>
-                              <p className="text-xs text-gray-400">Gaussienne : Très lisse</p>
-                              <p className="text-xs text-gray-400">Thin Plate : Surfaces naturelles</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -410,10 +401,7 @@ export const SensorPanel = () => {
                           </TooltipTrigger>
                           <TooltipContent side="top" sideOffset={5}>
                             <p className="text-xs font-medium mb-1">Résolution de la grille 3D</p>
-                            <p className="text-xs text-gray-400">10³ : Rapide, moins détaillé</p>
-                            <p className="text-xs text-gray-400">20³ : Équilibré (recommandé)</p>
-                            <p className="text-xs text-gray-400">40³ : Très détaillé, plus lent</p>
-                            <p className="text-xs text-gray-400 mt-1">Actuel: {Math.pow(meshResolution, 3).toLocaleString()} points</p>
+                            <p className="text-xs text-gray-400">Actuel: {Math.pow(meshResolution, 3).toLocaleString()} points</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>

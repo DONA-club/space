@@ -217,12 +217,12 @@ export const TimelineControl = () => {
           {/* Metric selector */}
           <TooltipProvider delayDuration={300}>
             <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
-              <TabsList className="bg-white/50 dark:bg-black/50 h-8">
+              <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 p-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="temperature" 
-                      className="flex items-center gap-1 h-7 px-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-red-600 dark:data-[state=active]:border-red-400"
+                      className="flex items-center gap-1 h-6 px-2 data-[state=active]:bg-red-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
                     >
                       <Thermometer size={14} className={selectedMetric === 'temperature' ? 'text-white' : 'text-red-500'} />
                       <span className="text-xs font-medium">T°</span>
@@ -231,7 +231,6 @@ export const TimelineControl = () => {
                   <TooltipContent side="top" sideOffset={5}>
                     <p className="text-xs font-medium mb-1">Température (°C)</p>
                     <p className="text-xs text-gray-400">Mesure la chaleur de l'air ambiant</p>
-                    <p className="text-xs text-gray-400 mt-1">Influence le confort thermique</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -239,7 +238,7 @@ export const TimelineControl = () => {
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="humidity" 
-                      className="flex items-center gap-1 h-7 px-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-blue-700 dark:data-[state=active]:border-blue-400"
+                      className="flex items-center gap-1 h-6 px-2 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
                     >
                       <Droplets size={14} className={selectedMetric === 'humidity' ? 'text-white' : 'text-blue-500'} />
                       <span className="text-xs font-medium">HR</span>
@@ -248,7 +247,6 @@ export const TimelineControl = () => {
                   <TooltipContent side="top" sideOffset={5}>
                     <p className="text-xs font-medium mb-1">Humidité Relative (%)</p>
                     <p className="text-xs text-gray-400">Pourcentage de vapeur d'eau dans l'air</p>
-                    <p className="text-xs text-gray-400 mt-1">Varie avec la température</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -256,7 +254,7 @@ export const TimelineControl = () => {
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="absoluteHumidity" 
-                      className="flex items-center gap-1 h-7 px-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-cyan-700 dark:data-[state=active]:border-cyan-400"
+                      className="flex items-center gap-1 h-6 px-2 data-[state=active]:bg-cyan-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
                     >
                       <Wind size={14} className={selectedMetric === 'absoluteHumidity' ? 'text-white' : 'text-cyan-500'} />
                       <span className="text-xs font-medium">HA</span>
@@ -265,7 +263,6 @@ export const TimelineControl = () => {
                   <TooltipContent side="top" sideOffset={5}>
                     <p className="text-xs font-medium mb-1">Humidité Absolue (g/m³)</p>
                     <p className="text-xs text-gray-400">Quantité réelle d'eau dans l'air</p>
-                    <p className="text-xs text-gray-400 mt-1">Indépendante de la température</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -273,7 +270,7 @@ export const TimelineControl = () => {
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="dewPoint" 
-                      className="flex items-center gap-1 h-7 px-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-purple-700 dark:data-[state=active]:border-purple-400"
+                      className="flex items-center gap-1 h-6 px-2 data-[state=active]:bg-purple-500/90 data-[state=active]:text-white data-[state=active]:shadow-md"
                     >
                       <CloudRain size={14} className={selectedMetric === 'dewPoint' ? 'text-white' : 'text-purple-500'} />
                       <span className="text-xs font-medium">PR</span>
@@ -282,7 +279,6 @@ export const TimelineControl = () => {
                   <TooltipContent side="top" sideOffset={5}>
                     <p className="text-xs font-medium mb-1">Point de Rosée (°C)</p>
                     <p className="text-xs text-gray-400">Température de condensation</p>
-                    <p className="text-xs text-gray-400 mt-1">Risque de moisissures si proche de T°</p>
                   </TooltipContent>
                 </Tooltip>
               </TabsList>
@@ -363,7 +359,6 @@ export const TimelineControl = () => {
               <TooltipContent side="top" sideOffset={5}>
                 <p className="text-xs font-medium mb-1">Timeline interactive</p>
                 <p className="text-xs text-gray-400">🔵 Début • 🟣 Fin • 🟡 Position actuelle</p>
-                <p className="text-xs text-gray-400 mt-1">Glissez les curseurs pour ajuster la plage</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
