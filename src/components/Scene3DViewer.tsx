@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { AlertCircle } from "lucide-react";
-import { interpolateIDW, RBFInterpolator, calculateBounds, type Point3D } from "@/utils/interpolation";
+import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -20,6 +20,8 @@ export const Scene3DViewer = () => {
     boundingSphere: THREE.Sphere;
     sensorData: Map<number, Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>>;
     interpolationMesh: THREE.Points | null;
+    modelBounds: { min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null;
+    modelScale: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -238,7 +240,12 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, sensorData, interpolationMesh } = sceneRef.current;
+    const { scene, sensorData, interpolationMesh, modelBounds, modelScale } = sceneRef.current;
+
+    if (!modelBounds) {
+      console.warn('Model bounds not available yet');
+      return;
+    }
 
     // Remove old mesh
     if (interpolationMesh) {
@@ -291,8 +298,18 @@ export const Scene3DViewer = () => {
 
     if (points.length === 0) return;
 
-    // Calculate bounds
-    const bounds = calculateBounds(points);
+    // Use model bounds for interpolation volume
+    const bounds = {
+      minX: modelBounds.min.x,
+      maxX: modelBounds.max.x,
+      minY: modelBounds.min.y,
+      maxY: modelBounds.max.y,
+      minZ: modelBounds.min.z,
+      maxZ: modelBounds.max.z,
+    };
+    
+    console.log('📦 Model bounds:', bounds);
+    console.log('📏 Model scale:', modelScale);
     
     // Create interpolation grid
     const positions: number[] = [];
@@ -335,6 +352,8 @@ export const Scene3DViewer = () => {
       }
     }
 
+    console.log(`📊 Value range: [${minValue.toFixed(2)}, ${maxValue.toFixed(2)}]`);
+
     // Create geometry with colors
     gridValues.forEach(({ x, y, z, value }) => {
       positions.push(x, y, z);
@@ -369,9 +388,13 @@ export const Scene3DViewer = () => {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
+    // Calculate appropriate point size based on model scale
+    const avgDim = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3;
+    const pointSize = avgDim / meshResolution * 1.5;
+
     // Create material
     const material = new THREE.PointsMaterial({
-      size: 0.08,
+      size: pointSize,
       vertexColors: true,
       transparent: true,
       opacity: 0.6,
@@ -384,7 +407,7 @@ export const Scene3DViewer = () => {
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
 
-    console.log(`✨ Interpolation mesh created: ${gridValues.length} points, range [${minValue.toFixed(2)}, ${maxValue.toFixed(2)}]`);
+    console.log(`✨ Interpolation mesh created: ${gridValues.length} points, size: ${pointSize.toFixed(3)}`);
   }, [dataReady, meshingEnabled, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]);
 
   // Handle container resize with zoom adjustment
@@ -554,6 +577,8 @@ export const Scene3DViewer = () => {
     const loader = new GLTFLoader();
 
     let boundingSphere = new THREE.Sphere();
+    let modelBounds: { min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null = null;
+    let modelScale = 1;
 
     loader.load(
       gltfModel,
@@ -562,10 +587,17 @@ export const Scene3DViewer = () => {
         setError(null);
         setLoading(false);
         
-        // Calculate bounding box
-        const box = new THREE.Box3().setFromObject(gltf.scene);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
+        // Calculate bounding box BEFORE any transformations
+        const originalBox = new THREE.Box3().setFromObject(gltf.scene);
+        const originalCenter = originalBox.getCenter(new THREE.Vector3());
+        const originalSize = originalBox.getSize(new THREE.Vector3());
+        
+        console.log('📦 Original model bounds:', {
+          min: originalBox.min,
+          max: originalBox.max,
+          center: originalCenter,
+          size: originalSize
+        });
         
         // Check if model has geometry
         let hasGeometry = false;
@@ -583,12 +615,22 @@ export const Scene3DViewer = () => {
         }
         
         // Center the model
-        gltf.scene.position.sub(center);
+        gltf.scene.position.sub(originalCenter);
         
         // Scale the model to fit in view
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = maxDim > 0 ? 10 / maxDim : 1;
-        gltf.scene.scale.multiplyScalar(scale);
+        const maxDim = Math.max(originalSize.x, originalSize.y, originalSize.z);
+        modelScale = maxDim > 0 ? 10 / maxDim : 1;
+        gltf.scene.scale.multiplyScalar(modelScale);
+        
+        // Store scaled bounds for interpolation
+        modelBounds = {
+          min: originalBox.min.clone().sub(originalCenter).multiplyScalar(modelScale),
+          max: originalBox.max.clone().sub(originalCenter).multiplyScalar(modelScale),
+          center: new THREE.Vector3(0, 0, 0),
+          size: originalSize.clone().multiplyScalar(modelScale)
+        };
+        
+        console.log('📦 Scaled model bounds:', modelBounds);
         
         scene.add(gltf.scene);
         
@@ -659,8 +701,8 @@ export const Scene3DViewer = () => {
             });
             sprite = new THREE.Sprite(spriteMaterial);
             sprite.position.copy(originalPosition);
-            sprite.position.y += 0.5 / scale;
-            sprite.scale.set(1.2 / scale, 0.3 / scale, 1);
+            sprite.position.y += 0.5 / modelScale;
+            sprite.scale.set(1.2 / modelScale, 0.3 / modelScale, 1);
             sensorGroup.add(sprite);
 
             // Store meshes for later updates
@@ -671,7 +713,8 @@ export const Scene3DViewer = () => {
         scene.add(sensorGroup);
         
         // Calculate bounding sphere for proper camera positioning
-        box.getBoundingSphere(boundingSphere);
+        originalBox.getBoundingSphere(boundingSphere);
+        boundingSphere.radius *= modelScale;
         
         // Position camera to see the entire model with margin
         const fov = camera.fov * (Math.PI / 180);
@@ -720,7 +763,9 @@ export const Scene3DViewer = () => {
       sensorMeshes,
       boundingSphere,
       sensorData,
-      interpolationMesh: null
+      interpolationMesh: null,
+      modelBounds,
+      modelScale
     };
 
     // Cleanup
