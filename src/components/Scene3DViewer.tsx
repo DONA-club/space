@@ -44,6 +44,7 @@ export const Scene3DViewer = () => {
   const idwPower = useAppStore((state) => state.idwPower);
   const meshResolution = useAppStore((state) => state.meshResolution);
   const visualizationType = useAppStore((state) => state.visualizationType);
+  const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -328,31 +329,39 @@ export const Scene3DViewer = () => {
     const positions: number[] = [];
     const colors: number[] = [];
     
-    const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
-    const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
-    const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
-
-    const validGridPoints: { x: number; y: number; z: number }[] = [];
-    let totalPoints = 0;
+    // Use filtered point cloud if available, otherwise generate grid
+    let validGridPoints: { x: number; y: number; z: number }[] = [];
     
-    const startTime = performance.now();
-    
-    // NO FILTERING - Keep all points
-    for (let i = 0; i < meshResolution; i++) {
-      for (let j = 0; j < meshResolution; j++) {
-        for (let k = 0; k < meshResolution; k++) {
-          totalPoints++;
-          const x = modelBounds.min.x + i * stepX + INTERPOLATION_OFFSET_X;
-          const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET_Y;
-          const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET_Z;
+    if (filteredPointCloud && filteredPointCloud.length > 0) {
+      console.log(`🎯 Using filtered point cloud: ${(filteredPointCloud.length / 3).toLocaleString()} points`);
+      
+      // Convert filtered point cloud to grid points
+      for (let i = 0; i < filteredPointCloud.length; i += 3) {
+        validGridPoints.push({
+          x: filteredPointCloud[i] + INTERPOLATION_OFFSET_X,
+          y: filteredPointCloud[i + 1] + INTERPOLATION_OFFSET_Y,
+          z: filteredPointCloud[i + 2] + INTERPOLATION_OFFSET_Z,
+        });
+      }
+    } else {
+      console.log(`📊 Generating regular grid: ${meshResolution}³ points`);
+      
+      const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
+      const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
+      const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
 
-          validGridPoints.push({ x, y, z });
+      for (let i = 0; i < meshResolution; i++) {
+        for (let j = 0; j < meshResolution; j++) {
+          for (let k = 0; k < meshResolution; k++) {
+            const x = modelBounds.min.x + i * stepX + INTERPOLATION_OFFSET_X;
+            const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET_Y;
+            const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET_Z;
+
+            validGridPoints.push({ x, y, z });
+          }
         }
       }
     }
-    
-    const filterTime = performance.now() - startTime;
-    console.log(`✅ No filtering: ${totalPoints}/${totalPoints} points (100.0%) in ${filterTime.toFixed(0)}ms`);
 
     let rbfInterpolator: RBFInterpolator | null = null;
     if (interpolationMethod === 'rbf') {
@@ -422,7 +431,7 @@ export const Scene3DViewer = () => {
       geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
       const avgDim = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3;
-      const pointSize = avgDim / meshResolution * 0.5;
+      const pointSize = filteredPointCloud ? avgDim / 50 : avgDim / meshResolution * 0.5;
 
       const material = new THREE.PointsMaterial({
         size: pointSize,
@@ -534,7 +543,7 @@ export const Scene3DViewer = () => {
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded]);
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded, filteredPointCloud]);
 
   useEffect(() => {
     if (!containerRef.current || !sceneRef.current) return;

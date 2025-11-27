@@ -6,7 +6,9 @@ import { LiquidGlassCard } from './LiquidGlassCard';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Label } from './ui/label';
-import { Loader2, Play, Download } from 'lucide-react';
+import { Loader2, Play, Download, Trash2 } from 'lucide-react';
+import { useAppStore } from '@/store/appStore';
+import { showSuccess } from '@/utils/toast';
 
 interface InteriorVolumeSamplerProps {
   gltfUrl: string | null;
@@ -20,6 +22,8 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<InteriorPointCloudResult | null>(null);
   const pointCloudRef = useRef<THREE.Points | null>(null);
+  const setFilteredPointCloud = useAppStore((state) => state.setFilteredPointCloud);
+  const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
 
   const handleGenerate = async () => {
     if (!volumeData.mesh || !volumeData.geometry) {
@@ -45,6 +49,10 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
 
       setResult(result);
       
+      // Save to store for use in Scene3DViewer
+      setFilteredPointCloud(result.points);
+      showSuccess(`Point cloud filtré sauvegardé ! ${result.totalInside.toLocaleString()} points intérieurs`);
+      
       if (onPointCloudGenerated) {
         onPointCloudGenerated(result);
       }
@@ -53,6 +61,12 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleClear = () => {
+    setResult(null);
+    setFilteredPointCloud(null);
+    showSuccess('Point cloud filtré supprimé');
   };
 
   const handleExport = () => {
@@ -138,23 +152,35 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             </p>
           </div>
 
-          <Button
-            onClick={handleGenerate}
-            disabled={processing || !volumeData.mesh}
-            className="w-full"
-          >
-            {processing ? (
-              <>
-                <Loader2 className="animate-spin mr-2" size={16} />
-                Traitement... {progress.toFixed(0)}%
-              </>
-            ) : (
-              <>
-                <Play size={16} className="mr-2" />
-                Générer le Point Cloud
-              </>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleGenerate}
+              disabled={processing || !volumeData.mesh}
+              className="flex-1"
+            >
+              {processing ? (
+                <>
+                  <Loader2 className="animate-spin mr-2" size={16} />
+                  Traitement... {progress.toFixed(0)}%
+                </>
+              ) : (
+                <>
+                  <Play size={16} className="mr-2" />
+                  Générer
+                </>
+              )}
+            </Button>
+            
+            {(result || filteredPointCloud) && (
+              <Button
+                onClick={handleClear}
+                variant="outline"
+                disabled={processing}
+              >
+                <Trash2 size={16} />
+              </Button>
             )}
-          </Button>
+          </div>
         </div>
       </div>
 
@@ -174,7 +200,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
 
       {result && (
         <div className="space-y-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-          <h4 className="font-medium text-green-800 dark:text-green-300">✅ Point Cloud Généré</h4>
+          <h4 className="font-medium text-green-800 dark:text-green-300">✅ Point Cloud Généré & Appliqué</h4>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
               <span className="text-gray-600 dark:text-gray-400">Points totaux:</span>
@@ -203,6 +229,10 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             <Download size={14} className="mr-2" />
             Exporter (JSON)
           </Button>
+          
+          <p className="text-xs text-green-700 dark:text-green-400 text-center">
+            🎯 L'interpolation utilise maintenant ces points filtrés
+          </p>
         </div>
       )}
 

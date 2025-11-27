@@ -52,6 +52,9 @@ interface AppState {
   meshResolution: number;
   visualizationType: VisualizationType;
   
+  // Filtered Point Cloud
+  filteredPointCloud: Float32Array | null;
+  
   // WebSocket
   wsConnected: boolean;
   
@@ -75,6 +78,7 @@ interface AppState {
   setIdwPower: (power: number) => void;
   setMeshResolution: (resolution: number) => void;
   setVisualizationType: (type: VisualizationType) => void;
+  setFilteredPointCloud: (points: Float32Array | null) => void;
   setWsConnected: (connected: boolean) => void;
 }
 
@@ -97,6 +101,7 @@ export const useAppStore = create<AppState>((set) => ({
   idwPower: 2,
   meshResolution: 40,
   visualizationType: 'points',
+  filteredPointCloud: null,
   wsConnected: false,
   
   setAuth: (token, machineId) => set({ isAuthenticated: true, token, machineId }),
@@ -128,5 +133,6 @@ export const useAppStore = create<AppState>((set) => ({
   setIdwPower: (power) => set({ idwPower: power }),
   setMeshResolution: (resolution) => set({ meshResolution: resolution }),
   setVisualizationType: (type) => set({ visualizationType: type }),
+  setFilteredPointCloud: (points) => set({ filteredPointCloud: points }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
 }));
