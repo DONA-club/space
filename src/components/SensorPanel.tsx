@@ -1,17 +1,34 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Upload, Thermometer, Droplets, AlertCircle, FileText, X, ChevronDown, ChevronUp, FolderUp } from 'lucide-react';
+import { Upload, Thermometer, Droplets, AlertCircle, FileText, X, ChevronDown, ChevronUp, FolderUp, Grid3x3, Zap, Waves, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { showSuccess, showError } from '@/utils/toast';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
   const mode = useAppStore((state) => state.mode);
   const setSensorCsv = useAppStore((state) => state.setSensorCsv);
+  const dataReady = useAppStore((state) => state.dataReady);
+  const meshingEnabled = useAppStore((state) => state.meshingEnabled);
+  const setMeshingEnabled = useAppStore((state) => state.setMeshingEnabled);
+  const interpolationMethod = useAppStore((state) => state.interpolationMethod);
+  const setInterpolationMethod = useAppStore((state) => state.setInterpolationMethod);
+  const rbfKernel = useAppStore((state) => state.rbfKernel);
+  const setRbfKernel = useAppStore((state) => state.setRbfKernel);
+  const idwPower = useAppStore((state) => state.idwPower);
+  const setIdwPower = useAppStore((state) => state.setIdwPower);
+  const meshResolution = useAppStore((state) => state.meshResolution);
+  const setMeshResolution = useAppStore((state) => state.setMeshResolution);
+  
   const [isExpanded, setIsExpanded] = useState(true);
 
   const handleFileUpload = (sensorId: number, file: File) => {
@@ -30,18 +47,12 @@ export const SensorPanel = () => {
     for (const file of fileArray) {
       if (!file.name.endsWith('.csv')) continue;
 
-      // Extraire le nom sans l'extension
       const fileNameWithoutExt = file.name.replace(/\.csv$/i, '');
       
-      // Chercher un capteur correspondant
       const matchingSensor = sensors.find(sensor => {
-        // Matching exact
         if (sensor.name === fileNameWithoutExt) return true;
-        
-        // Matching insensible à la casse
         if (sensor.name.toLowerCase() === fileNameWithoutExt.toLowerCase()) return true;
         
-        // Matching avec espaces/tirets normalisés
         const normalizedSensorName = sensor.name.replace(/[\s-_]/g, '').toLowerCase();
         const normalizedFileName = fileNameWithoutExt.replace(/[\s-_]/g, '').toLowerCase();
         if (normalizedSensorName === normalizedFileName) return true;
@@ -57,7 +68,6 @@ export const SensorPanel = () => {
       }
     }
 
-    // Afficher le résultat
     if (matchedCount > 0) {
       showSuccess(`${matchedCount} fichier${matchedCount > 1 ? 's' : ''} CSV associé${matchedCount > 1 ? 's' : ''} automatiquement`);
     }
@@ -77,6 +87,13 @@ export const SensorPanel = () => {
 
   const sensorsWithCsv = sensors.filter(s => s.csvFile).length;
   const allSensorsHaveCsv = sensors.length > 0 && sensorsWithCsv === sensors.length;
+
+  // Auto-collapse when data is ready
+  useEffect(() => {
+    if (dataReady) {
+      setIsExpanded(false);
+    }
+  }, [dataReady]);
 
   return (
     <LiquidGlassCard className="h-full">
@@ -116,11 +133,10 @@ export const SensorPanel = () => {
             </div>
           </div>
         ) : (
-          /* Scrollable Content */
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden flex flex-col">
             {/* Bulk Upload Button */}
             {mode === 'replay' && isExpanded && (
-              <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <Button
                   size="sm"
                   variant="outline"
@@ -146,8 +162,9 @@ export const SensorPanel = () => {
               </div>
             )}
 
+            {/* Sensors List */}
             {isExpanded && (
-              <div className="h-full overflow-y-auto p-3 space-y-2">
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
                 {sensors.map((sensor) => (
                   <div 
                     key={sensor.id} 
@@ -156,7 +173,6 @@ export const SensorPanel = () => {
                     onMouseLeave={handleSensorLeave}
                   >
                     <div className="space-y-2">
-                      {/* Header */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <h3 className="font-medium text-xs truncate">{sensor.name}</h3>
@@ -177,7 +193,6 @@ export const SensorPanel = () => {
                         </Badge>
                       </div>
 
-                      {/* Data */}
                       {sensor.currentData && (
                         <div className="grid grid-cols-2 gap-1.5 text-[10px]">
                           <div className="flex items-center gap-1.5 p-1.5 bg-red-50 dark:bg-red-900/20 rounded">
@@ -195,7 +210,6 @@ export const SensorPanel = () => {
                         </div>
                       )}
 
-                      {/* CSV Upload - Compact */}
                       {mode === 'replay' && (
                         <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
                           {!sensor.csvFile ? (
@@ -240,6 +254,106 @@ export const SensorPanel = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Interpolation Section - Only when data is ready */}
+            {dataReady && (
+              <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Grid3x3 size={16} className="text-purple-600" />
+                    <h3 className="font-medium text-sm">Interpolation</h3>
+                  </div>
+                  <Switch
+                    id="meshing-toggle"
+                    checked={meshingEnabled}
+                    onCheckedChange={setMeshingEnabled}
+                    className="scale-75"
+                  />
+                </div>
+
+                {meshingEnabled && (
+                  <div className="space-y-3">
+                    <TooltipProvider>
+                      <Tabs value={interpolationMethod} onValueChange={(v) => setInterpolationMethod(v as any)}>
+                        <TabsList className="grid grid-cols-2 bg-white/50 dark:bg-black/50 h-8">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <TabsTrigger value="idw" className="flex items-center gap-1 text-xs">
+                                <Zap size={12} />
+                                IDW
+                              </TabsTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Inverse Distance Weighting</p>
+                            </TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <TabsTrigger value="rbf" className="flex items-center gap-1 text-xs">
+                                <Waves size={12} />
+                                RBF
+                              </TabsTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Radial Basis Functions</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TabsList>
+                      </Tabs>
+                    </TooltipProvider>
+
+                    {interpolationMethod === 'idw' && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Exposant (p)</Label>
+                          <span className="text-xs font-medium text-blue-600">{idwPower}</span>
+                        </div>
+                        <Slider
+                          value={[idwPower]}
+                          onValueChange={(v) => setIdwPower(v[0])}
+                          min={1}
+                          max={5}
+                          step={0.5}
+                          className="w-full"
+                        />
+                      </div>
+                    )}
+
+                    {interpolationMethod === 'rbf' && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">Kernel</Label>
+                        <select
+                          value={rbfKernel}
+                          onChange={(e) => setRbfKernel(e.target.value as any)}
+                          className="w-full text-xs bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          <option value="multiquadric">Multiquadric</option>
+                          <option value="gaussian">Gaussienne</option>
+                          <option value="inverse_multiquadric">Inverse Multiquadric</option>
+                          <option value="thin_plate_spline">Thin Plate Spline</option>
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Résolution</Label>
+                        <span className="text-xs font-medium text-purple-600">{meshResolution}³</span>
+                      </div>
+                      <Slider
+                        value={[meshResolution]}
+                        onValueChange={(v) => setMeshResolution(v[0])}
+                        min={10}
+                        max={40}
+                        step={5}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

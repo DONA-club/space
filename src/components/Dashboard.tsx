@@ -11,7 +11,6 @@ import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
 import { FileUploadPanel } from './FileUploadPanel';
 import { DataControlPanel } from './DataControlPanel';
-import { MeshingControlPanel } from './MeshingControlPanel';
 
 export const Dashboard = () => {
   const mode = useAppStore((state) => state.mode);
@@ -20,6 +19,7 @@ export const Dashboard = () => {
   const logout = useAppStore((state) => state.logout);
   const sensors = useAppStore((state) => state.sensors);
   const gltfModel = useAppStore((state) => state.gltfModel);
+  const dataReady = useAppStore((state) => state.dataReady);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -124,21 +124,15 @@ export const Dashboard = () => {
                   <DataControlPanel />
                 </motion.div>
                 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                >
-                  <MeshingControlPanel />
-                </motion.div>
-                
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                >
-                  <TimelineControl />
-                </motion.div>
+                {dataReady && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <TimelineControl />
+                  </motion.div>
+                )}
               </div>
             )}
           </>
