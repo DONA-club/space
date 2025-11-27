@@ -95,7 +95,7 @@ export const useAppStore = create<AppState>((set) => ({
   interpolationMethod: 'idw',
   rbfKernel: 'multiquadric',
   idwPower: 2,
-  meshResolution: 20,
+  meshResolution: 40,
   visualizationType: 'points',
   wsConnected: false,
   

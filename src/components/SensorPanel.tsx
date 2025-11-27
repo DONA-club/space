@@ -286,6 +286,25 @@ export const SensorPanel = () => {
 
                 {meshingEnabled && (
                   <>
+                    {/* Resolution */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Résolution</Label>
+                        <span className="text-xs font-medium text-purple-600">{meshResolution}³</span>
+                      </div>
+                      <Slider
+                        value={[meshResolution]}
+                        onValueChange={(v) => setMeshResolution(v[0])}
+                        min={10}
+                        max={50}
+                        step={5}
+                        className="w-full"
+                      />
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                        {Math.pow(meshResolution, 3).toLocaleString()} points
+                      </p>
+                    </div>
+
                     {/* Visualization Type */}
                     <div className="space-y-1">
                       <Label className="text-xs">Type de visualisation</Label>
@@ -425,21 +444,6 @@ export const SensorPanel = () => {
                         </select>
                       </div>
                     )}
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs">Résolution</Label>
-                        <span className="text-xs font-medium text-purple-600">{meshResolution}³</span>
-                      </div>
-                      <Slider
-                        value={[meshResolution]}
-                        onValueChange={(v) => setMeshResolution(v[0])}
-                        min={10}
-                        max={40}
-                        step={5}
-                        className="w-full"
-                      />
-                    </div>
                   </>
                 )}
               </div>

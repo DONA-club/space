@@ -30,7 +30,6 @@ function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean 
   ];
   
   let insideCount = 0;
-  let totalTests = 0;
   
   for (const direction of directions) {
     raycaster.set(point, direction);
@@ -40,12 +39,10 @@ function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean 
     if (intersects.length % 2 === 1) {
       insideCount++;
     }
-    totalTests++;
   }
   
-  // Point is inside if majority of tests say it's inside
-  // This helps eliminate false positives from grazing rays
-  return insideCount > totalTests / 2;
+  // Point is inside if majority of tests say it's inside (at least 4 out of 6)
+  return insideCount >= 4;
 }
 
 export const Scene3DViewer = () => {
@@ -361,11 +358,6 @@ export const Scene3DViewer = () => {
 
     if (points.length === 0) return;
 
-    console.log('🎯 Sensor positions:', points.map(p => ({ x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2), value: p.value.toFixed(2) })));
-    console.log('📦 Model bounds:', modelBounds);
-    console.log('🔧 Fixed offsets:', { x: INTERPOLATION_OFFSET_X, y: INTERPOLATION_OFFSET_Y, z: INTERPOLATION_OFFSET_Z });
-    console.log('🏠 Using GLB for NOR filtering (bounding box MINUS GLB volume):', !!modelGroup);
-    
     const positions: number[] = [];
     const colors: number[] = [];
     
@@ -376,40 +368,8 @@ export const Scene3DViewer = () => {
     const validGridPoints: { x: number; y: number; z: number }[] = [];
     let totalPoints = 0;
     let keptPoints = 0;
-    let removedPoints = 0;
-    let cacheHits = 0;
-    
-    console.log('🔍 Starting HIGH-PRECISION NOR filtering (Bounding Box - GLB Volume)...');
-    console.log('   - Resolution:', meshResolution);
-    console.log('   - Step sizes:', { x: stepX.toFixed(3), y: stepY.toFixed(3), z: stepZ.toFixed(3) });
-    console.log('   - Using 6-direction raycasting for better accuracy');
     
     const useFiltering = !!modelGroup;
-    console.log('   - Filtering enabled:', useFiltering);
-    
-    if (useFiltering) {
-      console.log('   - ✅ Using multi-directional raycasting for precision');
-      console.log('   - 💡 Testing 6 directions per point (±X, ±Y, ±Z)');
-      console.log('   - Cache size:', volumeCache.size);
-      
-      // Test a few sample points first
-      const testPoints = [
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(modelBounds.min.x, modelBounds.min.y, modelBounds.min.z),
-        new THREE.Vector3(modelBounds.max.x, modelBounds.max.y, modelBounds.max.z),
-        new THREE.Vector3((modelBounds.min.x + modelBounds.max.x) / 2, (modelBounds.min.y + modelBounds.max.y) / 2, (modelBounds.min.z + modelBounds.max.z) / 2),
-      ];
-      
-      console.log('   - Testing multi-directional raycasting:');
-      testPoints.forEach((tp, idx) => {
-        const insideGLB = isPointInsideMesh(tp, modelGroup!);
-        const keepPoint = !insideGLB;
-        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${insideGLB ? 'IN GLB ✗' : 'NOT IN GLB ✓'} -> ${keepPoint ? 'KEEP' : 'REMOVE'}`);
-      });
-    } else {
-      console.log('   - ⚠️ No filtering (GLB not available) - keeping all points');
-    }
-    
     const startTime = performance.now();
     
     for (let i = 0; i < meshResolution; i++) {
@@ -422,13 +382,11 @@ export const Scene3DViewer = () => {
 
           let keepPoint = true;
           if (useFiltering) {
-            // Create cache key with higher precision for better accuracy
             const cacheKey = `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
             
             let insideGLB: boolean;
             if (volumeCache.has(cacheKey)) {
               insideGLB = volumeCache.get(cacheKey)!;
-              cacheHits++;
             } else {
               const point = new THREE.Vector3(x, y, z);
               insideGLB = isPointInsideMesh(point, modelGroup!);
@@ -442,8 +400,6 @@ export const Scene3DViewer = () => {
           if (keepPoint) {
             validGridPoints.push({ x, y, z });
             keptPoints++;
-          } else {
-            removedPoints++;
           }
         }
       }
@@ -451,13 +407,10 @@ export const Scene3DViewer = () => {
     
     const filterTime = performance.now() - startTime;
     const filterPercentage = totalPoints > 0 ? ((keptPoints/totalPoints)*100).toFixed(1) : '0';
-    console.log(`✅ HIGH-PRECISION NOR Filtering complete: ${keptPoints}/${totalPoints} points KEPT (${filterPercentage}%), ${removedPoints} removed`);
-    console.log(`   - Time: ${filterTime.toFixed(0)}ms`);
-    console.log(`   - Cache hits: ${cacheHits}/${totalPoints} (${(cacheHits/totalPoints*100).toFixed(1)}%)`);
-    console.log(`   - Average time per point: ${(filterTime/totalPoints).toFixed(2)}ms`);
+    console.log(`✅ NOR Filtering: ${keptPoints}/${totalPoints} points (${filterPercentage}%) in ${filterTime.toFixed(0)}ms`);
 
     if (validGridPoints.length === 0) {
-      console.warn('⚠️ No valid grid points found after NOR filtering!');
+      console.warn('⚠️ No valid grid points after filtering');
       return;
     }
 
@@ -483,8 +436,6 @@ export const Scene3DViewer = () => {
       minValue = Math.min(minValue, value);
       maxValue = Math.max(maxValue, value);
     });
-
-    console.log(`📊 Value range for ${selectedMetric}: [${minValue.toFixed(2)}, ${maxValue.toFixed(2)}]`);
 
     const getColorFromValue = (value: number): THREE.Color => {
       const normalized = (value - minValue) / (maxValue - minValue);
@@ -545,7 +496,6 @@ export const Scene3DViewer = () => {
       });
 
       newMesh = new THREE.Points(geometry, material);
-      console.log(`✨ Created ${positions.length / 3} points`);
       
     } else if (visualizationType === 'vectors') {
       const vectorGroup = new THREE.Group();
@@ -584,7 +534,6 @@ export const Scene3DViewer = () => {
       }
       
       newMesh = vectorGroup;
-      console.log(`🎯 Created ${vectorGroup.children.length} vectors`);
       
     } else if (visualizationType === 'isosurface') {
       const isosurfaceGroup = new THREE.Group();
@@ -620,7 +569,6 @@ export const Scene3DViewer = () => {
       }
       
       newMesh = isosurfaceGroup;
-      console.log(`📊 Created ${numLevels} isosurface levels`);
       
     } else {
       gridValues.forEach(({ x, y, z, value }) => {
@@ -642,13 +590,10 @@ export const Scene3DViewer = () => {
       });
 
       newMesh = new THREE.Points(geometry, material);
-      console.log(`🔷 Created volumetric mesh with ${positions.length / 3} points`);
     }
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
-
-    console.log(`✅ Interpolation created (${visualizationType}) with HIGH-PRECISION NOR filtering`);
   }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded]);
 
   useEffect(() => {
@@ -704,7 +649,6 @@ export const Scene3DViewer = () => {
     const height = container.clientHeight;
 
     if (width === 0 || height === 0) {
-      console.warn('Container has zero dimensions, waiting...');
       return;
     }
 
@@ -836,13 +780,6 @@ export const Scene3DViewer = () => {
         originalCenter = originalBox.getCenter(new THREE.Vector3());
         const originalSize = originalBox.getSize(new THREE.Vector3());
         
-        console.log('📦 Original model bounds:', {
-          min: originalBox.min,
-          max: originalBox.max,
-          center: originalCenter,
-          size: originalSize
-        });
-        
         let hasGeometry = false;
         gltf.scene.traverse((child) => {
           if (child instanceof THREE.Mesh) {
@@ -870,7 +807,6 @@ export const Scene3DViewer = () => {
           size: originalSize.clone().multiplyScalar(modelScale)
         };
         
-        console.log('📦 Scaled model bounds:', scaledBounds);
         setModelBounds(scaledBounds);
         
         modelGroup = gltf.scene;
@@ -966,7 +902,6 @@ export const Scene3DViewer = () => {
         
         controls.update();
         
-        // Store modelGroup in sceneRef BEFORE setting modelLoaded
         if (sceneRef.current) {
           sceneRef.current.modelGroup = modelGroup;
           sceneRef.current.modelScale = modelScale;
@@ -974,7 +909,6 @@ export const Scene3DViewer = () => {
         }
         
         setModelLoaded(true);
-        console.log('✅ Model loaded - HIGH-PRECISION NOR filtering ready (Bounding Box - GLB)');
       },
       undefined,
       (err) => {

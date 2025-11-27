@@ -295,10 +295,10 @@ export const TimelineControl = () => {
                   className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value={60}>1 min/s</option>
-                  <option value={120}>2x</option>
                   <option value={300}>5x</option>
                   <option value={600}>10x</option>
                   <option value={1800}>30x</option>
+                  <option value={3600}>60x</option>
                 </select>
               </TooltipPrimitive.Trigger>
               <TooltipPrimitive.Portal>
