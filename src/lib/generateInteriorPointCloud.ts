@@ -3,6 +3,7 @@ import { generateGridFromBounds } from './generateGrid';
 
 export interface InteriorPointCloudOptions {
   resolution?: number;
+  tolerance?: number;
   onProgress?: (processed: number, total: number, percentage: number) => void;
 }
 
@@ -18,9 +19,11 @@ export async function generateInteriorPointCloud(
   bounds: THREE.Box3,
   options: InteriorPointCloudOptions = {}
 ): Promise<InteriorPointCloudResult> {
-  const { resolution = 0.25, onProgress } = options;
+  const { resolution = 0.25, tolerance = 3, onProgress } = options;
   
   console.log('🚀 Starting interior point cloud generation...');
+  console.log(`📐 Resolution: ${resolution}m`);
+  console.log(`🎯 Tolerance: ${tolerance}/6 directions (${((tolerance/6)*100).toFixed(0)}% agreement)`);
   
   // Step 1: Generate grid
   const gridPoints = generateGridFromBounds(bounds, resolution);
@@ -49,11 +52,12 @@ export async function generateInteriorPointCloud(
           onProgress(e.data.processed, e.data.total, e.data.percentage);
         }
       } else if (e.data.type === 'result') {
-        const filterPercentage = (e.data.totalInside / e.data.totalProcessed) * 100;
+        const filterPercentage = ((e.data.totalProcessed - e.data.totalInside) / e.data.totalProcessed) * 100;
         
         console.log(`✅ Interior point cloud generated:`);
         console.log(`   - Total processed: ${e.data.totalProcessed.toLocaleString()}`);
         console.log(`   - Points inside: ${e.data.totalInside.toLocaleString()}`);
+        console.log(`   - Points filtered: ${(e.data.totalProcessed - e.data.totalInside).toLocaleString()}`);
         console.log(`   - Filter rate: ${filterPercentage.toFixed(1)}%`);
         
         worker.terminate();
@@ -79,6 +83,7 @@ export async function generateInteriorPointCloud(
         type: 'filter',
         points: gridPoints,
         geometryData,
+        tolerance,
       },
       [gridPoints.buffer]
     );

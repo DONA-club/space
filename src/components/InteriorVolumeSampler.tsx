@@ -6,7 +6,7 @@ import { LiquidGlassCard } from './LiquidGlassCard';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Label } from './ui/label';
-import { Loader2, Play, Download, Trash2 } from 'lucide-react';
+import { Loader2, Play, Download, Trash2, Info } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { showSuccess } from '@/utils/toast';
 
@@ -18,6 +18,7 @@ interface InteriorVolumeSamplerProps {
 export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: InteriorVolumeSamplerProps) => {
   const volumeData = useLoadVolumeGLB(gltfUrl);
   const [resolution, setResolution] = useState(0.25);
+  const [tolerance, setTolerance] = useState(3);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<InteriorPointCloudResult | null>(null);
@@ -41,6 +42,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
         volumeData.bounds,
         {
           resolution,
+          tolerance,
           onProgress: (processed, total, percentage) => {
             setProgress(percentage);
           },
@@ -51,7 +53,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
       
       // Save to store for use in Scene3DViewer
       setFilteredPointCloud(result.points);
-      showSuccess(`Point cloud filtré sauvegardé ! ${result.totalInside.toLocaleString()} points intérieurs`);
+      showSuccess(`Point cloud filtré sauvegardé ! ${result.totalInside.toLocaleString()} points intérieurs (${result.filterPercentage.toFixed(1)}% filtrés)`);
       
       if (onPointCloudGenerated) {
         onPointCloudGenerated(result);
@@ -77,6 +79,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
       metadata: {
         totalPoints: result.totalInside,
         resolution,
+        tolerance,
         filterPercentage: result.filterPercentage,
         timestamp: new Date().toISOString(),
       },
@@ -128,6 +131,8 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
       )
     : 0;
 
+  const tolerancePercentage = (tolerance / 6) * 100;
+
   return (
     <LiquidGlassCard className="p-6 space-y-6">
       <div>
@@ -149,6 +154,44 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Points estimés: ~{estimatedPoints.toLocaleString()}
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Label>Tolérance</Label>
+                <div className="group relative">
+                  <Info size={14} className="text-gray-400 cursor-help" />
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-50">
+                    <p className="font-medium mb-1">Vote majoritaire multi-directionnel</p>
+                    <p>Nombre minimum de directions (sur 6) qui doivent s'accorder pour considérer un point comme intérieur.</p>
+                    <ul className="mt-2 space-y-1">
+                      <li>• 2/6 = 33% (très permissif)</li>
+                      <li>• 3/6 = 50% (équilibré)</li>
+                      <li>• 4/6 = 67% (strict)</li>
+                      <li>• 5/6 = 83% (très strict)</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <span className="text-sm font-medium text-purple-600">
+                {tolerance}/6 ({tolerancePercentage.toFixed(0)}%)
+              </span>
+            </div>
+            <Slider
+              value={[tolerance]}
+              onValueChange={(v) => setTolerance(v[0])}
+              min={2}
+              max={5}
+              step={1}
+              disabled={processing}
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {tolerance === 2 && "Très permissif - garde plus de points"}
+              {tolerance === 3 && "Équilibré - recommandé (50% d'accord)"}
+              {tolerance === 4 && "Strict - filtre plus agressivement"}
+              {tolerance === 5 && "Très strict - garde uniquement les points certains"}
             </p>
           </div>
 
@@ -193,7 +236,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             />
           </div>
           <p className="text-xs text-center text-gray-600 dark:text-gray-400">
-            Filtrage volumétrique avec BVH...
+            Filtrage volumétrique multi-directionnel avec BVH...
           </p>
         </div>
       )}
@@ -211,12 +254,20 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
               <span className="ml-2 font-medium">{result.totalInside.toLocaleString()}</span>
             </div>
             <div>
+              <span className="text-gray-600 dark:text-gray-400">Points filtrés:</span>
+              <span className="ml-2 font-medium">{(result.totalProcessed - result.totalInside).toLocaleString()}</span>
+            </div>
+            <div>
               <span className="text-gray-600 dark:text-gray-400">Taux de filtrage:</span>
               <span className="ml-2 font-medium">{result.filterPercentage.toFixed(1)}%</span>
             </div>
             <div>
               <span className="text-gray-600 dark:text-gray-400">Résolution:</span>
               <span className="ml-2 font-medium">{resolution.toFixed(2)}m</span>
+            </div>
+            <div>
+              <span className="text-gray-600 dark:text-gray-400">Tolérance:</span>
+              <span className="ml-2 font-medium">{tolerance}/6 ({tolerancePercentage.toFixed(0)}%)</span>
             </div>
           </div>
           
@@ -237,12 +288,13 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
       )}
 
       <div className="text-xs text-gray-500 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-        <p className="font-medium mb-2">🔧 Technologie:</p>
+        <p className="font-medium mb-2">🔧 Technologie améliorée:</p>
         <ul className="space-y-1">
           <li>• <strong>BVH</strong> (three-mesh-bvh) pour raycasting accéléré</li>
+          <li>• <strong>Raycasting multi-directionnel</strong> (6 directions: ±X, ±Y, ±Z)</li>
+          <li>• <strong>Vote majoritaire</strong> pour robustesse accrue</li>
           <li>• <strong>Web Worker</strong> pour traitement parallèle</li>
           <li>• <strong>Even-Odd Rule</strong> pour test inside/outside</li>
-          <li>• Optimisé pour 64k+ points</li>
         </ul>
       </div>
     </LiquidGlassCard>

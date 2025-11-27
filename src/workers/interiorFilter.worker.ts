@@ -13,6 +13,7 @@ interface WorkerMessage {
     index: Uint32Array | null;
   };
   batchSize?: number;
+  tolerance?: number;
 }
 
 interface ProgressMessage {
@@ -48,29 +49,51 @@ function reconstructGeometry(geometryData: WorkerMessage['geometryData']): THREE
   return geometry;
 }
 
-// Test if a point is inside the mesh using even-odd rule
+// Test if a point is inside the mesh using multi-directional raycasting with majority vote
 function isPointInside(
   point: THREE.Vector3,
   mesh: THREE.Mesh,
-  raycaster: THREE.Raycaster
+  raycaster: THREE.Raycaster,
+  tolerance: number = 2
 ): boolean {
-  // Cast ray in positive X direction
-  const direction = new THREE.Vector3(1, 0, 0);
-  raycaster.set(point, direction);
+  // Test in 6 directions: +X, -X, +Y, -Y, +Z, -Z
+  const directions = [
+    new THREE.Vector3(1, 0, 0),   // +X
+    new THREE.Vector3(-1, 0, 0),  // -X
+    new THREE.Vector3(0, 1, 0),   // +Y
+    new THREE.Vector3(0, -1, 0),  // -Y
+    new THREE.Vector3(0, 0, 1),   // +Z
+    new THREE.Vector3(0, 0, -1),  // -Z
+  ];
   
-  const intersects = raycaster.intersectObject(mesh, false);
+  let insideCount = 0;
   
-  // Even-odd rule: odd number of intersections = inside
-  return intersects.length % 2 === 1;
+  for (const direction of directions) {
+    raycaster.set(point, direction);
+    const intersects = raycaster.intersectObject(mesh, false);
+    
+    // Even-odd rule: odd number of intersections = inside
+    if (intersects.length % 2 === 1) {
+      insideCount++;
+    }
+  }
+  
+  // Majority vote: if at least 'tolerance' directions say inside, consider it inside
+  // tolerance = 2 means at least 2 out of 6 directions must agree
+  // tolerance = 3 means at least 3 out of 6 directions must agree (50%)
+  // tolerance = 4 means at least 4 out of 6 directions must agree (majority)
+  return insideCount >= tolerance;
 }
 
 // Process points in batches
 self.onmessage = (e: MessageEvent<WorkerMessage>) => {
-  const { type, points, geometryData, batchSize = 2048 } = e.data;
+  const { type, points, geometryData, batchSize = 2048, tolerance = 3 } = e.data;
   
   if (type !== 'filter') return;
   
   console.log('🔧 Worker: Reconstructing geometry with BVH...');
+  console.log(`🎯 Worker: Using tolerance = ${tolerance}/6 (${((tolerance/6)*100).toFixed(0)}% agreement required)`);
+  
   const geometry = reconstructGeometry(geometryData);
   const mesh = new THREE.Mesh(geometry);
   const raycaster = new THREE.Raycaster();
@@ -79,7 +102,7 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   const totalPoints = points.length / 3;
   const interiorPoints: number[] = [];
   
-  console.log(`🔍 Worker: Processing ${totalPoints.toLocaleString()} points...`);
+  console.log(`🔍 Worker: Processing ${totalPoints.toLocaleString()} points with multi-directional raycasting...`);
   
   const startTime = performance.now();
   let lastProgressTime = startTime;
@@ -91,7 +114,7 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
     
     const point = new THREE.Vector3(x, y, z);
     
-    if (isPointInside(point, mesh, raycaster)) {
+    if (isPointInside(point, mesh, raycaster, tolerance)) {
       interiorPoints.push(x, y, z);
     }
     
@@ -113,8 +136,14 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   
   const endTime = performance.now();
   const duration = endTime - startTime;
+  const filterPercentage = ((totalPoints - interiorPoints.length / 3) / totalPoints) * 100;
   
-  console.log(`✅ Worker: Filtered ${interiorPoints.length / 3}/${totalPoints} points in ${duration.toFixed(0)}ms`);
+  console.log(`✅ Worker: Multi-directional raycasting completed:`);
+  console.log(`   - Total processed: ${totalPoints.toLocaleString()}`);
+  console.log(`   - Points inside: ${(interiorPoints.length / 3).toLocaleString()}`);
+  console.log(`   - Points filtered: ${(totalPoints - interiorPoints.length / 3).toLocaleString()}`);
+  console.log(`   - Filter rate: ${filterPercentage.toFixed(1)}%`);
+  console.log(`   - Duration: ${duration.toFixed(0)}ms`);
   
   const result: ResultMessage = {
     type: 'result',
