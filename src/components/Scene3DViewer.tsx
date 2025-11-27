@@ -26,6 +26,7 @@ export const Scene3DViewer = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [modelBoundsReady, setModelBoundsReady] = useState(false); // NEW: Track when bounds are ready
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
   const dataReady = useAppStore((state) => state.dataReady);
@@ -228,10 +229,10 @@ export const Scene3DViewer = () => {
     });
   }, [dataReady, selectedMetric, currentTimestamp, sensors]);
 
-  // Update interpolation mesh - FIX: Add all dependencies
+  // Update interpolation mesh - FIX: Use modelBoundsReady state
   useEffect(() => {
     // Early exit if conditions not met
-    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelLoaded) {
+    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBoundsReady) {
       // Remove existing mesh if disabled
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
@@ -245,7 +246,7 @@ export const Scene3DViewer = () => {
     const { scene, sensorData, interpolationMesh, modelBounds, modelScale } = sceneRef.current;
 
     if (!modelBounds) {
-      console.warn('Model bounds not available yet');
+      console.warn('⚠️ Model bounds not available yet (should not happen)');
       return;
     }
 
@@ -410,7 +411,7 @@ export const Scene3DViewer = () => {
     sceneRef.current.interpolationMesh = newMesh;
 
     console.log(`✨ Interpolation mesh created: ${gridValues.length} points, size: ${pointSize.toFixed(3)}`);
-  }, [dataReady, meshingEnabled, modelLoaded, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]); // FIX: Added all dependencies
+  }, [dataReady, meshingEnabled, modelBoundsReady, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]); // FIX: Use modelBoundsReady instead of modelLoaded
 
   // Handle container resize with zoom adjustment
   useEffect(() => {
@@ -480,6 +481,7 @@ export const Scene3DViewer = () => {
     setLoading(true);
     setError(null);
     setModelLoaded(false);
+    setModelBoundsReady(false); // NEW: Reset bounds ready state
 
     const loadingTimeout = setTimeout(() => {
       setError('Le chargement du modèle a pris trop de temps. Vérifiez que tous les fichiers nécessaires sont présents.');
@@ -738,6 +740,8 @@ export const Scene3DViewer = () => {
         
         // Mark model as loaded
         setModelLoaded(true);
+        setModelBoundsReady(true); // NEW: Mark bounds as ready
+        console.log('✅ Model bounds are now ready for interpolation');
       },
       undefined,
       (err) => {
@@ -807,7 +811,7 @@ export const Scene3DViewer = () => {
         sceneRef.current = null;
       }
     };
-  }, [gltfModel, sensors]); // FIX: Added sensors to dependencies
+  }, [gltfModel, sensors]);
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">

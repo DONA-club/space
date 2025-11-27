@@ -134,96 +134,9 @@ export const TimelineControl = () => {
   return (
     <LiquidGlassCard className="p-4">
       <div className="space-y-4">
-        {/* Top Controls Row - Reorganized */}
+        {/* Top Controls Row - Métriques à gauche, Vitesse à droite */}
         <div className="flex items-center justify-between gap-4">
-          {/* Left: Playback speed */}
-          <TooltipPrimitive.Provider delayDuration={300}>
-            <TooltipPrimitive.Root>
-              <TooltipPrimitive.Trigger asChild>
-                <select
-                  value={playbackSpeed}
-                  onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                  className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value={60}>1 min/s</option>
-                  <option value={120}>2x</option>
-                  <option value={300}>5x</option>
-                  <option value={600}>10x</option>
-                  <option value={1800}>30x</option>
-                </select>
-              </TooltipPrimitive.Trigger>
-              <TooltipPrimitive.Portal>
-                <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
-                  <p className="font-medium mb-1">Vitesse de lecture</p>
-                  <p>Contrôle la vitesse de défilement des données</p>
-                </TooltipPrimitive.Content>
-              </TooltipPrimitive.Portal>
-            </TooltipPrimitive.Root>
-          </TooltipPrimitive.Provider>
-
-          {/* Center: Playback controls + current time */}
-          <div className="flex items-center gap-2">
-            <TooltipPrimitive.Provider delayDuration={300}>
-              <TooltipPrimitive.Root>
-                <TooltipPrimitive.Trigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentTimestamp(rangeStart)}
-                    className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
-                  >
-                    <SkipBack size={14} />
-                  </Button>
-                </TooltipPrimitive.Trigger>
-                <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
-                    Retour au début
-                  </TooltipPrimitive.Content>
-                </TooltipPrimitive.Portal>
-              </TooltipPrimitive.Root>
-
-              <TooltipPrimitive.Root>
-                <TooltipPrimitive.Trigger asChild>
-                  <Button
-                    size="sm"
-                    onClick={() => setPlaying(!isPlaying)}
-                    className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 h-8 w-8 p-0"
-                  >
-                    {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-                  </Button>
-                </TooltipPrimitive.Trigger>
-                <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
-                    {isPlaying ? 'Pause' : 'Lecture'}
-                  </TooltipPrimitive.Content>
-                </TooltipPrimitive.Portal>
-              </TooltipPrimitive.Root>
-
-              <TooltipPrimitive.Root>
-                <TooltipPrimitive.Trigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentTimestamp(rangeEnd)}
-                    className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
-                  >
-                    <SkipForward size={14} />
-                  </Button>
-                </TooltipPrimitive.Trigger>
-                <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
-                    Aller à la fin
-                  </TooltipPrimitive.Content>
-                </TooltipPrimitive.Portal>
-              </TooltipPrimitive.Root>
-            </TooltipPrimitive.Provider>
-
-            <div className="text-xs text-blue-600 dark:text-blue-400 font-medium ml-2">
-              {formatTime(currentTimestamp)}
-            </div>
-          </div>
-
-          {/* Right: Metric selector */}
+          {/* Left: Metric selector */}
           <TooltipPrimitive.Provider delayDuration={300}>
             <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
               <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-9 p-1 gap-1">
@@ -312,6 +225,89 @@ export const TimelineControl = () => {
                 </TooltipPrimitive.Root>
               </TabsList>
             </Tabs>
+          </TooltipPrimitive.Provider>
+
+          {/* Center: Playback controls only */}
+          <div className="flex items-center gap-2">
+            <TooltipPrimitive.Provider delayDuration={300}>
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentTimestamp(rangeStart)}
+                    className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
+                  >
+                    <SkipBack size={14} />
+                  </Button>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                    Retour au début
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
+
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
+                  <Button
+                    size="sm"
+                    onClick={() => setPlaying(!isPlaying)}
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 h-8 w-8 p-0"
+                  >
+                    {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                  </Button>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                    {isPlaying ? 'Pause' : 'Lecture'}
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
+
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentTimestamp(rangeEnd)}
+                    className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
+                  >
+                    <SkipForward size={14} />
+                  </Button>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                    Aller à la fin
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
+            </TooltipPrimitive.Provider>
+          </div>
+
+          {/* Right: Playback speed */}
+          <TooltipPrimitive.Provider delayDuration={300}>
+            <TooltipPrimitive.Root>
+              <TooltipPrimitive.Trigger asChild>
+                <select
+                  value={playbackSpeed}
+                  onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                  className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={60}>1 min/s</option>
+                  <option value={120}>2x</option>
+                  <option value={300}>5x</option>
+                  <option value={600}>10x</option>
+                  <option value={1800}>30x</option>
+                </select>
+              </TooltipPrimitive.Trigger>
+              <TooltipPrimitive.Portal>
+                <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                  <p className="font-medium mb-1">Vitesse de lecture</p>
+                  <p>Contrôle la vitesse de défilement des données</p>
+                </TooltipPrimitive.Content>
+              </TooltipPrimitive.Portal>
+            </TooltipPrimitive.Root>
           </TooltipPrimitive.Provider>
         </div>
 
