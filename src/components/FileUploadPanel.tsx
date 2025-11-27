@@ -192,13 +192,19 @@ export const FileUploadPanel = () => {
   };
 
   const handleStlUpload = async (file: File) => {
-    if (!file.name.endsWith('.stl')) {
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith('.stl')) {
       showError('Veuillez sélectionner un fichier STL');
       return;
     }
 
     if (file.size > 50 * 1024 * 1024) {
       showError('Le fichier est trop volumineux (max 50MB)');
+      return;
+    }
+
+    if (file.size === 0) {
+      showError('Le fichier est vide');
       return;
     }
 
@@ -222,6 +228,7 @@ export const FileUploadPanel = () => {
   };
 
   const hasModel = glbFile || gltfFiles.length > 0;
+  const canProceed = hasModel && jsonFile && stlFile;
 
   return (
     <LiquidGlassCard className="p-6">
@@ -413,6 +420,27 @@ export const FileUploadPanel = () => {
             </Button>
           )}
         </div>
+
+        {/* Status message */}
+        {!canProceed && (
+          <div className="text-xs text-gray-600 dark:text-gray-400 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+            <p className="font-medium mb-1 flex items-center gap-2">
+              <AlertCircle size={14} />
+              Fichiers requis pour continuer :
+            </p>
+            <ul className="space-y-1 ml-5">
+              <li className={hasModel ? 'text-green-600 dark:text-green-400' : ''}>
+                {hasModel ? '✓' : '○'} Modèle 3D (GLB ou GLTF)
+              </li>
+              <li className={stlFile ? 'text-green-600 dark:text-green-400' : ''}>
+                {stlFile ? '✓' : '○'} Volume STL
+              </li>
+              <li className={jsonFile ? 'text-green-600 dark:text-green-400' : ''}>
+                {jsonFile ? '✓' : '○'} Positions des capteurs (JSON)
+              </li>
+            </ul>
+          </div>
+        )}
 
         {/* Info */}
         <div className="text-xs text-gray-600 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
