@@ -13,9 +13,9 @@ const INTERPOLATION_OFFSET_X = 0;
 const INTERPOLATION_OFFSET_Y = 0.6;
 const INTERPOLATION_OFFSET_Z = 0.9;
 
-// Helper function to check if a point is inside the AIR volume (cavity)
-// Returns TRUE if point is in the air cavity, FALSE if in solid walls or outside
-function isPointInAirVolume(point: THREE.Vector3, mesh: THREE.Object3D): boolean {
+// Helper function to check if a point is inside the air volume mesh
+// Returns TRUE if point is inside the air volume (odd number of intersections)
+function isPointInsideAirVolume(point: THREE.Vector3, mesh: THREE.Object3D): boolean {
   const raycaster = new THREE.Raycaster();
   raycaster.firstHitOnly = false;
   
@@ -25,11 +25,9 @@ function isPointInAirVolume(point: THREE.Vector3, mesh: THREE.Object3D): boolean
   
   const intersects = raycaster.intersectObject(mesh, true);
   
-  // If odd number of intersections, point is OUTSIDE the air volume (in walls or exterior)
-  // If even number (including 0), point is INSIDE the air volume (cavity)
-  // This is the INVERSE of typical inside/outside testing because the mesh represents
-  // the WALLS, not the air volume
-  return intersects.length % 2 === 0 && intersects.length > 0;
+  // If odd number of intersections, point is INSIDE the air volume
+  // If even number (including 0), point is OUTSIDE
+  return intersects.length % 2 === 1;
 }
 
 export const Scene3DViewer = () => {
@@ -348,7 +346,7 @@ export const Scene3DViewer = () => {
     console.log('🎯 Sensor positions:', points.map(p => ({ x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2), value: p.value.toFixed(2) })));
     console.log('📦 Model bounds:', modelBounds);
     console.log('🔧 Fixed offsets:', { x: INTERPOLATION_OFFSET_X, y: INTERPOLATION_OFFSET_Y, z: INTERPOLATION_OFFSET_Z });
-    console.log('🏠 Using GLTF model for AIR VOLUME filtering:', !!modelGroup);
+    console.log('🏠 Using GLB air volume for filtering:', !!modelGroup);
     
     const positions: number[] = [];
     const colors: number[] = [];
@@ -362,7 +360,7 @@ export const Scene3DViewer = () => {
     let insideAirPoints = 0;
     let cacheHits = 0;
     
-    console.log('🔍 Starting grid point filtering for AIR VOLUME...');
+    console.log('🔍 Starting grid point filtering with air volume GLB...');
     console.log('   - Resolution:', meshResolution);
     console.log('   - Step sizes:', { x: stepX.toFixed(3), y: stepY.toFixed(3), z: stepZ.toFixed(3) });
     
@@ -370,8 +368,8 @@ export const Scene3DViewer = () => {
     console.log('   - Filtering enabled:', useFiltering);
     
     if (useFiltering) {
-      console.log('   - ✅ Using GLTF model for AIR VOLUME filtering');
-      console.log('   - 💡 Keeping points in AIR CAVITY, removing points in WALLS');
+      console.log('   - ✅ Using GLB air volume mesh for filtering');
+      console.log('   - 💡 Keeping points INSIDE the air volume (odd intersections)');
       console.log('   - Cache size:', volumeCache.size);
       
       // Test a few sample points first
@@ -382,16 +380,16 @@ export const Scene3DViewer = () => {
         new THREE.Vector3((modelBounds.min.x + modelBounds.max.x) / 2, (modelBounds.min.y + modelBounds.max.y) / 2, (modelBounds.min.z + modelBounds.max.z) / 2),
       ];
       
-      console.log('   - Testing raycasting with GLTF:');
+      console.log('   - Testing raycasting with GLB:');
       testPoints.forEach((tp, idx) => {
-        const inAir = isPointInAirVolume(tp, modelGroup!);
+        const inside = isPointInsideAirVolume(tp, modelGroup!);
         const raycaster = new THREE.Raycaster();
         raycaster.set(tp, new THREE.Vector3(1, 0, 0));
         const intersects = raycaster.intersectObject(modelGroup!, true);
-        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${inAir ? 'IN AIR ✓' : 'IN WALL/OUTSIDE ✗'} (${intersects.length} intersections)`);
+        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${inside ? 'INSIDE AIR ✓' : 'OUTSIDE ✗'} (${intersects.length} intersections)`);
       });
     } else {
-      console.log('   - ⚠️ No volume filtering (GLTF model not available)');
+      console.log('   - ⚠️ No volume filtering (GLB not available)');
     }
     
     const startTime = performance.now();
@@ -404,22 +402,22 @@ export const Scene3DViewer = () => {
           const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET_Y;
           const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET_Z;
 
-          let inAir = true;
+          let inside = true;
           if (useFiltering) {
             // Create cache key (round to 2 decimals for cache efficiency)
             const cacheKey = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
             
             if (volumeCache.has(cacheKey)) {
-              inAir = volumeCache.get(cacheKey)!;
+              inside = volumeCache.get(cacheKey)!;
               cacheHits++;
             } else {
               const point = new THREE.Vector3(x, y, z);
-              inAir = isPointInAirVolume(point, modelGroup!);
-              volumeCache.set(cacheKey, inAir);
+              inside = isPointInsideAirVolume(point, modelGroup!);
+              volumeCache.set(cacheKey, inside);
             }
           }
 
-          if (inAir) {
+          if (inside) {
             validGridPoints.push({ x, y, z });
             insideAirPoints++;
           }
@@ -429,12 +427,12 @@ export const Scene3DViewer = () => {
     
     const filterTime = performance.now() - startTime;
     const filterPercentage = totalPoints > 0 ? ((insideAirPoints/totalPoints)*100).toFixed(1) : '0';
-    console.log(`✅ Filtering complete: ${insideAirPoints}/${totalPoints} points IN AIR VOLUME (${filterPercentage}%)`);
+    console.log(`✅ Filtering complete: ${insideAirPoints}/${totalPoints} points INSIDE AIR VOLUME (${filterPercentage}%)`);
     console.log(`   - Time: ${filterTime.toFixed(0)}ms`);
     console.log(`   - Cache hits: ${cacheHits}/${totalPoints} (${(cacheHits/totalPoints*100).toFixed(1)}%)`);
 
     if (validGridPoints.length === 0) {
-      console.warn('⚠️ No valid grid points found in air volume!');
+      console.warn('⚠️ No valid grid points found inside air volume!');
       return;
     }
 
@@ -951,7 +949,7 @@ export const Scene3DViewer = () => {
         }
         
         setModelLoaded(true);
-        console.log('✅ Model loaded successfully - ready for AIR VOLUME filtering');
+        console.log('✅ Model loaded successfully - GLB represents air volume');
       },
       undefined,
       (err) => {
