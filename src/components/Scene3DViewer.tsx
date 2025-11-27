@@ -13,40 +13,6 @@ const INTERPOLATION_OFFSET_X = 0;
 const INTERPOLATION_OFFSET_Y = 0.6;
 const INTERPOLATION_OFFSET_Z = 0.9;
 
-// Helper function to check if a point is inside a mesh using NAND logic
-// NAND: Keep point if at least ONE direction says "outside" (NOT all say "inside")
-function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean {
-  const raycaster = new THREE.Raycaster();
-  raycaster.firstHitOnly = false;
-  
-  // Test with multiple directions
-  const directions = [
-    new THREE.Vector3(1, 0, 0),
-    new THREE.Vector3(-1, 0, 0),
-    new THREE.Vector3(0, 1, 0),
-    new THREE.Vector3(0, -1, 0),
-    new THREE.Vector3(0, 0, 1),
-    new THREE.Vector3(0, 0, -1),
-  ];
-  
-  let allSayInside = true;
-  
-  for (const direction of directions) {
-    raycaster.set(point, direction);
-    const intersects = raycaster.intersectObject(mesh, true);
-    
-    // Even number of intersections (including 0) = OUTSIDE
-    if (intersects.length % 2 === 0) {
-      allSayInside = false;
-      break; // At least one says outside, so NAND = keep point
-    }
-  }
-  
-  // NAND logic: return true (inside) only if ALL directions say inside
-  // If at least one says outside, return false (outside) -> point will be kept
-  return allSayInside;
-}
-
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<{
@@ -62,7 +28,6 @@ export const Scene3DViewer = () => {
     modelScale: number;
     modelGroup: THREE.Group | null;
     originalCenter: THREE.Vector3 | null;
-    volumeCache: Map<string, boolean>;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -289,7 +254,7 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, sensorData, interpolationMesh, modelScale, modelGroup, originalCenter, volumeCache } = sceneRef.current;
+    const { scene, sensorData, interpolationMesh, modelScale, originalCenter } = sceneRef.current;
 
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
@@ -369,11 +334,10 @@ export const Scene3DViewer = () => {
 
     const validGridPoints: { x: number; y: number; z: number }[] = [];
     let totalPoints = 0;
-    let keptPoints = 0;
     
-    const useFiltering = !!modelGroup;
     const startTime = performance.now();
     
+    // NO FILTERING - Keep all points
     for (let i = 0; i < meshResolution; i++) {
       for (let j = 0; j < meshResolution; j++) {
         for (let k = 0; k < meshResolution; k++) {
@@ -382,39 +346,13 @@ export const Scene3DViewer = () => {
           const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET_Y;
           const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET_Z;
 
-          let keepPoint = true;
-          if (useFiltering) {
-            const cacheKey = `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
-            
-            let insideGLB: boolean;
-            if (volumeCache.has(cacheKey)) {
-              insideGLB = volumeCache.get(cacheKey)!;
-            } else {
-              const point = new THREE.Vector3(x, y, z);
-              insideGLB = isPointInsideMesh(point, modelGroup!);
-              volumeCache.set(cacheKey, insideGLB);
-            }
-            
-            // NAND logic: keep point if it's NOT inside the GLB
-            keepPoint = !insideGLB;
-          }
-
-          if (keepPoint) {
-            validGridPoints.push({ x, y, z });
-            keptPoints++;
-          }
+          validGridPoints.push({ x, y, z });
         }
       }
     }
     
     const filterTime = performance.now() - startTime;
-    const filterPercentage = totalPoints > 0 ? ((keptPoints/totalPoints)*100).toFixed(1) : '0';
-    console.log(`✅ NAND Filtering: ${keptPoints}/${totalPoints} points (${filterPercentage}%) in ${filterTime.toFixed(0)}ms`);
-
-    if (validGridPoints.length === 0) {
-      console.warn('⚠️ No valid grid points after filtering');
-      return;
-    }
+    console.log(`✅ No filtering: ${totalPoints}/${totalPoints} points (100.0%) in ${filterTime.toFixed(0)}ms`);
 
     let rbfInterpolator: RBFInterpolator | null = null;
     if (interpolationMethod === 'rbf') {
@@ -762,7 +700,6 @@ export const Scene3DViewer = () => {
 
     const sensorMeshes = new Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>();
     const sensorData = new Map();
-    const volumeCache = new Map<string, boolean>();
 
     const loader = new GLTFLoader();
 
@@ -944,7 +881,6 @@ export const Scene3DViewer = () => {
       modelScale,
       modelGroup: null,
       originalCenter: null,
-      volumeCache,
     };
 
     return () => {
