@@ -13,8 +13,9 @@ const INTERPOLATION_OFFSET_X = 0;
 const INTERPOLATION_OFFSET_Y = 0.6;
 const INTERPOLATION_OFFSET_Z = 0.9;
 
-// Helper function to check if a point is inside a mesh using raycasting
-function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean {
+// Helper function to check if a point is inside the AIR volume (cavity)
+// Returns TRUE if point is in the air cavity, FALSE if in solid walls or outside
+function isPointInAirVolume(point: THREE.Vector3, mesh: THREE.Object3D): boolean {
   const raycaster = new THREE.Raycaster();
   raycaster.firstHitOnly = false;
   
@@ -24,9 +25,11 @@ function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean 
   
   const intersects = raycaster.intersectObject(mesh, true);
   
-  // If odd number of intersections, point is inside
-  // If even number (including 0), point is outside
-  return intersects.length % 2 === 1;
+  // If odd number of intersections, point is OUTSIDE the air volume (in walls or exterior)
+  // If even number (including 0), point is INSIDE the air volume (cavity)
+  // This is the INVERSE of typical inside/outside testing because the mesh represents
+  // the WALLS, not the air volume
+  return intersects.length % 2 === 0 && intersects.length > 0;
 }
 
 export const Scene3DViewer = () => {
@@ -345,7 +348,7 @@ export const Scene3DViewer = () => {
     console.log('🎯 Sensor positions:', points.map(p => ({ x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2), value: p.value.toFixed(2) })));
     console.log('📦 Model bounds:', modelBounds);
     console.log('🔧 Fixed offsets:', { x: INTERPOLATION_OFFSET_X, y: INTERPOLATION_OFFSET_Y, z: INTERPOLATION_OFFSET_Z });
-    console.log('🏠 Using GLTF model for volume filtering:', !!modelGroup);
+    console.log('🏠 Using GLTF model for AIR VOLUME filtering:', !!modelGroup);
     
     const positions: number[] = [];
     const colors: number[] = [];
@@ -356,10 +359,10 @@ export const Scene3DViewer = () => {
 
     const validGridPoints: { x: number; y: number; z: number }[] = [];
     let totalPoints = 0;
-    let insidePoints = 0;
+    let insideAirPoints = 0;
     let cacheHits = 0;
     
-    console.log('🔍 Starting grid point filtering with GLTF model...');
+    console.log('🔍 Starting grid point filtering for AIR VOLUME...');
     console.log('   - Resolution:', meshResolution);
     console.log('   - Step sizes:', { x: stepX.toFixed(3), y: stepY.toFixed(3), z: stepZ.toFixed(3) });
     
@@ -367,8 +370,26 @@ export const Scene3DViewer = () => {
     console.log('   - Filtering enabled:', useFiltering);
     
     if (useFiltering) {
-      console.log('   - ✅ Using GLTF model for volume filtering');
+      console.log('   - ✅ Using GLTF model for AIR VOLUME filtering');
+      console.log('   - 💡 Keeping points in AIR CAVITY, removing points in WALLS');
       console.log('   - Cache size:', volumeCache.size);
+      
+      // Test a few sample points first
+      const testPoints = [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(modelBounds.min.x, modelBounds.min.y, modelBounds.min.z),
+        new THREE.Vector3(modelBounds.max.x, modelBounds.max.y, modelBounds.max.z),
+        new THREE.Vector3((modelBounds.min.x + modelBounds.max.x) / 2, (modelBounds.min.y + modelBounds.max.y) / 2, (modelBounds.min.z + modelBounds.max.z) / 2),
+      ];
+      
+      console.log('   - Testing raycasting with GLTF:');
+      testPoints.forEach((tp, idx) => {
+        const inAir = isPointInAirVolume(tp, modelGroup!);
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(tp, new THREE.Vector3(1, 0, 0));
+        const intersects = raycaster.intersectObject(modelGroup!, true);
+        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${inAir ? 'IN AIR ✓' : 'IN WALL/OUTSIDE ✗'} (${intersects.length} intersections)`);
+      });
     } else {
       console.log('   - ⚠️ No volume filtering (GLTF model not available)');
     }
@@ -383,37 +404,37 @@ export const Scene3DViewer = () => {
           const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET_Y;
           const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET_Z;
 
-          let inside = true;
+          let inAir = true;
           if (useFiltering) {
             // Create cache key (round to 2 decimals for cache efficiency)
             const cacheKey = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
             
             if (volumeCache.has(cacheKey)) {
-              inside = volumeCache.get(cacheKey)!;
+              inAir = volumeCache.get(cacheKey)!;
               cacheHits++;
             } else {
               const point = new THREE.Vector3(x, y, z);
-              inside = isPointInsideMesh(point, modelGroup!);
-              volumeCache.set(cacheKey, inside);
+              inAir = isPointInAirVolume(point, modelGroup!);
+              volumeCache.set(cacheKey, inAir);
             }
           }
 
-          if (inside) {
+          if (inAir) {
             validGridPoints.push({ x, y, z });
-            insidePoints++;
+            insideAirPoints++;
           }
         }
       }
     }
     
     const filterTime = performance.now() - startTime;
-    const filterPercentage = totalPoints > 0 ? ((insidePoints/totalPoints)*100).toFixed(1) : '0';
-    console.log(`✅ Filtering complete: ${insidePoints}/${totalPoints} points INSIDE (${filterPercentage}%)`);
+    const filterPercentage = totalPoints > 0 ? ((insideAirPoints/totalPoints)*100).toFixed(1) : '0';
+    console.log(`✅ Filtering complete: ${insideAirPoints}/${totalPoints} points IN AIR VOLUME (${filterPercentage}%)`);
     console.log(`   - Time: ${filterTime.toFixed(0)}ms`);
     console.log(`   - Cache hits: ${cacheHits}/${totalPoints} (${(cacheHits/totalPoints*100).toFixed(1)}%)`);
 
     if (validGridPoints.length === 0) {
-      console.warn('⚠️ No valid grid points found inside room volume!');
+      console.warn('⚠️ No valid grid points found in air volume!');
       return;
     }
 
@@ -930,7 +951,7 @@ export const Scene3DViewer = () => {
         }
         
         setModelLoaded(true);
-        console.log('✅ Model loaded successfully - ready for volume filtering');
+        console.log('✅ Model loaded successfully - ready for AIR VOLUME filtering');
       },
       undefined,
       (err) => {
