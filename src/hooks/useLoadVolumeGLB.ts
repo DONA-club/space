@@ -79,9 +79,8 @@ export function useLoadVolumeGLB(url: string | null): VolumeData {
 
         // Apply mesh transformations to bounds
         if (mainMesh.parent) {
-          const worldMatrix = new THREE.Matrix4();
-          mainMesh.getWorldMatrix(worldMatrix);
-          bounds.applyMatrix4(worldMatrix);
+          mainMesh.updateMatrixWorld(true);
+          bounds.applyMatrix4(mainMesh.matrixWorld);
         }
 
         console.log('📦 Volume bounds:', {
