@@ -123,7 +123,7 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
     totalInside: interiorPoints.length / 3,
   };
   
-  self.postMessage(result, [result.interiorPoints.buffer]);
+  self.postMessage(result, { transfer: [result.interiorPoints.buffer] });
   
   // Cleanup
   geometry.dispose();
