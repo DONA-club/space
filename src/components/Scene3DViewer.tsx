@@ -36,7 +36,6 @@ function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Mesh): boolean {
     }
   }
 
-  // A point is inside if it intersects in at least 4 directions
   return intersectionCount >= 4;
 }
 
@@ -75,7 +74,6 @@ export const Scene3DViewer = () => {
   const visualizationType = useAppStore((state) => state.visualizationType);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
 
-  // Listen to hover events from SensorPanel
   useEffect(() => {
     const handleSensorHover = (event: CustomEvent) => {
       setHoveredSensorId(event.detail.sensorId);
@@ -94,7 +92,6 @@ export const Scene3DViewer = () => {
     };
   }, []);
 
-  // Load STL volume when roomVolume changes
   useEffect(() => {
     if (!sceneRef.current || !roomVolume) return;
 
@@ -108,7 +105,6 @@ export const Scene3DViewer = () => {
       (geometry) => {
         console.log('✅ STL loaded successfully');
         
-        // Create mesh from STL geometry
         const material = new THREE.MeshBasicMaterial({
           color: 0x00ff00,
           transparent: true,
@@ -118,7 +114,6 @@ export const Scene3DViewer = () => {
         
         const stlMesh = new THREE.Mesh(geometry, material);
         
-        // Apply same transformations as the GLTF model
         if (originalCenter) {
           stlMesh.position.set(
             -originalCenter.x * modelScale,
@@ -127,9 +122,6 @@ export const Scene3DViewer = () => {
           );
         }
         stlMesh.scale.set(modelScale, modelScale, modelScale);
-        
-        // Don't add to scene (invisible helper for raycasting)
-        // But we need to update its matrix for raycasting to work
         stlMesh.updateMatrixWorld(true);
         
         if (sceneRef.current) {
@@ -145,7 +137,6 @@ export const Scene3DViewer = () => {
     );
   }, [roomVolume]);
 
-  // Load CSV data when sensors change
   useEffect(() => {
     if (!sceneRef.current) return;
 
@@ -199,7 +190,6 @@ export const Scene3DViewer = () => {
     loadSensorData();
   }, [sensors]);
 
-  // Update sensor colors
   useEffect(() => {
     if (!sceneRef.current) return;
 
@@ -236,7 +226,6 @@ export const Scene3DViewer = () => {
     });
   }, [hoveredSensorId, sensors]);
 
-  // Update labels when data changes
   useEffect(() => {
     if (!sceneRef.current) return;
 
@@ -311,7 +300,6 @@ export const Scene3DViewer = () => {
     });
   }, [dataReady, selectedMetric, currentTimestamp, sensors]);
 
-  // Update interpolation mesh with different visualization types
   useEffect(() => {
     if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds) {
       if (sceneRef.current?.interpolationMesh) {
@@ -363,7 +351,6 @@ export const Scene3DViewer = () => {
       }
     }
 
-    // Collect current sensor values (in SCENE coordinates)
     const points: Point3D[] = [];
     
     sensors.forEach((sensor) => {
@@ -397,7 +384,6 @@ export const Scene3DViewer = () => {
           break;
       }
       
-      // Transform sensor positions to scene space
       const xScene = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
       const yScene = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
       const zScene = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
@@ -423,7 +409,6 @@ export const Scene3DViewer = () => {
     const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
     const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
 
-    // First pass: filter grid points that are inside the room volume
     const validGridPoints: { x: number; y: number; z: number }[] = [];
     let totalPoints = 0;
     let insidePoints = 0;
@@ -438,7 +423,6 @@ export const Scene3DViewer = () => {
           const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET_Y;
           const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET_Z;
 
-          // Check if point is inside the room volume
           let inside = true;
           if (roomVolumeMesh) {
             const point = new THREE.Vector3(x, y, z);
@@ -460,7 +444,6 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    // Second pass: interpolate only for valid points
     let rbfInterpolator: RBFInterpolator | null = null;
     if (interpolationMethod === 'rbf') {
       rbfInterpolator = new RBFInterpolator(points, rbfKernel, 1.0);
@@ -486,7 +469,6 @@ export const Scene3DViewer = () => {
 
     console.log(`📊 Value range for ${selectedMetric}: [${minValue.toFixed(2)}, ${maxValue.toFixed(2)}]`);
 
-    // Helper function to get color from value
     const getColorFromValue = (value: number): THREE.Color => {
       const normalized = (value - minValue) / (maxValue - minValue);
       const color = new THREE.Color();
@@ -521,7 +503,6 @@ export const Scene3DViewer = () => {
     let newMesh: THREE.Points | THREE.Group | THREE.Mesh;
 
     if (visualizationType === 'points') {
-      // Points visualization
       gridValues.forEach(({ x, y, z, value }) => {
         positions.push(x, y, z);
         const color = getColorFromValue(value);
@@ -550,7 +531,6 @@ export const Scene3DViewer = () => {
       console.log(`✨ Created ${positions.length / 3} points`);
       
     } else if (visualizationType === 'vectors') {
-      // Vector field visualization
       const vectorGroup = new THREE.Group();
       const step = Math.max(1, Math.floor(Math.cbrt(validGridPoints.length) / 8));
       
@@ -558,7 +538,6 @@ export const Scene3DViewer = () => {
         const gridPoint = gridValues[idx];
         const { x, y, z, value } = gridPoint;
         
-        // Calculate gradient (approximate)
         const nextIdx = Math.min(idx + step, gridValues.length - 1);
         const nextPoint = gridValues[nextIdx];
         
@@ -591,7 +570,6 @@ export const Scene3DViewer = () => {
       console.log(`🎯 Created ${vectorGroup.children.length} vectors`);
       
     } else if (visualizationType === 'isosurface') {
-      // Isosurface visualization
       const isosurfaceGroup = new THREE.Group();
       const numLevels = 5;
       
@@ -627,8 +605,7 @@ export const Scene3DViewer = () => {
       newMesh = isosurfaceGroup;
       console.log(`📊 Created ${numLevels} isosurface levels`);
       
-    } else { // mesh
-      // Volumetric mesh visualization
+    } else {
       gridValues.forEach(({ x, y, z, value }) => {
         positions.push(x, y, z);
         const color = getColorFromValue(value);
@@ -657,7 +634,6 @@ export const Scene3DViewer = () => {
     console.log(`✅ Interpolation created (${visualizationType})`);
   }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, roomVolume]);
 
-  // Handle container resize
   useEffect(() => {
     if (!containerRef.current || !sceneRef.current) return;
 
@@ -696,8 +672,370 @@ export const Scene3DViewer = () => {
     };
   }, []);
 
-  // Scene creation (rest of the code remains the same...)
-  // [Previous scene creation code continues here - keeping it unchanged for brevity]
+  useLayoutEffect(() => {
+    if (!containerRef.current) {
+      return;
+    }
+
+    if (!gltfModel) {
+      setLoading(false);
+      return;
+    }
+
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    if (width === 0 || height === 0) {
+      console.warn('Container has zero dimensions, waiting...');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setModelLoaded(false);
+    setModelBounds(null);
+
+    const loadingTimeout = setTimeout(() => {
+      setError('Le chargement du modèle a pris trop de temps. Vérifiez que tous les fichiers nécessaires sont présents.');
+      setLoading(false);
+    }, 30000);
+
+    if (sceneRef.current) {
+      const { renderer, scene, controls, animationId, interpolationMesh } = sceneRef.current;
+      cancelAnimationFrame(animationId);
+      controls.dispose();
+      
+      if (interpolationMesh) {
+        scene.remove(interpolationMesh);
+        if (interpolationMesh instanceof THREE.Points) {
+          interpolationMesh.geometry.dispose();
+          (interpolationMesh.material as THREE.PointsMaterial).dispose();
+        } else if (interpolationMesh instanceof THREE.Mesh) {
+          interpolationMesh.geometry.dispose();
+          (interpolationMesh.material as THREE.Material).dispose();
+        } else if (interpolationMesh instanceof THREE.Group) {
+          interpolationMesh.traverse((child) => {
+            if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+              child.geometry.dispose();
+              if (Array.isArray(child.material)) {
+                child.material.forEach(m => m.dispose());
+              } else {
+                child.material.dispose();
+              }
+            }
+          });
+        }
+      }
+      
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          if (Array.isArray(object.material)) {
+            object.material.forEach(material => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+      });
+      
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+      renderer.dispose();
+      sceneRef.current = null;
+    }
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f4f8);
+    scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
+
+    const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    container.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    scene.add(ambientLight);
+
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    mainLight.position.set(10, 15, 10);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 2048;
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 50;
+    scene.add(mainLight);
+
+    const fillLight = new THREE.DirectionalLight(0xadd8e6, 0.8);
+    fillLight.position.set(-10, 10, -10);
+    scene.add(fillLight);
+
+    const backLight = new THREE.DirectionalLight(0xffa07a, 0.6);
+    backLight.position.set(0, 5, -15);
+    scene.add(backLight);
+
+    const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0xf0e68c, 0.6);
+    scene.add(hemisphereLight);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.0;
+    controls.minDistance = 2;
+    controls.maxDistance = 50;
+    controls.maxPolarAngle = Math.PI / 1.5;
+
+    const sensorMeshes = new Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>();
+    const sensorData = new Map();
+
+    const loader = new GLTFLoader();
+
+    let boundingSphere = new THREE.Sphere();
+    let modelScale = 1;
+    let roomVolumeMesh: THREE.Mesh | null = null;
+    let modelGroup: THREE.Group | null = null;
+    let originalCenter: THREE.Vector3 | null = null;
+
+    loader.load(
+      gltfModel,
+      (gltf) => {
+        clearTimeout(loadingTimeout);
+        setError(null);
+        setLoading(false);
+        
+        const originalBox = new THREE.Box3().setFromObject(gltf.scene);
+        originalCenter = originalBox.getCenter(new THREE.Vector3());
+        const originalSize = originalBox.getSize(new THREE.Vector3());
+        
+        console.log('📦 Original model bounds:', {
+          min: originalBox.min,
+          max: originalBox.max,
+          center: originalCenter,
+          size: originalSize
+        });
+        
+        let hasGeometry = false;
+        gltf.scene.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            hasGeometry = true;
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        
+        if (!hasGeometry) {
+          setError('Le modèle ne contient pas de géométrie visible');
+          return;
+        }
+        
+        gltf.scene.position.sub(originalCenter);
+        
+        const maxDim = Math.max(originalSize.x, originalSize.y, originalSize.z);
+        modelScale = maxDim > 0 ? 10 / maxDim : 1;
+        gltf.scene.scale.multiplyScalar(modelScale);
+        
+        const scaledBounds = {
+          min: originalBox.min.clone().sub(originalCenter).multiplyScalar(modelScale),
+          max: originalBox.max.clone().sub(originalCenter).multiplyScalar(modelScale),
+          center: new THREE.Vector3(0, 0, 0),
+          size: originalSize.clone().multiplyScalar(modelScale)
+        };
+        
+        console.log('📦 Scaled model bounds:', scaledBounds);
+        setModelBounds(scaledBounds);
+        
+        modelGroup = gltf.scene;
+        scene.add(gltf.scene);
+        
+        const sensorGroup = new THREE.Group();
+        sensorGroup.position.copy(gltf.scene.position);
+        sensorGroup.scale.copy(gltf.scene.scale);
+        
+        sensors.forEach((sensor) => {
+          const originalPosition = new THREE.Vector3(
+            sensor.position[0],
+            sensor.position[1],
+            sensor.position[2]
+          );
+          
+          const hasCSV = !!sensor.csvFile;
+          const initialColor = hasCSV ? 0x22c55e : 0x4dabf7;
+          const initialEmissive = hasCSV ? 0x16a34a : 0x2563eb;
+          
+          const geometry = new THREE.SphereGeometry(0.15, 32, 32);
+          const material = new THREE.MeshStandardMaterial({
+            color: initialColor,
+            emissive: initialEmissive,
+            emissiveIntensity: 0.4,
+            metalness: 0.6,
+            roughness: 0.2,
+          });
+          const sphere = new THREE.Mesh(geometry, material);
+          sphere.position.copy(originalPosition);
+          sphere.castShadow = true;
+          sphere.receiveShadow = true;
+          sensorGroup.add(sphere);
+
+          const glowGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+          const glowMaterial = new THREE.MeshBasicMaterial({
+            color: initialColor,
+            transparent: true,
+            opacity: 0.3,
+          });
+          const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+          glow.position.copy(originalPosition);
+          sensorGroup.add(glow);
+
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          let sprite: THREE.Sprite;
+          
+          if (context) {
+            canvas.width = 256;
+            canvas.height = 64;
+            context.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            context.roundRect(0, 0, canvas.width, canvas.height, 8);
+            context.fill();
+            context.fillStyle = '#1e40af';
+            context.font = 'bold 28px Arial';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(sensor.name, 128, 32);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ 
+              map: texture,
+              transparent: true,
+            });
+            sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.copy(originalPosition);
+            sprite.position.y += 0.5 / modelScale;
+            sprite.scale.set(1.2 / modelScale, 0.3 / modelScale, 1);
+            sensorGroup.add(sprite);
+
+            sensorMeshes.set(sensor.id, { sphere, glow, sprite });
+          }
+        });
+        
+        scene.add(sensorGroup);
+        
+        originalBox.getBoundingSphere(boundingSphere);
+        boundingSphere.radius *= modelScale;
+        
+        const fov = camera.fov * (Math.PI / 180);
+        const aspectRatio = width / height;
+        const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
+        const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
+        const distance = Math.max(verticalFit, horizontalFit) * 1.5;
+        
+        camera.position.set(distance, distance * 0.75, distance);
+        camera.lookAt(0, 0, 0);
+        controls.target.set(0, 0, 0);
+        
+        controls.minDistance = boundingSphere.radius * 1.2;
+        controls.maxDistance = boundingSphere.radius * 5;
+        
+        controls.update();
+        
+        setModelLoaded(true);
+        console.log('✅ Model loaded successfully');
+      },
+      undefined,
+      (err) => {
+        clearTimeout(loadingTimeout);
+        console.error("Error loading GLTF:", err);
+        setError("Erreur lors du chargement du modèle 3D. Vérifiez que tous les fichiers nécessaires sont présents et correctement formatés.");
+        setLoading(false);
+      }
+    );
+
+    const animate = () => {
+      const animationId = requestAnimationFrame(animate);
+      if (sceneRef.current) {
+        sceneRef.current.animationId = animationId;
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    const firstAnimationId = requestAnimationFrame(animate);
+
+    sceneRef.current = {
+      renderer,
+      scene,
+      camera,
+      controls,
+      animationId: firstAnimationId,
+      sensorMeshes,
+      boundingSphere,
+      sensorData,
+      interpolationMesh: null,
+      modelScale,
+      roomVolumeMesh,
+      modelGroup,
+      originalCenter
+    };
+
+    return () => {
+      clearTimeout(loadingTimeout);
+      
+      if (sceneRef.current) {
+        const { renderer, scene, controls, animationId, interpolationMesh } = sceneRef.current;
+        cancelAnimationFrame(animationId);
+        controls.dispose();
+        
+        if (interpolationMesh) {
+          scene.remove(interpolationMesh);
+          if (interpolationMesh instanceof THREE.Points) {
+            interpolationMesh.geometry.dispose();
+            (interpolationMesh.material as THREE.PointsMaterial).dispose();
+          } else if (interpolationMesh instanceof THREE.Mesh) {
+            interpolationMesh.geometry.dispose();
+            (interpolationMesh.material as THREE.Material).dispose();
+          } else if (interpolationMesh instanceof THREE.Group) {
+            interpolationMesh.traverse((child) => {
+              if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+                child.geometry.dispose();
+                if (Array.isArray(child.material)) {
+                  child.material.forEach(m => m.dispose());
+                } else {
+                  child.material.dispose();
+                }
+              }
+            });
+          }
+        }
+        
+        scene.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            object.geometry.dispose();
+            if (Array.isArray(object.material)) {
+              object.material.forEach(material => material.dispose());
+            } else {
+              object.material.dispose();
+            }
+          }
+        });
+        
+        if (container.contains(renderer.domElement)) {
+          container.removeChild(renderer.domElement);
+        }
+        renderer.dispose();
+        sceneRef.current = null;
+      }
+    };
+  }, [gltfModel, sensors]);
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
@@ -741,7 +1079,6 @@ export const Scene3DViewer = () => {
   );
 };
 
-// Helper function to create a circular texture for round points
 function createCircleTexture(): THREE.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = 64;
