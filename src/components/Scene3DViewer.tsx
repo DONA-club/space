@@ -138,7 +138,6 @@ export const Scene3DViewer = () => {
           sceneRef.current.roomVolumeMesh = stlMesh;
         }
         
-        setStlLoaded(true);
         console.log('🏠 STL room volume mesh ready for raycasting');
         
         // Test the raycasting with a few sample points
@@ -156,6 +155,9 @@ export const Scene3DViewer = () => {
           const intersects = raycaster.intersectObject(stlMesh, true);
           console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${inside ? 'INSIDE' : 'OUTSIDE'} (${intersects.length} intersections)`);
         });
+        
+        // Set loaded state AFTER everything is ready
+        setStlLoaded(true);
       },
       (progress) => {
         if (progress.total > 0) {
@@ -453,6 +455,12 @@ export const Scene3DViewer = () => {
     const useFiltering = roomVolumeMesh && stlLoaded;
     console.log('   - Filtering enabled:', useFiltering);
     
+    if (useFiltering) {
+      console.log('   - ✅ Using STL volume filtering');
+    } else {
+      console.log('   - ⚠️ No STL filtering (roomVolumeMesh:', !!roomVolumeMesh, 'stlLoaded:', stlLoaded, ')');
+    }
+    
     for (let i = 0; i < meshResolution; i++) {
       for (let j = 0; j < meshResolution; j++) {
         for (let k = 0; k < meshResolution; k++) {
@@ -671,7 +679,7 @@ export const Scene3DViewer = () => {
     sceneRef.current.interpolationMesh = newMesh;
 
     console.log(`✅ Interpolation created (${visualizationType})`);
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, roomVolume, stlLoaded]);
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, stlLoaded]); // Added stlLoaded dependency
 
   useEffect(() => {
     if (!containerRef.current || !sceneRef.current) return;
