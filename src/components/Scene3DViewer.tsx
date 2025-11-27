@@ -18,15 +18,30 @@ function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean 
   const raycaster = new THREE.Raycaster();
   raycaster.firstHitOnly = false;
   
-  // Use a single direction (positive X) and count intersections
-  const direction = new THREE.Vector3(1, 0, 0);
-  raycaster.set(point, direction);
+  // Cast rays in multiple directions for more robust detection
+  const directions = [
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(-1, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(0, -1, 0),
+    new THREE.Vector3(0, 0, 1),
+    new THREE.Vector3(0, 0, -1),
+  ];
   
-  const intersects = raycaster.intersectObject(mesh, true);
+  let insideCount = 0;
   
-  // If odd number of intersections, point is inside
-  // If even number (including 0), point is outside
-  return intersects.length % 2 === 1;
+  for (const direction of directions) {
+    raycaster.set(point, direction);
+    const intersects = raycaster.intersectObject(mesh, true);
+    
+    // If odd number of intersections, point is inside from this direction
+    if (intersects.length % 2 === 1) {
+      insideCount++;
+    }
+  }
+  
+  // Point is inside if majority of rays say it's inside
+  return insideCount >= 4;
 }
 
 export const Scene3DViewer = () => {
@@ -378,10 +393,7 @@ export const Scene3DViewer = () => {
       console.log('   - Testing raycasting with GLTF:');
       testPoints.forEach((tp, idx) => {
         const inside = isPointInsideMesh(tp, modelGroup!);
-        const raycaster = new THREE.Raycaster();
-        raycaster.set(tp, new THREE.Vector3(1, 0, 0));
-        const intersects = raycaster.intersectObject(modelGroup!, true);
-        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${inside ? 'INSIDE' : 'OUTSIDE'} (${intersects.length} intersections)`);
+        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${inside ? 'INSIDE ✓' : 'OUTSIDE ✗'}`);
       });
     } else {
       console.log('   - ⚠️ No volume filtering (GLTF model not available)');
@@ -410,7 +422,7 @@ export const Scene3DViewer = () => {
     }
     
     const filterPercentage = totalPoints > 0 ? ((insidePoints/totalPoints)*100).toFixed(1) : '0';
-    console.log(`✅ Filtering complete: ${insidePoints}/${totalPoints} points (${filterPercentage}%)`);
+    console.log(`✅ Filtering complete: ${insidePoints}/${totalPoints} points INSIDE (${filterPercentage}%)`);
 
     if (validGridPoints.length === 0) {
       console.warn('⚠️ No valid grid points found inside room volume!');
