@@ -15,9 +15,9 @@ const INTERPOLATION_OFFSET_Y = 0.6;
 const INTERPOLATION_OFFSET_Z = 0.9;
 
 // Helper function to check if a point is inside a mesh using raycasting
-function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Mesh): boolean {
+function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean {
   const raycaster = new THREE.Raycaster();
-  raycaster.firstHitOnly = false; // We need all intersections
+  raycaster.firstHitOnly = false;
   
   // Use a single direction (positive X) and count intersections
   const direction = new THREE.Vector3(1, 0, 0);
@@ -100,7 +100,6 @@ export const Scene3DViewer = () => {
         console.log('   - Vertices:', geometry.attributes.position.count);
         console.log('   - Triangles:', geometry.attributes.position.count / 3);
         
-        // Compute normals for better raycasting
         geometry.computeVertexNormals();
         
         const material = new THREE.MeshBasicMaterial({
@@ -112,7 +111,6 @@ export const Scene3DViewer = () => {
         
         const stlMesh = new THREE.Mesh(geometry, material);
         
-        // Apply same transformations as the GLTF model
         if (originalCenter) {
           stlMesh.position.set(
             -originalCenter.x * modelScale,
@@ -122,11 +120,9 @@ export const Scene3DViewer = () => {
         }
         stlMesh.scale.set(modelScale, modelScale, modelScale);
         
-        // Update matrix for raycasting
         stlMesh.updateMatrix();
         stlMesh.updateMatrixWorld(true);
         
-        // Compute bounding box
         const stlBox = new THREE.Box3().setFromObject(stlMesh);
         console.log('   - STL Bounds:', {
           min: stlBox.min,
@@ -138,26 +134,8 @@ export const Scene3DViewer = () => {
           sceneRef.current.roomVolumeMesh = stlMesh;
         }
         
-        console.log('🏠 STL room volume mesh ready for raycasting');
-        
-        // Test the raycasting with a few sample points
-        const testPoints = [
-          new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(stlBox.min.x - 1, 0, 0), // Outside
-          new THREE.Vector3((stlBox.min.x + stlBox.max.x) / 2, (stlBox.min.y + stlBox.max.y) / 2, (stlBox.min.z + stlBox.max.z) / 2), // Center (should be inside)
-        ];
-        
-        console.log('   - Testing raycasting:');
-        testPoints.forEach((tp, idx) => {
-          const inside = isPointInsideMesh(tp, stlMesh);
-          const raycaster = new THREE.Raycaster();
-          raycaster.set(tp, new THREE.Vector3(1, 0, 0));
-          const intersects = raycaster.intersectObject(stlMesh, true);
-          console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${inside ? 'INSIDE' : 'OUTSIDE'} (${intersects.length} intersections)`);
-        });
-        
-        // Set loaded state AFTER everything is ready
         setStlLoaded(true);
+        console.log('🏠 STL room volume mesh ready (but using GLTF for filtering)');
       },
       (progress) => {
         if (progress.total > 0) {
@@ -361,7 +339,7 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, sensorData, interpolationMesh, modelScale, roomVolumeMesh, originalCenter } = sceneRef.current;
+    const { scene, sensorData, interpolationMesh, modelScale, modelGroup, originalCenter } = sceneRef.current;
 
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
@@ -435,7 +413,7 @@ export const Scene3DViewer = () => {
     console.log('🎯 Sensor positions:', points.map(p => ({ x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2), value: p.value.toFixed(2) })));
     console.log('📦 Model bounds:', modelBounds);
     console.log('🔧 Fixed offsets:', { x: INTERPOLATION_OFFSET_X, y: INTERPOLATION_OFFSET_Y, z: INTERPOLATION_OFFSET_Z });
-    console.log('🏠 STL loaded:', !!roomVolumeMesh, 'STL ready:', stlLoaded);
+    console.log('🏠 Using GLTF model for volume filtering:', !!modelGroup);
     
     const positions: number[] = [];
     const colors: number[] = [];
@@ -448,17 +426,34 @@ export const Scene3DViewer = () => {
     let totalPoints = 0;
     let insidePoints = 0;
     
-    console.log('🔍 Starting grid point filtering...');
+    console.log('🔍 Starting grid point filtering with GLTF model...');
     console.log('   - Resolution:', meshResolution);
     console.log('   - Step sizes:', { x: stepX.toFixed(3), y: stepY.toFixed(3), z: stepZ.toFixed(3) });
     
-    const useFiltering = roomVolumeMesh && stlLoaded;
+    const useFiltering = !!modelGroup;
     console.log('   - Filtering enabled:', useFiltering);
     
     if (useFiltering) {
-      console.log('   - ✅ Using STL volume filtering');
+      console.log('   - ✅ Using GLTF model for volume filtering');
+      
+      // Test a few sample points first
+      const testPoints = [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(modelBounds.min.x, modelBounds.min.y, modelBounds.min.z),
+        new THREE.Vector3(modelBounds.max.x, modelBounds.max.y, modelBounds.max.z),
+        new THREE.Vector3((modelBounds.min.x + modelBounds.max.x) / 2, (modelBounds.min.y + modelBounds.max.y) / 2, (modelBounds.min.z + modelBounds.max.z) / 2),
+      ];
+      
+      console.log('   - Testing raycasting with GLTF:');
+      testPoints.forEach((tp, idx) => {
+        const inside = isPointInsideMesh(tp, modelGroup!);
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(tp, new THREE.Vector3(1, 0, 0));
+        const intersects = raycaster.intersectObject(modelGroup!, true);
+        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${inside ? 'INSIDE' : 'OUTSIDE'} (${intersects.length} intersections)`);
+      });
     } else {
-      console.log('   - ⚠️ No STL filtering (roomVolumeMesh:', !!roomVolumeMesh, 'stlLoaded:', stlLoaded, ')');
+      console.log('   - ⚠️ No volume filtering (GLTF model not available)');
     }
     
     for (let i = 0; i < meshResolution; i++) {
@@ -472,7 +467,7 @@ export const Scene3DViewer = () => {
           let inside = true;
           if (useFiltering) {
             const point = new THREE.Vector3(x, y, z);
-            inside = isPointInsideMesh(point, roomVolumeMesh!);
+            inside = isPointInsideMesh(point, modelGroup!);
           }
 
           if (inside) {
@@ -679,7 +674,7 @@ export const Scene3DViewer = () => {
     sceneRef.current.interpolationMesh = newMesh;
 
     console.log(`✅ Interpolation created (${visualizationType})`);
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, stlLoaded]); // Added stlLoaded dependency
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded]);
 
   useEffect(() => {
     if (!containerRef.current || !sceneRef.current) return;
@@ -997,7 +992,7 @@ export const Scene3DViewer = () => {
         controls.update();
         
         setModelLoaded(true);
-        console.log('✅ Model loaded successfully');
+        console.log('✅ Model loaded successfully - ready for volume filtering');
       },
       undefined,
       (err) => {
