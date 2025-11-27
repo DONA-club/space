@@ -3,8 +3,10 @@
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export const TimelineControl = () => {
   const isPlaying = useAppStore((state) => state.isPlaying);
@@ -12,6 +14,8 @@ export const TimelineControl = () => {
   const currentTimestamp = useAppStore((state) => state.currentTimestamp);
   const setCurrentTimestamp = useAppStore((state) => state.setCurrentTimestamp);
   const timeRange = useAppStore((state) => state.timeRange);
+  const selectedMetric = useAppStore((state) => state.selectedMetric);
+  const setSelectedMetric = useAppStore((state) => state.setSelectedMetric);
 
   const [playbackSpeed, setPlaybackSpeed] = useState(60);
   const [rangeStart, setRangeStart] = useState<number | null>(null);
@@ -128,50 +132,162 @@ export const TimelineControl = () => {
   const dayMarkers = getDayMarkers();
 
   return (
-    <LiquidGlassCard className="p-6">
-      <div className="space-y-6">
-        {/* Controls */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentTimestamp(rangeStart)}
-              className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50"
-            >
-              <SkipBack size={16} />
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setPlaying(!isPlaying)}
-              className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-            >
-              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentTimestamp(rangeEnd)}
-              className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50"
-            >
-              <SkipForward size={16} />
-            </Button>
+    <LiquidGlassCard className="p-4">
+      <div className="space-y-4">
+        {/* Top Controls Row */}
+        <div className="flex items-center justify-between gap-4">
+          {/* Playback controls */}
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentTimestamp(rangeStart)}
+                    className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
+                  >
+                    <SkipBack size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Retour au début</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    onClick={() => setPlaying(!isPlaying)}
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 h-8 w-8 p-0"
+                  >
+                    {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">{isPlaying ? 'Pause' : 'Lecture'}</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentTimestamp(rangeEnd)}
+                    className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
+                  >
+                    <SkipForward size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Aller à la fin</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <div className="text-xs text-gray-600 dark:text-gray-300 font-medium ml-2 min-w-[100px]">
+              {formatTime(currentTimestamp)}
+            </div>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <select
+                    value={playbackSpeed}
+                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                    className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value={60}>1 min/s</option>
+                    <option value={120}>2x</option>
+                    <option value={300}>5x</option>
+                    <option value={600}>10x</option>
+                    <option value={1800}>30x</option>
+                  </select>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs font-medium mb-1">Vitesse de lecture</p>
+                  <p className="text-xs">Contrôle la vitesse de défilement des données</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">Vitesse:</span>
-            <select
-              value={playbackSpeed}
-              onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-              className="text-sm bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value={60}>1 min/s</option>
-              <option value={120}>2x</option>
-              <option value={300}>5x</option>
-              <option value={600}>10x</option>
-              <option value={1800}>30x</option>
-            </select>
-          </div>
+          {/* Metric selector */}
+          <TooltipProvider>
+            <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
+              <TabsList className="bg-white/50 dark:bg-black/50 h-8">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger 
+                      value="temperature" 
+                      className="flex items-center gap-1 data-[state=active]:bg-red-100 dark:data-[state=active]:bg-red-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-red-300 dark:data-[state=active]:border-red-700 h-7 px-2"
+                    >
+                      <Thermometer size={14} className="text-red-500" />
+                      <span className="text-xs font-medium">T°</span>
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs font-medium mb-1">Température (°C)</p>
+                    <p className="text-xs text-gray-400">Mesure la chaleur de l'air ambiant</p>
+                    <p className="text-xs text-gray-400 mt-1">Influence le confort thermique</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger 
+                      value="humidity" 
+                      className="flex items-center gap-1 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-blue-300 dark:data-[state=active]:border-blue-700 h-7 px-2"
+                    >
+                      <Droplets size={14} className="text-blue-500" />
+                      <span className="text-xs font-medium">HR</span>
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs font-medium mb-1">Humidité Relative (%)</p>
+                    <p className="text-xs text-gray-400">Pourcentage de vapeur d'eau dans l'air</p>
+                    <p className="text-xs text-gray-400 mt-1">Varie avec la température</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger 
+                      value="absoluteHumidity" 
+                      className="flex items-center gap-1 data-[state=active]:bg-cyan-100 dark:data-[state=active]:bg-cyan-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-cyan-300 dark:data-[state=active]:border-cyan-700 h-7 px-2"
+                    >
+                      <Wind size={14} className="text-cyan-500" />
+                      <span className="text-xs font-medium">HA</span>
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs font-medium mb-1">Humidité Absolue (g/m³)</p>
+                    <p className="text-xs text-gray-400">Quantité réelle d'eau dans l'air</p>
+                    <p className="text-xs text-gray-400 mt-1">Indépendante de la température</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger 
+                      value="dewPoint" 
+                      className="flex items-center gap-1 data-[state=active]:bg-purple-100 dark:data-[state=active]:bg-purple-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-purple-300 dark:data-[state=active]:border-purple-700 h-7 px-2"
+                    >
+                      <CloudRain size={14} className="text-purple-500" />
+                      <span className="text-xs font-medium">PR</span>
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs font-medium mb-1">Point de Rosée (°C)</p>
+                    <p className="text-xs text-gray-400">Température de condensation</p>
+                    <p className="text-xs text-gray-400 mt-1">Risque de moisissures si proche de T°</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TabsList>
+            </Tabs>
+          </TooltipProvider>
         </div>
 
         {/* Timeline */}
@@ -182,80 +298,91 @@ export const TimelineControl = () => {
             <span>{formatTime(rangeEnd)}</span>
           </div>
 
-          <div 
-            ref={timelineRef}
-            className="relative h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
-          >
-            {/* Day markers */}
-            {dayMarkers.map((marker, idx) => {
-              const pos = getPosition(marker);
-              return (
-                <div
-                  key={idx}
-                  className="absolute top-0 bottom-0 flex flex-col items-center"
-                  style={{ left: `${pos}%` }}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div 
+                  ref={timelineRef}
+                  className="relative h-12 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
                 >
-                  <div className="w-px h-full bg-gray-400/50"></div>
-                  <span className="absolute -bottom-5 text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                    {formatDate(marker)}
-                  </span>
+                  {/* Day markers */}
+                  {dayMarkers.map((marker, idx) => {
+                    const pos = getPosition(marker);
+                    return (
+                      <div
+                        key={idx}
+                        className="absolute top-0 bottom-0 flex flex-col items-center"
+                        style={{ left: `${pos}%` }}
+                      >
+                        <div className="w-px h-full bg-gray-400/50"></div>
+                        <span className="absolute -bottom-5 text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                          {formatDate(marker)}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Selected range highlight */}
+                  <div
+                    className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm"
+                    style={{
+                      left: `${getPosition(rangeStart)}%`,
+                      width: `${getPosition(rangeEnd) - getPosition(rangeStart)}%`
+                    }}
+                  />
+
+                  {/* Range start handle */}
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
+                    style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-6px' }}
+                    onMouseDown={handleMouseDown('start')}
+                  >
+                    <div className="absolute inset-0 bg-white/20 rounded-full"></div>
+                  </div>
+
+                  {/* Range end handle */}
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
+                    style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-6px' }}
+                    onMouseDown={handleMouseDown('end')}
+                  >
+                    <div className="absolute inset-0 bg-white/20 rounded-full"></div>
+                  </div>
+
+                  {/* Current position cursor */}
+                  <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-yellow-400 to-orange-500 cursor-ew-resize shadow-lg"
+                    style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px' }}
+                    onMouseDown={handleMouseDown('current')}
+                  >
+                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
+                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
+                  </div>
                 </div>
-              );
-            })}
-
-            {/* Selected range highlight */}
-            <div
-              className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm"
-              style={{
-                left: `${getPosition(rangeStart)}%`,
-                width: `${getPosition(rangeEnd) - getPosition(rangeStart)}%`
-              }}
-            />
-
-            {/* Range start handle */}
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-4 h-8 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
-              style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-8px' }}
-              onMouseDown={handleMouseDown('start')}
-            >
-              <div className="absolute inset-0 bg-white/20 rounded-full"></div>
-            </div>
-
-            {/* Range end handle */}
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-4 h-8 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
-              style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-8px' }}
-              onMouseDown={handleMouseDown('end')}
-            >
-              <div className="absolute inset-0 bg-white/20 rounded-full"></div>
-            </div>
-
-            {/* Current position cursor */}
-            <div
-              className="absolute top-0 bottom-0 w-1 bg-gradient-to-b from-yellow-400 to-orange-500 cursor-ew-resize shadow-lg"
-              style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-2px' }}
-              onMouseDown={handleMouseDown('current')}
-            >
-              <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border-2 border-white shadow-lg"></div>
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3 h-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border-2 border-white shadow-lg"></div>
-            </div>
-          </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs font-medium mb-1">Timeline interactive</p>
+                <p className="text-xs text-gray-400">🔵 Début • 🟣 Fin • 🟡 Position actuelle</p>
+                <p className="text-xs text-gray-400 mt-1">Glissez les curseurs pour ajuster la plage</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {/* Info */}
         <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"></div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"></div>
               <span>Début</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full"></div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full"></div>
               <span>Fin</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full"></div>
-              <span>Position actuelle</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full"></div>
+              <span>Actuel</span>
             </div>
           </div>
           <span>

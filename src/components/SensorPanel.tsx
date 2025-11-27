@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Upload, Thermometer, Droplets, AlertCircle, FileText, X, ChevronDown, ChevronUp, FolderUp, Grid3x3, Zap, Waves, Info } from 'lucide-react';
+import { Upload, Thermometer, Droplets, AlertCircle, FileText, X, ChevronDown, ChevronUp, FolderUp, Grid3x3, Zap, Waves } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { showSuccess, showError } from '@/utils/toast';
 import { Switch } from '@/components/ui/switch';
@@ -265,12 +265,25 @@ export const SensorPanel = () => {
                     <Grid3x3 size={16} className="text-purple-600" />
                     <h3 className="font-medium text-sm">Interpolation</h3>
                   </div>
-                  <Switch
-                    id="meshing-toggle"
-                    checked={meshingEnabled}
-                    onCheckedChange={setMeshingEnabled}
-                    className="scale-75"
-                  />
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <Switch
+                            id="meshing-toggle"
+                            checked={meshingEnabled}
+                            onCheckedChange={setMeshingEnabled}
+                            className="scale-75"
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs font-medium mb-1">Interpolation spatiale 3D</p>
+                        <p className="text-xs text-gray-400">Crée un champ continu entre les capteurs</p>
+                        <p className="text-xs text-gray-400 mt-1">Visualise les gradients de température/humidité</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
 
                 {meshingEnabled && (
@@ -280,25 +293,37 @@ export const SensorPanel = () => {
                         <TabsList className="grid grid-cols-2 bg-white/50 dark:bg-black/50 h-8">
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <TabsTrigger value="idw" className="flex items-center gap-1 text-xs">
+                              <TabsTrigger 
+                                value="idw" 
+                                className="flex items-center gap-1 text-xs data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-blue-300 dark:data-[state=active]:border-blue-700"
+                              >
                                 <Zap size={12} />
                                 IDW
                               </TabsTrigger>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p className="text-xs">Inverse Distance Weighting</p>
+                              <p className="text-xs font-medium mb-1">Inverse Distance Weighting</p>
+                              <p className="text-xs text-gray-400">✓ Rapide et efficace</p>
+                              <p className="text-xs text-gray-400">✓ Méthode de Shepard (1968)</p>
+                              <p className="text-xs text-gray-400 mt-1">Les points proches ont plus d'influence</p>
                             </TooltipContent>
                           </Tooltip>
 
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <TabsTrigger value="rbf" className="flex items-center gap-1 text-xs">
+                              <TabsTrigger 
+                                value="rbf" 
+                                className="flex items-center gap-1 text-xs data-[state=active]:bg-purple-100 dark:data-[state=active]:bg-purple-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-purple-300 dark:data-[state=active]:border-purple-700"
+                              >
                                 <Waves size={12} />
                                 RBF
                               </TabsTrigger>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p className="text-xs">Radial Basis Functions</p>
+                              <p className="text-xs font-medium mb-1">Radial Basis Functions</p>
+                              <p className="text-xs text-gray-400">✓ Surfaces très lisses</p>
+                              <p className="text-xs text-gray-400">✓ Interpolation exacte</p>
+                              <p className="text-xs text-gray-400 mt-1">Plus coûteux en calcul</p>
                             </TooltipContent>
                           </Tooltip>
                         </TabsList>
@@ -311,30 +336,56 @@ export const SensorPanel = () => {
                           <Label className="text-xs">Exposant (p)</Label>
                           <span className="text-xs font-medium text-blue-600">{idwPower}</span>
                         </div>
-                        <Slider
-                          value={[idwPower]}
-                          onValueChange={(v) => setIdwPower(v[0])}
-                          min={1}
-                          max={5}
-                          step={0.5}
-                          className="w-full"
-                        />
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div>
+                                <Slider
+                                  value={[idwPower]}
+                                  onValueChange={(v) => setIdwPower(v[0])}
+                                  min={1}
+                                  max={5}
+                                  step={0.5}
+                                  className="w-full"
+                                />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs font-medium mb-1">Exposant de pondération</p>
+                              <p className="text-xs text-gray-400">p=1 : Influence linéaire</p>
+                              <p className="text-xs text-gray-400">p=2 : Standard (recommandé)</p>
+                              <p className="text-xs text-gray-400">p=5 : Influence très locale</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     )}
 
                     {interpolationMethod === 'rbf' && (
                       <div className="space-y-1">
                         <Label className="text-xs">Kernel</Label>
-                        <select
-                          value={rbfKernel}
-                          onChange={(e) => setRbfKernel(e.target.value as any)}
-                          className="w-full text-xs bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        >
-                          <option value="multiquadric">Multiquadric</option>
-                          <option value="gaussian">Gaussienne</option>
-                          <option value="inverse_multiquadric">Inverse Multiquadric</option>
-                          <option value="thin_plate_spline">Thin Plate Spline</option>
-                        </select>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <select
+                                value={rbfKernel}
+                                onChange={(e) => setRbfKernel(e.target.value as any)}
+                                className="w-full text-xs bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              >
+                                <option value="multiquadric">Multiquadric</option>
+                                <option value="gaussian">Gaussienne</option>
+                                <option value="inverse_multiquadric">Inverse Multiquadric</option>
+                                <option value="thin_plate_spline">Thin Plate Spline</option>
+                              </select>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs font-medium mb-1">Fonction de base radiale</p>
+                              <p className="text-xs text-gray-400">Multiquadric : Équilibré (recommandé)</p>
+                              <p className="text-xs text-gray-400">Gaussienne : Très lisse</p>
+                              <p className="text-xs text-gray-400">Thin Plate : Surfaces naturelles</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     )}
 
@@ -343,14 +394,29 @@ export const SensorPanel = () => {
                         <Label className="text-xs">Résolution</Label>
                         <span className="text-xs font-medium text-purple-600">{meshResolution}³</span>
                       </div>
-                      <Slider
-                        value={[meshResolution]}
-                        onValueChange={(v) => setMeshResolution(v[0])}
-                        min={10}
-                        max={40}
-                        step={5}
-                        className="w-full"
-                      />
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <Slider
+                                value={[meshResolution]}
+                                onValueChange={(v) => setMeshResolution(v[0])}
+                                min={10}
+                                max={40}
+                                step={5}
+                                className="w-full"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs font-medium mb-1">Résolution de la grille 3D</p>
+                            <p className="text-xs text-gray-400">10³ : Rapide, moins détaillé</p>
+                            <p className="text-xs text-gray-400">20³ : Équilibré (recommandé)</p>
+                            <p className="text-xs text-gray-400">40³ : Très détaillé, plus lent</p>
+                            <p className="text-xs text-gray-400 mt-1">Actuel: {Math.pow(meshResolution, 3).toLocaleString()} points</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
                 )}
