@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { AlertCircle } from "lucide-react";
+import { interpolateIDW, RBFInterpolator, calculateBounds, type Point3D } from "@/utils/interpolation";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -18,6 +19,7 @@ export const Scene3DViewer = () => {
     sensorMeshes: Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>;
     boundingSphere: THREE.Sphere;
     sensorData: Map<number, Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>>;
+    interpolationMesh: THREE.Points | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,6 +28,11 @@ export const Scene3DViewer = () => {
   const dataReady = useAppStore((state) => state.dataReady);
   const selectedMetric = useAppStore((state) => state.selectedMetric);
   const currentTimestamp = useAppStore((state) => state.currentTimestamp);
+  const meshingEnabled = useAppStore((state) => state.meshingEnabled);
+  const interpolationMethod = useAppStore((state) => state.interpolationMethod);
+  const rbfKernel = useAppStore((state) => state.rbfKernel);
+  const idwPower = useAppStore((state) => state.idwPower);
+  const meshResolution = useAppStore((state) => state.meshResolution);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
 
   // Listen to hover events from SensorPanel
@@ -218,6 +225,168 @@ export const Scene3DViewer = () => {
     });
   }, [dataReady, selectedMetric, currentTimestamp, sensors]);
 
+  // Update interpolation mesh
+  useEffect(() => {
+    if (!sceneRef.current || !dataReady || !meshingEnabled) {
+      // Remove existing mesh if disabled
+      if (sceneRef.current?.interpolationMesh) {
+        sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
+        sceneRef.current.interpolationMesh.geometry.dispose();
+        (sceneRef.current.interpolationMesh.material as THREE.PointsMaterial).dispose();
+        sceneRef.current.interpolationMesh = null;
+      }
+      return;
+    }
+
+    const { scene, sensorData, interpolationMesh } = sceneRef.current;
+
+    // Remove old mesh
+    if (interpolationMesh) {
+      scene.remove(interpolationMesh);
+      interpolationMesh.geometry.dispose();
+      (interpolationMesh.material as THREE.PointsMaterial).dispose();
+    }
+
+    // Collect current sensor values
+    const points: Point3D[] = [];
+    
+    sensors.forEach((sensor) => {
+      if (!sensorData.has(sensor.id)) return;
+      
+      const data = sensorData.get(sensor.id)!;
+      let closestData = data[0];
+      let minDiff = Math.abs(data[0].timestamp - currentTimestamp);
+      
+      for (const point of data) {
+        const diff = Math.abs(point.timestamp - currentTimestamp);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestData = point;
+        }
+      }
+      
+      let value = 0;
+      switch (selectedMetric) {
+        case 'temperature':
+          value = closestData.temperature;
+          break;
+        case 'humidity':
+          value = closestData.humidity;
+          break;
+        case 'absoluteHumidity':
+          value = closestData.absoluteHumidity;
+          break;
+        case 'dewPoint':
+          value = closestData.dewPoint;
+          break;
+      }
+      
+      points.push({
+        x: sensor.position[0],
+        y: sensor.position[1],
+        z: sensor.position[2],
+        value
+      });
+    });
+
+    if (points.length === 0) return;
+
+    // Calculate bounds
+    const bounds = calculateBounds(points);
+    
+    // Create interpolation grid
+    const positions: number[] = [];
+    const colors: number[] = [];
+    
+    const stepX = (bounds.maxX - bounds.minX) / (meshResolution - 1);
+    const stepY = (bounds.maxY - bounds.minY) / (meshResolution - 1);
+    const stepZ = (bounds.maxZ - bounds.minZ) / (meshResolution - 1);
+
+    // Prepare interpolator for RBF
+    let rbfInterpolator: RBFInterpolator | null = null;
+    if (interpolationMethod === 'rbf') {
+      rbfInterpolator = new RBFInterpolator(points, rbfKernel, 1.0);
+    }
+
+    // Find min/max values for color mapping
+    let minValue = Infinity;
+    let maxValue = -Infinity;
+    
+    const gridValues: { x: number; y: number; z: number; value: number }[] = [];
+    
+    for (let i = 0; i < meshResolution; i++) {
+      for (let j = 0; j < meshResolution; j++) {
+        for (let k = 0; k < meshResolution; k++) {
+          const x = bounds.minX + i * stepX;
+          const y = bounds.minY + j * stepY;
+          const z = bounds.minZ + k * stepZ;
+
+          let value: number;
+          if (interpolationMethod === 'idw') {
+            value = interpolateIDW(points, { x, y, z }, idwPower);
+          } else {
+            value = rbfInterpolator!.interpolate({ x, y, z });
+          }
+
+          gridValues.push({ x, y, z, value });
+          minValue = Math.min(minValue, value);
+          maxValue = Math.max(maxValue, value);
+        }
+      }
+    }
+
+    // Create geometry with colors
+    gridValues.forEach(({ x, y, z, value }) => {
+      positions.push(x, y, z);
+      
+      // Normalize value to 0-1
+      const normalized = (value - minValue) / (maxValue - minValue);
+      
+      // Color gradient based on metric
+      const color = new THREE.Color();
+      
+      switch (selectedMetric) {
+        case 'temperature':
+          // Blue (cold) to Red (hot)
+          color.setHSL(0.6 - normalized * 0.6, 1, 0.5);
+          break;
+        case 'humidity':
+        case 'absoluteHumidity':
+          // Yellow (dry) to Blue (humid)
+          color.setHSL(0.15 + normalized * 0.45, 1, 0.5);
+          break;
+        case 'dewPoint':
+          // Purple (low) to Cyan (high)
+          color.setHSL(0.75 - normalized * 0.25, 1, 0.5);
+          break;
+      }
+      
+      colors.push(color.r, color.g, color.b);
+    });
+
+    // Create geometry
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+    // Create material
+    const material = new THREE.PointsMaterial({
+      size: 0.08,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.6,
+      sizeAttenuation: true,
+      blending: THREE.AdditiveBlending,
+    });
+
+    // Create mesh
+    const newMesh = new THREE.Points(geometry, material);
+    scene.add(newMesh);
+    sceneRef.current.interpolationMesh = newMesh;
+
+    console.log(`✨ Interpolation mesh created: ${gridValues.length} points, range [${minValue.toFixed(2)}, ${maxValue.toFixed(2)}]`);
+  }, [dataReady, meshingEnabled, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, sensors]);
+
   // Handle container resize with zoom adjustment
   useEffect(() => {
     if (!containerRef.current || !sceneRef.current) return;
@@ -293,9 +462,15 @@ export const Scene3DViewer = () => {
 
     // Cleanup previous scene if exists
     if (sceneRef.current) {
-      const { renderer, scene, controls, animationId } = sceneRef.current;
+      const { renderer, scene, controls, animationId, interpolationMesh } = sceneRef.current;
       cancelAnimationFrame(animationId);
       controls.dispose();
+      
+      if (interpolationMesh) {
+        scene.remove(interpolationMesh);
+        interpolationMesh.geometry.dispose();
+        (interpolationMesh.material as THREE.PointsMaterial).dispose();
+      }
       
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
@@ -544,7 +719,8 @@ export const Scene3DViewer = () => {
       animationId: firstAnimationId,
       sensorMeshes,
       boundingSphere,
-      sensorData
+      sensorData,
+      interpolationMesh: null
     };
 
     // Cleanup
@@ -552,9 +728,15 @@ export const Scene3DViewer = () => {
       clearTimeout(loadingTimeout);
       
       if (sceneRef.current) {
-        const { renderer, scene, controls, animationId } = sceneRef.current;
+        const { renderer, scene, controls, animationId, interpolationMesh } = sceneRef.current;
         cancelAnimationFrame(animationId);
         controls.dispose();
+        
+        if (interpolationMesh) {
+          scene.remove(interpolationMesh);
+          interpolationMesh.geometry.dispose();
+          (interpolationMesh.material as THREE.PointsMaterial).dispose();
+        }
         
         scene.traverse((object) => {
           if (object instanceof THREE.Mesh) {
