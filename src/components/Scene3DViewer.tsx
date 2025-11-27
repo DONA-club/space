@@ -18,30 +18,15 @@ function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean 
   const raycaster = new THREE.Raycaster();
   raycaster.firstHitOnly = false;
   
-  // Cast rays in multiple directions for more robust detection
-  const directions = [
-    new THREE.Vector3(1, 0, 0),
-    new THREE.Vector3(-1, 0, 0),
-    new THREE.Vector3(0, 1, 0),
-    new THREE.Vector3(0, -1, 0),
-    new THREE.Vector3(0, 0, 1),
-    new THREE.Vector3(0, 0, -1),
-  ];
+  // Use a single direction (positive X) and count intersections
+  const direction = new THREE.Vector3(1, 0, 0);
+  raycaster.set(point, direction);
   
-  let insideCount = 0;
+  const intersects = raycaster.intersectObject(mesh, true);
   
-  for (const direction of directions) {
-    raycaster.set(point, direction);
-    const intersects = raycaster.intersectObject(mesh, true);
-    
-    // If odd number of intersections, point is inside from this direction
-    if (intersects.length % 2 === 1) {
-      insideCount++;
-    }
-  }
-  
-  // Point is inside if majority of rays say it's inside
-  return insideCount >= 4;
+  // If odd number of intersections, point is inside
+  // If even number (including 0), point is outside
+  return intersects.length % 2 === 1;
 }
 
 export const Scene3DViewer = () => {
@@ -59,6 +44,7 @@ export const Scene3DViewer = () => {
     modelScale: number;
     modelGroup: THREE.Group | null;
     originalCenter: THREE.Vector3 | null;
+    volumeCache: Map<string, boolean>;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -285,7 +271,7 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, sensorData, interpolationMesh, modelScale, modelGroup, originalCenter } = sceneRef.current;
+    const { scene, sensorData, interpolationMesh, modelScale, modelGroup, originalCenter, volumeCache } = sceneRef.current;
 
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
@@ -371,6 +357,7 @@ export const Scene3DViewer = () => {
     const validGridPoints: { x: number; y: number; z: number }[] = [];
     let totalPoints = 0;
     let insidePoints = 0;
+    let cacheHits = 0;
     
     console.log('🔍 Starting grid point filtering with GLTF model...');
     console.log('   - Resolution:', meshResolution);
@@ -381,23 +368,12 @@ export const Scene3DViewer = () => {
     
     if (useFiltering) {
       console.log('   - ✅ Using GLTF model for volume filtering');
-      
-      // Test a few sample points first
-      const testPoints = [
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(modelBounds.min.x, modelBounds.min.y, modelBounds.min.z),
-        new THREE.Vector3(modelBounds.max.x, modelBounds.max.y, modelBounds.max.z),
-        new THREE.Vector3((modelBounds.min.x + modelBounds.max.x) / 2, (modelBounds.min.y + modelBounds.max.y) / 2, (modelBounds.min.z + modelBounds.max.z) / 2),
-      ];
-      
-      console.log('   - Testing raycasting with GLTF:');
-      testPoints.forEach((tp, idx) => {
-        const inside = isPointInsideMesh(tp, modelGroup!);
-        console.log(`     Point ${idx}: (${tp.x.toFixed(2)}, ${tp.y.toFixed(2)}, ${tp.z.toFixed(2)}) -> ${inside ? 'INSIDE ✓' : 'OUTSIDE ✗'}`);
-      });
+      console.log('   - Cache size:', volumeCache.size);
     } else {
       console.log('   - ⚠️ No volume filtering (GLTF model not available)');
     }
+    
+    const startTime = performance.now();
     
     for (let i = 0; i < meshResolution; i++) {
       for (let j = 0; j < meshResolution; j++) {
@@ -409,8 +385,17 @@ export const Scene3DViewer = () => {
 
           let inside = true;
           if (useFiltering) {
-            const point = new THREE.Vector3(x, y, z);
-            inside = isPointInsideMesh(point, modelGroup!);
+            // Create cache key (round to 2 decimals for cache efficiency)
+            const cacheKey = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
+            
+            if (volumeCache.has(cacheKey)) {
+              inside = volumeCache.get(cacheKey)!;
+              cacheHits++;
+            } else {
+              const point = new THREE.Vector3(x, y, z);
+              inside = isPointInsideMesh(point, modelGroup!);
+              volumeCache.set(cacheKey, inside);
+            }
           }
 
           if (inside) {
@@ -421,8 +406,11 @@ export const Scene3DViewer = () => {
       }
     }
     
+    const filterTime = performance.now() - startTime;
     const filterPercentage = totalPoints > 0 ? ((insidePoints/totalPoints)*100).toFixed(1) : '0';
     console.log(`✅ Filtering complete: ${insidePoints}/${totalPoints} points INSIDE (${filterPercentage}%)`);
+    console.log(`   - Time: ${filterTime.toFixed(0)}ms`);
+    console.log(`   - Cache hits: ${cacheHits}/${totalPoints} (${(cacheHits/totalPoints*100).toFixed(1)}%)`);
 
     if (validGridPoints.length === 0) {
       console.warn('⚠️ No valid grid points found inside room volume!');
@@ -784,6 +772,7 @@ export const Scene3DViewer = () => {
 
     const sensorMeshes = new Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>();
     const sensorData = new Map();
+    const volumeCache = new Map<string, boolean>();
 
     const loader = new GLTFLoader();
 
@@ -973,8 +962,9 @@ export const Scene3DViewer = () => {
       sensorData,
       interpolationMesh: null,
       modelScale,
-      modelGroup: null, // Will be set when model loads
-      originalCenter: null, // Will be set when model loads
+      modelGroup: null,
+      originalCenter: null,
+      volumeCache,
     };
 
     return () => {
