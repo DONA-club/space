@@ -65,6 +65,9 @@ export const Scene3DViewer = () => {
   const idwPower = useAppStore((state) => state.idwPower);
   const meshResolution = useAppStore((state) => state.meshResolution);
   const visualizationType = useAppStore((state) => state.visualizationType);
+  const interpolationOffsetX = useAppStore((state) => state.interpolationOffsetX);
+  const interpolationOffsetY = useAppStore((state) => state.interpolationOffsetY);
+  const interpolationOffsetZ = useAppStore((state) => state.interpolationOffsetZ);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
 
   // Listen to hover events from SensorPanel
@@ -355,6 +358,7 @@ export const Scene3DViewer = () => {
 
     console.log('🎯 Sensor positions in scene space:', points.map(p => ({ x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2), value: p.value.toFixed(2) })));
     console.log('📦 Model bounds:', modelBounds);
+    console.log('🔧 Offsets:', { x: interpolationOffsetX, y: interpolationOffsetY, z: interpolationOffsetZ });
     
     const positions: number[] = [];
     const colors: number[] = [];
@@ -378,9 +382,9 @@ export const Scene3DViewer = () => {
     for (let i = 0; i < meshResolution; i++) {
       for (let j = 0; j < meshResolution; j++) {
         for (let k = 0; k < meshResolution; k++) {
-          const x = modelBounds.min.x + i * stepX;
-          const y = modelBounds.min.y + j * stepY;
-          const z = modelBounds.min.z + k * stepZ;
+          const x = modelBounds.min.x + i * stepX + interpolationOffsetX;
+          const y = modelBounds.min.y + j * stepY + interpolationOffsetY;
+          const z = modelBounds.min.z + k * stepZ + interpolationOffsetZ;
 
           // Check if point is inside the room mesh
           let inside = true;
@@ -592,7 +596,7 @@ export const Scene3DViewer = () => {
     sceneRef.current.interpolationMesh = newMesh;
 
     console.log(`✅ Interpolation created (${visualizationType})`);
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors]);
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, interpolationOffsetX, interpolationOffsetY, interpolationOffsetZ, sensors]);
 
   // Handle container resize
   useEffect(() => {

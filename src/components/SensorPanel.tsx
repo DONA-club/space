@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Upload, Thermometer, Droplets, AlertCircle, FileText, X, ChevronDown, ChevronUp, FolderUp, Grid3x3, Zap, Waves, Circle, ArrowUpRight, Box, Layers } from 'lucide-react';
+import { Upload, Thermometer, Droplets, AlertCircle, FileText, X, ChevronDown, ChevronUp, FolderUp, Grid3x3, Zap, Waves, Circle, ArrowUpRight, Box, Layers, Move3d } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { showSuccess, showError } from '@/utils/toast';
 import { Switch } from '@/components/ui/switch';
@@ -30,6 +30,12 @@ export const SensorPanel = () => {
   const setMeshResolution = useAppStore((state) => state.setMeshResolution);
   const visualizationType = useAppStore((state) => state.visualizationType);
   const setVisualizationType = useAppStore((state) => state.setVisualizationType);
+  const interpolationOffsetX = useAppStore((state) => state.interpolationOffsetX);
+  const setInterpolationOffsetX = useAppStore((state) => state.setInterpolationOffsetX);
+  const interpolationOffsetY = useAppStore((state) => state.interpolationOffsetY);
+  const setInterpolationOffsetY = useAppStore((state) => state.setInterpolationOffsetY);
+  const interpolationOffsetZ = useAppStore((state) => state.interpolationOffsetZ);
+  const setInterpolationOffsetZ = useAppStore((state) => state.setInterpolationOffsetZ);
   
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -256,7 +262,7 @@ export const SensorPanel = () => {
             )}
 
             {dataReady && (
-              <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-3 space-y-3">
+              <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-3 space-y-3 overflow-y-auto max-h-[50vh]">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Grid3x3 size={16} className="text-purple-600" />
@@ -286,6 +292,72 @@ export const SensorPanel = () => {
 
                 {meshingEnabled && (
                   <>
+                    {/* Offset Controls */}
+                    <div className="space-y-2 p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Move3d size={14} className="text-orange-600" />
+                        <Label className="text-xs font-medium">Ajustement position</Label>
+                      </div>
+                      
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px]">Décalage X</Label>
+                          <span className="text-[10px] font-medium text-orange-600">{interpolationOffsetX.toFixed(2)}</span>
+                        </div>
+                        <Slider
+                          value={[interpolationOffsetX]}
+                          onValueChange={(v) => setInterpolationOffsetX(v[0])}
+                          min={-5}
+                          max={5}
+                          step={0.1}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px]">Décalage Y</Label>
+                          <span className="text-[10px] font-medium text-orange-600">{interpolationOffsetY.toFixed(2)}</span>
+                        </div>
+                        <Slider
+                          value={[interpolationOffsetY]}
+                          onValueChange={(v) => setInterpolationOffsetY(v[0])}
+                          min={-5}
+                          max={5}
+                          step={0.1}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px]">Décalage Z</Label>
+                          <span className="text-[10px] font-medium text-orange-600">{interpolationOffsetZ.toFixed(2)}</span>
+                        </div>
+                        <Slider
+                          value={[interpolationOffsetZ]}
+                          onValueChange={(v) => setInterpolationOffsetZ(v[0])}
+                          min={-5}
+                          max={5}
+                          step={0.1}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-6 text-[10px]"
+                        onClick={() => {
+                          setInterpolationOffsetX(0);
+                          setInterpolationOffsetY(0);
+                          setInterpolationOffsetZ(0);
+                        }}
+                      >
+                        Réinitialiser
+                      </Button>
+                    </div>
+
                     {/* Visualization Type */}
                     <div className="space-y-1">
                       <Label className="text-xs">Type de visualisation</Label>

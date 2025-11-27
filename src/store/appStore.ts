@@ -51,6 +51,9 @@ interface AppState {
   idwPower: number;
   meshResolution: number;
   visualizationType: VisualizationType;
+  interpolationOffsetX: number;
+  interpolationOffsetY: number;
+  interpolationOffsetZ: number;
   
   // WebSocket
   wsConnected: boolean;
@@ -75,6 +78,9 @@ interface AppState {
   setIdwPower: (power: number) => void;
   setMeshResolution: (resolution: number) => void;
   setVisualizationType: (type: VisualizationType) => void;
+  setInterpolationOffsetX: (offset: number) => void;
+  setInterpolationOffsetY: (offset: number) => void;
+  setInterpolationOffsetZ: (offset: number) => void;
   setWsConnected: (connected: boolean) => void;
 }
 
@@ -97,6 +103,9 @@ export const useAppStore = create<AppState>((set) => ({
   idwPower: 2,
   meshResolution: 20,
   visualizationType: 'points',
+  interpolationOffsetX: 0,
+  interpolationOffsetY: 0,
+  interpolationOffsetZ: 0,
   wsConnected: false,
   
   setAuth: (token, machineId) => set({ isAuthenticated: true, token, machineId }),
@@ -128,5 +137,8 @@ export const useAppStore = create<AppState>((set) => ({
   setIdwPower: (power) => set({ idwPower: power }),
   setMeshResolution: (resolution) => set({ meshResolution: resolution }),
   setVisualizationType: (type) => set({ visualizationType: type }),
+  setInterpolationOffsetX: (offset) => set({ interpolationOffsetX: offset }),
+  setInterpolationOffsetY: (offset) => set({ interpolationOffsetY: offset }),
+  setInterpolationOffsetZ: (offset) => set({ interpolationOffsetZ: offset }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
 }));
