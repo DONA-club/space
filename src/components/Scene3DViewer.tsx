@@ -13,13 +13,13 @@ const INTERPOLATION_OFFSET_X = 0;
 const INTERPOLATION_OFFSET_Y = 0.6;
 const INTERPOLATION_OFFSET_Z = 0.9;
 
-// Helper function to check if a point is inside a mesh with high precision
-// Uses multiple raycasting directions for better accuracy
+// Helper function to check if a point is inside a mesh using NAND logic
+// NAND: Keep point if at least ONE direction says "outside" (NOT all say "inside")
 function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean {
   const raycaster = new THREE.Raycaster();
   raycaster.firstHitOnly = false;
   
-  // Test with multiple directions for better accuracy
+  // Test with multiple directions
   const directions = [
     new THREE.Vector3(1, 0, 0),
     new THREE.Vector3(-1, 0, 0),
@@ -29,20 +29,22 @@ function isPointInsideMesh(point: THREE.Vector3, mesh: THREE.Object3D): boolean 
     new THREE.Vector3(0, 0, -1),
   ];
   
-  let insideCount = 0;
+  let allSayInside = true;
   
   for (const direction of directions) {
     raycaster.set(point, direction);
     const intersects = raycaster.intersectObject(mesh, true);
     
-    // Odd number of intersections = inside
-    if (intersects.length % 2 === 1) {
-      insideCount++;
+    // Even number of intersections (including 0) = OUTSIDE
+    if (intersects.length % 2 === 0) {
+      allSayInside = false;
+      break; // At least one says outside, so NAND = keep point
     }
   }
   
-  // Point is inside if majority of tests say it's inside (at least 4 out of 6)
-  return insideCount >= 4;
+  // NAND logic: return true (inside) only if ALL directions say inside
+  // If at least one says outside, return false (outside) -> point will be kept
+  return allSayInside;
 }
 
 export const Scene3DViewer = () => {
@@ -393,7 +395,7 @@ export const Scene3DViewer = () => {
               volumeCache.set(cacheKey, insideGLB);
             }
             
-            // NOR logic: keep point if it's NOT inside the GLB
+            // NAND logic: keep point if it's NOT inside the GLB
             keepPoint = !insideGLB;
           }
 
@@ -407,7 +409,7 @@ export const Scene3DViewer = () => {
     
     const filterTime = performance.now() - startTime;
     const filterPercentage = totalPoints > 0 ? ((keptPoints/totalPoints)*100).toFixed(1) : '0';
-    console.log(`✅ NOR Filtering: ${keptPoints}/${totalPoints} points (${filterPercentage}%) in ${filterTime.toFixed(0)}ms`);
+    console.log(`✅ NAND Filtering: ${keptPoints}/${totalPoints} points (${filterPercentage}%) in ${filterTime.toFixed(0)}ms`);
 
     if (validGridPoints.length === 0) {
       console.warn('⚠️ No valid grid points after filtering');
