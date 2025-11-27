@@ -138,7 +138,7 @@ export const TimelineControl = () => {
         <div className="flex items-center justify-between gap-4">
           {/* Playback controls */}
           <div className="flex items-center gap-2">
-            <TooltipProvider>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -150,7 +150,7 @@ export const TimelineControl = () => {
                     <SkipBack size={14} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent side="top" sideOffset={5}>
                   <p className="text-xs">Retour au début</p>
                 </TooltipContent>
               </Tooltip>
@@ -165,7 +165,7 @@ export const TimelineControl = () => {
                     {isPlaying ? <Pause size={14} /> : <Play size={14} />}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent side="top" sideOffset={5}>
                   <p className="text-xs">{isPlaying ? 'Pause' : 'Lecture'}</p>
                 </TooltipContent>
               </Tooltip>
@@ -181,7 +181,7 @@ export const TimelineControl = () => {
                     <SkipForward size={14} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent side="top" sideOffset={5}>
                   <p className="text-xs">Aller à la fin</p>
                 </TooltipContent>
               </Tooltip>
@@ -191,7 +191,7 @@ export const TimelineControl = () => {
               {formatTime(currentTimestamp)}
             </div>
 
-            <TooltipProvider>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <select
@@ -206,7 +206,7 @@ export const TimelineControl = () => {
                     <option value={1800}>30x</option>
                   </select>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent side="top" sideOffset={5}>
                   <p className="text-xs font-medium mb-1">Vitesse de lecture</p>
                   <p className="text-xs">Contrôle la vitesse de défilement des données</p>
                 </TooltipContent>
@@ -215,20 +215,20 @@ export const TimelineControl = () => {
           </div>
 
           {/* Metric selector */}
-          <TooltipProvider>
+          <TooltipProvider delayDuration={300}>
             <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
               <TabsList className="bg-white/50 dark:bg-black/50 h-8">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="temperature" 
-                      className="flex items-center gap-1 data-[state=active]:bg-red-100 dark:data-[state=active]:bg-red-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-red-300 dark:data-[state=active]:border-red-700 h-7 px-2"
+                      className="flex items-center gap-1 h-7 px-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-red-600 dark:data-[state=active]:border-red-400"
                     >
-                      <Thermometer size={14} className="text-red-500" />
+                      <Thermometer size={14} className={selectedMetric === 'temperature' ? 'text-white' : 'text-red-500'} />
                       <span className="text-xs font-medium">T°</span>
                     </TabsTrigger>
                   </TooltipTrigger>
-                  <TooltipContent>
+                  <TooltipContent side="top" sideOffset={5}>
                     <p className="text-xs font-medium mb-1">Température (°C)</p>
                     <p className="text-xs text-gray-400">Mesure la chaleur de l'air ambiant</p>
                     <p className="text-xs text-gray-400 mt-1">Influence le confort thermique</p>
@@ -239,13 +239,13 @@ export const TimelineControl = () => {
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="humidity" 
-                      className="flex items-center gap-1 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-blue-300 dark:data-[state=active]:border-blue-700 h-7 px-2"
+                      className="flex items-center gap-1 h-7 px-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-blue-700 dark:data-[state=active]:border-blue-400"
                     >
-                      <Droplets size={14} className="text-blue-500" />
+                      <Droplets size={14} className={selectedMetric === 'humidity' ? 'text-white' : 'text-blue-500'} />
                       <span className="text-xs font-medium">HR</span>
                     </TabsTrigger>
                   </TooltipTrigger>
-                  <TooltipContent>
+                  <TooltipContent side="top" sideOffset={5}>
                     <p className="text-xs font-medium mb-1">Humidité Relative (%)</p>
                     <p className="text-xs text-gray-400">Pourcentage de vapeur d'eau dans l'air</p>
                     <p className="text-xs text-gray-400 mt-1">Varie avec la température</p>
@@ -256,13 +256,13 @@ export const TimelineControl = () => {
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="absoluteHumidity" 
-                      className="flex items-center gap-1 data-[state=active]:bg-cyan-100 dark:data-[state=active]:bg-cyan-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-cyan-300 dark:data-[state=active]:border-cyan-700 h-7 px-2"
+                      className="flex items-center gap-1 h-7 px-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-cyan-700 dark:data-[state=active]:border-cyan-400"
                     >
-                      <Wind size={14} className="text-cyan-500" />
+                      <Wind size={14} className={selectedMetric === 'absoluteHumidity' ? 'text-white' : 'text-cyan-500'} />
                       <span className="text-xs font-medium">HA</span>
                     </TabsTrigger>
                   </TooltipTrigger>
-                  <TooltipContent>
+                  <TooltipContent side="top" sideOffset={5}>
                     <p className="text-xs font-medium mb-1">Humidité Absolue (g/m³)</p>
                     <p className="text-xs text-gray-400">Quantité réelle d'eau dans l'air</p>
                     <p className="text-xs text-gray-400 mt-1">Indépendante de la température</p>
@@ -273,13 +273,13 @@ export const TimelineControl = () => {
                   <TooltipTrigger asChild>
                     <TabsTrigger 
                       value="dewPoint" 
-                      className="flex items-center gap-1 data-[state=active]:bg-purple-100 dark:data-[state=active]:bg-purple-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-purple-300 dark:data-[state=active]:border-purple-700 h-7 px-2"
+                      className="flex items-center gap-1 h-7 px-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-purple-700 dark:data-[state=active]:border-purple-400"
                     >
-                      <CloudRain size={14} className="text-purple-500" />
+                      <CloudRain size={14} className={selectedMetric === 'dewPoint' ? 'text-white' : 'text-purple-500'} />
                       <span className="text-xs font-medium">PR</span>
                     </TabsTrigger>
                   </TooltipTrigger>
-                  <TooltipContent>
+                  <TooltipContent side="top" sideOffset={5}>
                     <p className="text-xs font-medium mb-1">Point de Rosée (°C)</p>
                     <p className="text-xs text-gray-400">Température de condensation</p>
                     <p className="text-xs text-gray-400 mt-1">Risque de moisissures si proche de T°</p>
@@ -298,7 +298,7 @@ export const TimelineControl = () => {
             <span>{formatTime(rangeEnd)}</span>
           </div>
 
-          <TooltipProvider>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <div 
@@ -360,7 +360,7 @@ export const TimelineControl = () => {
                   </div>
                 </div>
               </TooltipTrigger>
-              <TooltipContent>
+              <TooltipContent side="top" sideOffset={5}>
                 <p className="text-xs font-medium mb-1">Timeline interactive</p>
                 <p className="text-xs text-gray-400">🔵 Début • 🟣 Fin • 🟡 Position actuelle</p>
                 <p className="text-xs text-gray-400 mt-1">Glissez les curseurs pour ajuster la plage</p>

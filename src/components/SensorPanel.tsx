@@ -265,7 +265,7 @@ export const SensorPanel = () => {
                     <Grid3x3 size={16} className="text-purple-600" />
                     <h3 className="font-medium text-sm">Interpolation</h3>
                   </div>
-                  <TooltipProvider>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div>
@@ -277,7 +277,7 @@ export const SensorPanel = () => {
                           />
                         </div>
                       </TooltipTrigger>
-                      <TooltipContent>
+                      <TooltipContent side="left" sideOffset={5}>
                         <p className="text-xs font-medium mb-1">Interpolation spatiale 3D</p>
                         <p className="text-xs text-gray-400">Crée un champ continu entre les capteurs</p>
                         <p className="text-xs text-gray-400 mt-1">Visualise les gradients de température/humidité</p>
@@ -288,20 +288,20 @@ export const SensorPanel = () => {
 
                 {meshingEnabled && (
                   <div className="space-y-3">
-                    <TooltipProvider>
+                    <TooltipProvider delayDuration={300}>
                       <Tabs value={interpolationMethod} onValueChange={(v) => setInterpolationMethod(v as any)}>
                         <TabsList className="grid grid-cols-2 bg-white/50 dark:bg-black/50 h-8">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <TabsTrigger 
                                 value="idw" 
-                                className="flex items-center gap-1 text-xs data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-blue-300 dark:data-[state=active]:border-blue-700"
+                                className="flex items-center gap-1 text-xs h-7 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-blue-700 dark:data-[state=active]:border-blue-400"
                               >
-                                <Zap size={12} />
+                                <Zap size={12} className={interpolationMethod === 'idw' ? 'text-white' : ''} />
                                 IDW
                               </TabsTrigger>
                             </TooltipTrigger>
-                            <TooltipContent>
+                            <TooltipContent side="top" sideOffset={5}>
                               <p className="text-xs font-medium mb-1">Inverse Distance Weighting</p>
                               <p className="text-xs text-gray-400">✓ Rapide et efficace</p>
                               <p className="text-xs text-gray-400">✓ Méthode de Shepard (1968)</p>
@@ -313,13 +313,13 @@ export const SensorPanel = () => {
                             <TooltipTrigger asChild>
                               <TabsTrigger 
                                 value="rbf" 
-                                className="flex items-center gap-1 text-xs data-[state=active]:bg-purple-100 dark:data-[state=active]:bg-purple-900/30 data-[state=active]:shadow-md data-[state=active]:border data-[state=active]:border-purple-300 dark:data-[state=active]:border-purple-700"
+                                className="flex items-center gap-1 text-xs h-7 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-2 data-[state=active]:border-purple-700 dark:data-[state=active]:border-purple-400"
                               >
-                                <Waves size={12} />
+                                <Waves size={12} className={interpolationMethod === 'rbf' ? 'text-white' : ''} />
                                 RBF
                               </TabsTrigger>
                             </TooltipTrigger>
-                            <TooltipContent>
+                            <TooltipContent side="top" sideOffset={5}>
                               <p className="text-xs font-medium mb-1">Radial Basis Functions</p>
                               <p className="text-xs text-gray-400">✓ Surfaces très lisses</p>
                               <p className="text-xs text-gray-400">✓ Interpolation exacte</p>
@@ -336,7 +336,7 @@ export const SensorPanel = () => {
                           <Label className="text-xs">Exposant (p)</Label>
                           <span className="text-xs font-medium text-blue-600">{idwPower}</span>
                         </div>
-                        <TooltipProvider>
+                        <TooltipProvider delayDuration={300}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div>
@@ -350,7 +350,7 @@ export const SensorPanel = () => {
                                 />
                               </div>
                             </TooltipTrigger>
-                            <TooltipContent>
+                            <TooltipContent side="top" sideOffset={5}>
                               <p className="text-xs font-medium mb-1">Exposant de pondération</p>
                               <p className="text-xs text-gray-400">p=1 : Influence linéaire</p>
                               <p className="text-xs text-gray-400">p=2 : Standard (recommandé)</p>
@@ -364,7 +364,7 @@ export const SensorPanel = () => {
                     {interpolationMethod === 'rbf' && (
                       <div className="space-y-1">
                         <Label className="text-xs">Kernel</Label>
-                        <TooltipProvider>
+                        <TooltipProvider delayDuration={300}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <select
@@ -378,7 +378,7 @@ export const SensorPanel = () => {
                                 <option value="thin_plate_spline">Thin Plate Spline</option>
                               </select>
                             </TooltipTrigger>
-                            <TooltipContent>
+                            <TooltipContent side="top" sideOffset={5}>
                               <p className="text-xs font-medium mb-1">Fonction de base radiale</p>
                               <p className="text-xs text-gray-400">Multiquadric : Équilibré (recommandé)</p>
                               <p className="text-xs text-gray-400">Gaussienne : Très lisse</p>
@@ -394,7 +394,7 @@ export const SensorPanel = () => {
                         <Label className="text-xs">Résolution</Label>
                         <span className="text-xs font-medium text-purple-600">{meshResolution}³</span>
                       </div>
-                      <TooltipProvider>
+                      <TooltipProvider delayDuration={300}>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div>
@@ -408,7 +408,7 @@ export const SensorPanel = () => {
                               />
                             </div>
                           </TooltipTrigger>
-                          <TooltipContent>
+                          <TooltipContent side="top" sideOffset={5}>
                             <p className="text-xs font-medium mb-1">Résolution de la grille 3D</p>
                             <p className="text-xs text-gray-400">10³ : Rapide, moins détaillé</p>
                             <p className="text-xs text-gray-400">20³ : Équilibré (recommandé)</p>
