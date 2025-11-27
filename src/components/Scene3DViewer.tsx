@@ -45,6 +45,7 @@ export const Scene3DViewer = () => {
   const meshResolution = useAppStore((state) => state.meshResolution);
   const visualizationType = useAppStore((state) => state.visualizationType);
   const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
+  const setUnfilteredPointCloud = useAppStore((state) => state.setUnfilteredPointCloud);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -361,6 +362,16 @@ export const Scene3DViewer = () => {
           }
         }
       }
+      
+      // NEW: Save unfiltered grid to store
+      const unfilteredArray = new Float32Array(validGridPoints.length * 3);
+      validGridPoints.forEach((p, i) => {
+        unfilteredArray[i * 3] = p.x;
+        unfilteredArray[i * 3 + 1] = p.y;
+        unfilteredArray[i * 3 + 2] = p.z;
+      });
+      setUnfilteredPointCloud(unfilteredArray);
+      console.log(`💾 Saved unfiltered grid: ${validGridPoints.length.toLocaleString()} points`);
     }
 
     let rbfInterpolator: RBFInterpolator | null = null;
@@ -543,7 +554,7 @@ export const Scene3DViewer = () => {
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded, filteredPointCloud]);
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded, filteredPointCloud, setUnfilteredPointCloud]);
 
   useEffect(() => {
     if (!containerRef.current || !sceneRef.current) return;

@@ -1,7 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
-import * as THREE from 'three';
+import { useState } from 'react';
 import { useLoadVolumeGLB } from '@/hooks/useLoadVolumeGLB';
-import { generateInteriorPointCloud, InteriorPointCloudResult } from '@/lib/generateInteriorPointCloud';
+import { filterExistingGrid, FilterGridResult } from '@/lib/filterExistingGrid';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
@@ -13,33 +12,29 @@ import { Switch } from './ui/switch';
 
 interface InteriorVolumeSamplerProps {
   gltfUrl: string | null;
-  onPointCloudGenerated?: (result: InteriorPointCloudResult) => void;
+  onPointCloudGenerated?: (result: FilterGridResult) => void;
 }
 
 export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: InteriorVolumeSamplerProps) => {
   const volumeData = useLoadVolumeGLB(gltfUrl);
   const meshResolution = useAppStore((state) => state.meshResolution);
+  const unfilteredPointCloud = useAppStore((state) => state.unfilteredPointCloud);
   const [tolerance, setTolerance] = useState(2);
   const [invertLogic, setInvertLogic] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState<InteriorPointCloudResult | null>(null);
-  const pointCloudRef = useRef<THREE.Points | null>(null);
+  const [result, setResult] = useState<FilterGridResult | null>(null);
   const setFilteredPointCloud = useAppStore((state) => state.setFilteredPointCloud);
   const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
 
-  const resolution = volumeData.bounds 
-    ? Math.max(
-        volumeData.bounds.max.x - volumeData.bounds.min.x,
-        volumeData.bounds.max.y - volumeData.bounds.min.y,
-        volumeData.bounds.max.z - volumeData.bounds.min.z
-      ) / meshResolution
-    : 0.2;
-
   const handleGenerate = async () => {
     if (!volumeData.mesh || !volumeData.geometry) {
-      console.error('No mesh loaded');
       showError('Aucun modèle 3D chargé');
+      return;
+    }
+
+    if (!unfilteredPointCloud || unfilteredPointCloud.length === 0) {
+      showError('Aucune grille d\'interpolation disponible. Activez d\'abord l\'interpolation spatiale.');
       return;
     }
 
@@ -48,11 +43,12 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
     setResult(null);
 
     try {
-      const result = await generateInteriorPointCloud(
+      console.log(`🎯 Filtering existing grid of ${(unfilteredPointCloud.length / 3).toLocaleString()} points...`);
+      
+      const result = await filterExistingGrid(
+        unfilteredPointCloud,
         volumeData.mesh,
-        volumeData.bounds,
         {
-          resolution,
           tolerance,
           invertLogic,
           onProgress: (processed, total, percentage) => {
@@ -80,8 +76,8 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
         onPointCloudGenerated(result);
       }
     } catch (error) {
-      console.error('Error generating interior point cloud:', error);
-      showError('Erreur lors de la génération du point cloud');
+      console.error('Error filtering grid:', error);
+      showError('Erreur lors du filtrage de la grille');
     } finally {
       setProcessing(false);
     }
@@ -100,7 +96,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
       points: Array.from(result.points),
       metadata: {
         totalPoints: result.totalInside,
-        resolution,
+        meshResolution,
         tolerance,
         invertLogic,
         filterPercentage: result.filterPercentage,
@@ -112,7 +108,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `interior-points-${Date.now()}.json`;
+    a.download = `filtered-grid-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -138,9 +134,6 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Calcul du BVH pour le raycasting accéléré...
           </p>
-          <p className="text-xs text-blue-600 dark:text-blue-400">
-            💡 Consultez la console (F12) pour voir la progression détaillée
-          </p>
         </div>
       </LiquidGlassCard>
     );
@@ -154,42 +147,39 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
     );
   }
 
-  const estimatedPoints = volumeData.bounds 
-    ? Math.ceil(
-        (volumeData.bounds.max.x - volumeData.bounds.min.x) / resolution *
-        (volumeData.bounds.max.y - volumeData.bounds.min.y) / resolution *
-        (volumeData.bounds.max.z - volumeData.bounds.min.z) / resolution
-      )
-    : 0;
-
+  const gridPointCount = unfilteredPointCloud ? unfilteredPointCloud.length / 3 : 0;
   const tolerancePercentage = (tolerance / 6) * 100;
 
   return (
     <LiquidGlassCard className="p-6 space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-4">Générateur de Point Cloud Interne</h3>
+        <h3 className="text-lg font-semibold mb-4">Filtre Volumétrique</h3>
         
         <div className="space-y-4">
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-xs text-blue-800 dark:text-blue-200 mb-2">
-              <strong>ℹ️ Résolution synchronisée</strong>
-            </p>
-            <p className="text-xs text-blue-700 dark:text-blue-300">
-              La résolution est automatiquement calculée depuis le slider "Résolution de la grille" dans le panneau Interpolation.
-            </p>
-            <div className="mt-2 flex items-center justify-between text-xs">
-              <span className="text-blue-600 dark:text-blue-400">Résolution actuelle:</span>
-              <span className="font-medium text-blue-800 dark:text-blue-200">{resolution.toFixed(3)}m</span>
+          {!unfilteredPointCloud || unfilteredPointCloud.length === 0 ? (
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <p className="text-xs text-yellow-800 dark:text-yellow-200 mb-2">
+                <strong>⚠️ Grille d'interpolation non disponible</strong>
+              </p>
+              <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                Activez d'abord l'interpolation spatiale dans le panneau "Interpolation" pour générer la grille de points.
+              </p>
             </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-blue-600 dark:text-blue-400">Grille d'interpolation:</span>
-              <span className="font-medium text-blue-800 dark:text-blue-200">{meshResolution}³</span>
+          ) : (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <p className="text-xs text-blue-800 dark:text-blue-200 mb-2">
+                <strong>✅ Grille d'interpolation détectée</strong>
+              </p>
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <span className="text-blue-600 dark:text-blue-400">Points dans la grille:</span>
+                <span className="font-medium text-blue-800 dark:text-blue-200">{gridPointCount.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-blue-600 dark:text-blue-400">Résolution:</span>
+                <span className="font-medium text-blue-800 dark:text-blue-200">{meshResolution}³</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-blue-600 dark:text-blue-400">Points estimés:</span>
-              <span className="font-medium text-blue-800 dark:text-blue-200">~{estimatedPoints.toLocaleString()}</span>
-            </div>
-          </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -261,18 +251,18 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
           <div className="flex gap-2">
             <Button
               onClick={handleGenerate}
-              disabled={processing || !volumeData.mesh}
+              disabled={processing || !volumeData.mesh || !unfilteredPointCloud}
               className="flex-1"
             >
               {processing ? (
                 <>
                   <Loader2 className="animate-spin mr-2" size={16} />
-                  Traitement... {progress.toFixed(0)}%
+                  Filtrage... {progress.toFixed(0)}%
                 </>
               ) : (
                 <>
                   <Play size={16} className="mr-2" />
-                  Générer & Filtrer
+                  Filtrer la grille
                 </>
               )}
             </Button>
@@ -299,7 +289,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             />
           </div>
           <p className="text-xs text-center text-gray-600 dark:text-gray-400">
-            Filtrage volumétrique de {estimatedPoints.toLocaleString()} points avec BVH...
+            Filtrage volumétrique de {gridPointCount.toLocaleString()} points avec BVH...
           </p>
         </div>
       )}
@@ -321,7 +311,7 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
           }`}>
             {result.totalInside === 0 ? '❌ Aucun point trouvé' : 
              result.filterPercentage > 95 ? '⚠️ Filtrage trop agressif' :
-             '✅ Point Cloud Généré & Appliqué'}
+             '✅ Grille Filtrée & Appliquée'}
           </h4>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
@@ -339,10 +329,6 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
             <div>
               <span className="text-gray-600 dark:text-gray-400">Taux de filtrage:</span>
               <span className="ml-2 font-medium">{result.filterPercentage.toFixed(1)}%</span>
-            </div>
-            <div>
-              <span className="text-gray-600 dark:text-gray-400">Résolution:</span>
-              <span className="ml-2 font-medium">{resolution.toFixed(3)}m</span>
             </div>
             <div>
               <span className="text-gray-600 dark:text-gray-400">Mode:</span>
@@ -375,7 +361,6 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
                 <li>• Essayez de changer le mode de détection (Air ↔ Solide)</li>
                 <li>• Ajustez la tolérance (1-4)</li>
                 <li>• Vérifiez que le modèle 3D est correctement orienté</li>
-                <li>• Consultez la console pour les détails de debug</li>
               </ul>
             </div>
           )}
@@ -388,11 +373,10 @@ export const InteriorVolumeSampler = ({ gltfUrl, onPointCloudGenerated }: Interi
           Filtrage volumétrique intelligent
         </p>
         <ul className="space-y-1">
-          <li>• <strong>Mode Volume d'air :</strong> Détecte l'espace habitable entre les surfaces</li>
-          <li>• <strong>Mode Volume solide :</strong> Détecte l'intérieur des objets 3D</li>
+          <li>• Utilise la grille d'interpolation existante (pas de recalcul)</li>
+          <li>• <strong>Mode Volume d'air :</strong> Détecte l'espace habitable</li>
           <li>• <strong>BVH</strong> pour raycasting accéléré</li>
           <li>• <strong>6 directions</strong> testées (±X, ±Y, ±Z)</li>
-          <li>• <strong>Vote majoritaire</strong> avec tolérance ajustable</li>
         </ul>
       </div>
     </LiquidGlassCard>
