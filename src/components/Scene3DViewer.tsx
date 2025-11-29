@@ -51,7 +51,6 @@ export const Scene3DViewer = () => {
 
   const { sensorData, outdoorData } = useSensorData(currentSpace, sensors, hasOutdoorData);
 
-  // Update scene background
   useSceneBackground({
     scene: sceneRef.current?.scene || null,
     outdoorData,
@@ -62,7 +61,6 @@ export const Scene3DViewer = () => {
     dataReady
   });
 
-  // Calculate indoor average and update outdoor data
   useEffect(() => {
     if (!dataReady || sensorData.size === 0) return;
 
@@ -76,7 +74,6 @@ export const Scene3DViewer = () => {
     }
   }, [currentTimestamp, dataReady, hasOutdoorData, setOutdoorData, sensors, sensorData, outdoorData]);
 
-  // Update sensor meshes
   useSensorMeshUpdates({
     sensorMeshes: sceneRef.current?.sensorMeshes || null,
     sensors,
@@ -87,7 +84,6 @@ export const Scene3DViewer = () => {
     dataReady
   });
 
-  // Interpolation mesh generation
   useEffect(() => {
     if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || sensorData.size === 0) {
       if (sceneRef.current?.interpolationMesh) {
@@ -147,7 +143,6 @@ export const Scene3DViewer = () => {
     sensorData
   ]);
 
-  // Scene initialization
   useLayoutEffect(() => {
     if (!containerRef.current || !gltfModel) {
       setLoading(false);
@@ -189,6 +184,13 @@ export const Scene3DViewer = () => {
         
         const sensorMeshes = createSensorSpheres(sensors, modelScale);
         
+        // Add sensor meshes to scene
+        sensorMeshes.forEach((meshes) => {
+          scene.add(meshes.sphere);
+          scene.add(meshes.glow);
+          scene.add(meshes.sprite);
+        });
+        
         const box = new THREE.Box3().setFromObject(gltf.scene);
         box.getBoundingSphere(boundingSphere);
         boundingSphere.radius *= modelScale;
@@ -214,7 +216,6 @@ export const Scene3DViewer = () => {
       },
       undefined,
       (err) => {
-        console.error("Error loading GLTF:", err);
         setError("Erreur lors du chargement du modèle 3D.");
         setLoading(false);
       }
@@ -273,7 +274,6 @@ export const Scene3DViewer = () => {
   );
 };
 
-// Helper functions
 const disposeInterpolationMesh = (mesh: THREE.Points | THREE.Group | THREE.Mesh) => {
   if (mesh instanceof THREE.Points || mesh instanceof THREE.Mesh) {
     mesh.geometry.dispose();
@@ -410,10 +410,6 @@ const createVisualizationMesh = (
   meshResolution: number,
   filteredPointCloud: Float32Array | null
 ): THREE.Points | THREE.Group | THREE.Mesh => {
-  if (visualizationType !== 'points') {
-    return new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial());
-  }
-
   const positions: number[] = [];
   const colors: number[] = [];
   

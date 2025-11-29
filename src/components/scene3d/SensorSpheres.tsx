@@ -17,7 +17,6 @@ export const createSensorSpheres = (
   modelScale: number
 ): Map<number, SensorMeshes> => {
   const sensorMeshes = new Map<number, SensorMeshes>();
-  const sensorGroup = new THREE.Group();
   
   sensors.forEach((sensor) => {
     const originalPosition = new THREE.Vector3(
@@ -41,7 +40,6 @@ export const createSensorSpheres = (
     sphere.position.copy(originalPosition);
     sphere.castShadow = true;
     sphere.receiveShadow = true;
-    sensorGroup.add(sphere);
 
     const glowGeometry = new THREE.SphereGeometry(0.1, 16, 16);
     const glowMaterial = new THREE.MeshBasicMaterial({
@@ -51,7 +49,6 @@ export const createSensorSpheres = (
     });
     const glow = new THREE.Mesh(glowGeometry, glowMaterial);
     glow.position.copy(originalPosition);
-    sensorGroup.add(glow);
 
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
@@ -80,7 +77,6 @@ export const createSensorSpheres = (
       sprite.position.copy(originalPosition);
       sprite.position.y += 0.4 / modelScale;
       sprite.scale.set(0.8 / modelScale, 0.2 / modelScale, 1);
-      sensorGroup.add(sprite);
 
       sensorMeshes.set(sensor.id, { sphere, glow, sprite });
     }

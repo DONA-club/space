@@ -49,7 +49,6 @@ export const useSensorData = (
             }));
 
             data.set(sensor.id, formattedData);
-            console.log(`✅ Loaded ${formattedData.length} data points for sensor ${sensor.name}`);
           }
         }
 
@@ -57,7 +56,6 @@ export const useSensorData = (
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error loading sensor data';
         setError(errorMessage);
-        console.error('Error loading sensor data:', err);
       } finally {
         setLoading(false);
       }
@@ -90,7 +88,6 @@ export const useSensorData = (
           }));
 
           setOutdoorData(formattedData);
-          console.log(`✅ Loaded ${formattedData.length} outdoor data points`);
         }
       } catch (err) {
         console.error('Error loading outdoor data:', err);
