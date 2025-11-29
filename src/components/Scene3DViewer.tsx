@@ -21,6 +21,7 @@ import { createScene, createCamera, createRenderer, setupLights, createControls 
 import { SceneRef, ModelBounds } from "@/types/scene.types";
 import { INTERPOLATION_OFFSET, INTERPOLATION_DEFAULTS, VISUALIZATION_DEFAULTS } from "@/constants/interpolation";
 import { calculateAirDensity, calculateWaterMass } from "@/utils/airCalculations";
+import { calculateSceneVolume, calculateInteriorAirVolume } from "@/utils/volumeCalculations";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,11 +32,11 @@ export const Scene3DViewer = () => {
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelBounds, setModelBounds] = useState<ModelBounds | null>(null);
   const [originalModelBounds, setOriginalModelBounds] = useState<ModelBounds | null>(null);
+  const [exactAirVolume, setExactAirVolume] = useState<number | null>(null);
   const [currentOutdoorData, setCurrentOutdoorData] = useState<any>(null);
   const [indoorAverage, setIndoorAverage] = useState<any>(null);
   const [volumetricAverage, setVolumetricAverage] = useState<number | null>(null);
   const [interpolationPointCount, setInterpolationPointCount] = useState<number>(0);
-  const [airVolume, setAirVolume] = useState<number | null>(null);
   const [airMass, setAirMass] = useState<number | null>(null);
   const [waterMass, setWaterMass] = useState<number | null>(null);
   const [averageTemperature, setAverageTemperature] = useState<number | null>(null);
@@ -120,7 +121,7 @@ export const Scene3DViewer = () => {
   }, [sensorOffset, sensors, modelLoaded]);
 
   useEffect(() => {
-    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || !originalModelBounds || sensorData.size === 0) {
+    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || !originalModelBounds || sensorData.size === 0 || exactAirVolume === null) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
         disposeInterpolationMesh(sceneRef.current.interpolationMesh);
@@ -129,7 +130,6 @@ export const Scene3DViewer = () => {
       setInterpolationRange(null);
       setVolumetricAverage(null);
       setInterpolationPointCount(0);
-      setAirVolume(null);
       setAirMass(null);
       setWaterMass(null);
       setAverageTemperature(null);
@@ -161,8 +161,8 @@ export const Scene3DViewer = () => {
 
     setInterpolationRange({ min: minValue, max: maxValue });
 
-    // Calculate air volume, mass, and water mass
-    const { volume, mass, waterMass: calculatedWaterMass, avgTemp, avgHumidity } = calculateAirProperties(
+    // Calculate air mass and water mass using EXACT volume from GLB
+    const { mass, waterMass: calculatedWaterMass, avgTemp, avgHumidity } = calculateAirProperties(
       gridValues,
       sensors,
       sensorData,
@@ -171,15 +171,13 @@ export const Scene3DViewer = () => {
       interpolationMethod,
       rbfKernel,
       idwPower,
-      originalModelBounds,
       modelScale,
       originalCenter,
       modelPosition,
       sensorOffset,
-      meshResolution
+      exactAirVolume // Use exact volume from GLB
     );
     
-    setAirVolume(volume);
     setAirMass(mass);
     setWaterMass(calculatedWaterMass);
     setAverageTemperature(avgTemp);
@@ -204,6 +202,7 @@ export const Scene3DViewer = () => {
     meshingEnabled,
     modelBounds,
     originalModelBounds,
+    exactAirVolume,
     selectedMetric,
     interpolationMethod,
     rbfKernel,
@@ -252,6 +251,10 @@ export const Scene3DViewer = () => {
       (gltf) => {
         setError(null);
         setLoading(false);
+        
+        // Calculate EXACT volume from original GLB geometry BEFORE any transformation
+        const originalVolume = calculateInteriorAirVolume(gltf.scene);
+        setExactAirVolume(originalVolume);
         
         const { bounds, originalBounds, scale, center, modelPosition } = processLoadedModel(gltf, scene);
         modelScale = scale;
@@ -317,7 +320,7 @@ export const Scene3DViewer = () => {
       />
       
       <AirVolumeInfoBadge
-        airVolume={airVolume}
+        airVolume={exactAirVolume}
         airMass={airMass}
         waterMass={waterMass}
         averageTemperature={averageTemperature}
@@ -527,21 +530,12 @@ const calculateAirProperties = (
   interpolationMethod: string,
   rbfKernel: string,
   idwPower: number,
-  originalModelBounds: ModelBounds,
   modelScale: number,
   originalCenter: THREE.Vector3 | null,
   modelPosition: THREE.Vector3,
   sensorOffset: { x: number; y: number; z: number },
-  meshResolution: number
-): { volume: number; mass: number; waterMass: number; avgTemp: number; avgHumidity: number } => {
-  // Calculate voxel volume using ORIGINAL model dimensions (in meters)
-  const stepX = (originalModelBounds.max.x - originalModelBounds.min.x) / (meshResolution - 1);
-  const stepY = (originalModelBounds.max.y - originalModelBounds.min.y) / (meshResolution - 1);
-  const stepZ = (originalModelBounds.max.z - originalModelBounds.min.z) / (meshResolution - 1);
-  
-  const voxelVolume = stepX * stepY * stepZ;
-  const totalVolume = voxelVolume * validGridPoints.length;
-
+  exactVolume: number // Use exact volume from GLB
+): { mass: number; waterMass: number; avgTemp: number; avgHumidity: number } => {
   // Build temperature and humidity points from ALL sensor data
   const tempPoints: Point3D[] = [];
   const humidityPoints: Point3D[] = [];
@@ -592,8 +586,6 @@ const calculateAirProperties = (
     rbfHumidityInterpolator = new RBFInterpolator(humidityPoints, rbfKernel as any, 1.0);
   }
 
-  let totalMass = 0;
-  let totalWaterMass = 0;
   let totalTemp = 0;
   let totalHumidity = 0;
 
@@ -609,13 +601,6 @@ const calculateAirProperties = (
       humidity = rbfHumidityInterpolator!.interpolate({ x, y, z });
     }
 
-    const density = calculateAirDensity(temperature, humidity);
-    const voxelMass = density * voxelVolume;
-    
-    const voxelWaterMass = calculateWaterMass(voxelVolume, temperature, humidity);
-    
-    totalMass += voxelMass;
-    totalWaterMass += voxelWaterMass;
     totalTemp += temperature;
     totalHumidity += humidity;
   });
@@ -623,8 +608,14 @@ const calculateAirProperties = (
   const avgTemp = totalTemp / validGridPoints.length;
   const avgHumidity = totalHumidity / validGridPoints.length;
 
+  // Calculate air mass using EXACT volume and average conditions
+  const density = calculateAirDensity(avgTemp, avgHumidity);
+  const totalMass = density * exactVolume;
+  
+  // Calculate water mass using EXACT volume
+  const totalWaterMass = calculateWaterMass(exactVolume, avgTemp, avgHumidity);
+
   return {
-    volume: totalVolume,
     mass: totalMass,
     waterMass: totalWaterMass,
     avgTemp,
