@@ -17,6 +17,8 @@ interface DewPointDifference {
 
 const POINTS_BEFORE = 500;
 const POINTS_AFTER = 500;
+const PRELOAD_THRESHOLD = 0.3; // Start preloading when cursor is 30% away from edge
+const COLOR_ZONE_RADIUS = 0.15; // Color zone is 15% of total range on each side
 
 export const TimelineControl = () => {
   const isPlaying = useAppStore((state) => state.isPlaying);
@@ -36,7 +38,7 @@ export const TimelineControl = () => {
   const [isDragging, setIsDragging] = useState<'start' | 'end' | 'current' | null>(null);
   const [dewPointDifferences, setDewPointDifferences] = useState<DewPointDifference[]>([]);
   const [loadedRanges, setLoadedRanges] = useState<Array<{start: number, end: number}>>([]);
-  const [loadingCurve, setLoadingCurve] = useState(false);
+  const [loadingRanges, setLoadingRanges] = useState<Set<string>>(new Set());
   const timelineRef = useRef<HTMLDivElement>(null);
 
   // Initialize range when timeRange changes
@@ -47,7 +49,7 @@ export const TimelineControl = () => {
     }
   }, [timeRange, rangeStart, rangeEnd]);
 
-  // Load dew point differences in streaming windows
+  // Smart preloading: load data around cursor with anticipation
   useEffect(() => {
     if (!currentSpace || !hasOutdoorData || !timeRange) {
       setDewPointDifferences([]);
@@ -55,19 +57,24 @@ export const TimelineControl = () => {
       return;
     }
 
-    const loadDewPointWindow = async () => {
+    const loadDewPointWindow = async (targetTimestamp: number) => {
       try {
-        const targetDate = new Date(currentTimestamp).toISOString();
+        const targetDate = new Date(targetTimestamp).toISOString();
+        const rangeKey = `${targetTimestamp}`;
+
+        // Check if already loading
+        if (loadingRanges.has(rangeKey)) return;
 
         // Check if we already have data for this range
-        const needsLoad = !loadedRanges.some(r => 
-          r.start <= currentTimestamp && 
-          r.end >= currentTimestamp
+        const alreadyLoaded = loadedRanges.some(r => 
+          r.start <= targetTimestamp && 
+          r.end >= targetTimestamp
         );
 
-        if (!needsLoad) return;
+        if (alreadyLoaded) return;
 
-        setLoadingCurve(true);
+        // Mark as loading
+        setLoadingRanges(prev => new Set(prev).add(rangeKey));
 
         // Load outdoor data window (500 before + 500 after)
         const { data: outdoorBefore, error: outdoorBeforeError } = await supabase
@@ -94,7 +101,14 @@ export const TimelineControl = () => {
 
         const outdoorWindow = [...(outdoorBefore || []).reverse(), ...(outdoorAfter || [])];
 
-        if (outdoorWindow.length === 0) return;
+        if (outdoorWindow.length === 0) {
+          setLoadingRanges(prev => {
+            const next = new Set(prev);
+            next.delete(rangeKey);
+            return next;
+          });
+          return;
+        }
 
         // Load indoor data for the same window
         const indoorDataPromises = sensors.map(async (sensor) => {
@@ -161,14 +175,15 @@ export const TimelineControl = () => {
           }
         });
 
-        // Merge with existing data
-        const mergedData = [...dewPointDifferences, ...newDifferences]
-          .sort((a, b) => a.timestamp - b.timestamp)
-          .filter((item, index, arr) => 
-            index === 0 || item.timestamp !== arr[index - 1].timestamp
-          );
-
-        setDewPointDifferences(mergedData);
+        // Merge with existing data (keep all loaded data)
+        setDewPointDifferences(prev => {
+          const merged = [...prev, ...newDifferences]
+            .sort((a, b) => a.timestamp - b.timestamp)
+            .filter((item, index, arr) => 
+              index === 0 || item.timestamp !== arr[index - 1].timestamp
+            );
+          return merged;
+        });
 
         // Update loaded ranges
         if (newDifferences.length > 0) {
@@ -180,15 +195,45 @@ export const TimelineControl = () => {
             end: maxTimestamp
           }]);
         }
+
+        // Remove from loading set
+        setLoadingRanges(prev => {
+          const next = new Set(prev);
+          next.delete(rangeKey);
+          return next;
+        });
       } catch (error) {
         console.error('Error loading dew point window:', error);
-      } finally {
-        setLoadingCurve(false);
+        setLoadingRanges(prev => {
+          const next = new Set(prev);
+          next.delete(`${targetTimestamp}`);
+          return next;
+        });
       }
     };
 
-    loadDewPointWindow();
-  }, [currentSpace, hasOutdoorData, timeRange, sensors, currentTimestamp]);
+    // Load current position
+    loadDewPointWindow(currentTimestamp);
+
+    // Anticipate and preload ahead if playing or near edge
+    if (timeRange && rangeStart && rangeEnd) {
+      const totalRange = rangeEnd - rangeStart;
+      const distanceToEnd = rangeEnd - currentTimestamp;
+      const distanceToStart = currentTimestamp - rangeStart;
+      
+      // Preload ahead if close to end
+      if (distanceToEnd < totalRange * PRELOAD_THRESHOLD) {
+        const preloadTimestamp = currentTimestamp + (POINTS_AFTER * 60 * 1000); // Estimate 1 point per minute
+        loadDewPointWindow(preloadTimestamp);
+      }
+      
+      // Preload behind if close to start
+      if (distanceToStart < totalRange * PRELOAD_THRESHOLD) {
+        const preloadTimestamp = currentTimestamp - (POINTS_BEFORE * 60 * 1000);
+        loadDewPointWindow(preloadTimestamp);
+      }
+    }
+  }, [currentSpace, hasOutdoorData, timeRange, sensors, currentTimestamp, rangeStart, rangeEnd]);
 
   // Calculate min/max difference for scaling
   const { minDiff, maxDiff, diffRange } = useMemo(() => {
@@ -203,25 +248,6 @@ export const TimelineControl = () => {
 
     return { minDiff: min, maxDiff: max, diffRange: range };
   }, [dewPointDifferences]);
-
-  // Filter visible points with fade-out at edges
-  const visibleDewPointDifferences = useMemo(() => {
-    if (dewPointDifferences.length === 0) return [];
-
-    // Find the loaded range that contains current timestamp
-    const currentRange = loadedRanges.find(r => 
-      r.start <= currentTimestamp && 
-      r.end >= currentTimestamp
-    );
-
-    if (!currentRange) return [];
-
-    // Get points in the loaded range
-    return dewPointDifferences.filter(point => 
-      point.timestamp >= currentRange.start && 
-      point.timestamp <= currentRange.end
-    );
-  }, [dewPointDifferences, currentTimestamp, loadedRanges]);
 
   // Playback loop
   useEffect(() => {
@@ -356,8 +382,6 @@ export const TimelineControl = () => {
     const normalized = (difference - minDiff) / diffRange;
 
     // Green (max) to Blue (min) gradient
-    // Green: rgb(34, 197, 94) - high difference (max)
-    // Blue: rgb(59, 130, 246) - low difference (min)
     const r = Math.round(34 + (59 - 34) * (1 - normalized));
     const g = Math.round(197 - (197 - 130) * (1 - normalized));
     const b = Math.round(94 + (246 - 94) * (1 - normalized));
@@ -365,7 +389,15 @@ export const TimelineControl = () => {
     return `rgb(${r}, ${g}, ${b})`;
   };
 
-  // Generate ultra-smooth Bezier curve path with tension control
+  // Check if a point is in the color zone around cursor
+  const isInColorZone = (timestamp: number): boolean => {
+    if (!timeRange) return false;
+    const totalRange = timeRange[1] - timeRange[0];
+    const colorRadius = totalRange * COLOR_ZONE_RADIUS;
+    return Math.abs(timestamp - currentTimestamp) <= colorRadius;
+  };
+
+  // Generate ultra-smooth Bezier curve path
   const generateSmoothPath = (points: DewPointDifference[]): string => {
     if (points.length === 0) return '';
     if (points.length === 1) {
@@ -386,7 +418,7 @@ export const TimelineControl = () => {
     let path = `M ${coords[0].x},${coords[0].y}`;
 
     // Use Catmull-Rom spline for ultra-smooth curves
-    const tension = 0.5; // 0 = sharp corners, 1 = very smooth
+    const tension = 0.5;
 
     for (let i = 0; i < coords.length - 1; i++) {
       const p0 = coords[Math.max(i - 1, 0)];
@@ -394,7 +426,6 @@ export const TimelineControl = () => {
       const p2 = coords[i + 1];
       const p3 = coords[Math.min(i + 2, coords.length - 1)];
 
-      // Calculate control points using Catmull-Rom
       const cp1x = p1.x + (p2.x - p0.x) / 6 * tension;
       const cp1y = p1.y + (p2.y - p0.y) / 6 * tension;
       const cp2x = p2.x - (p3.x - p1.x) / 6 * tension;
@@ -409,10 +440,7 @@ export const TimelineControl = () => {
   if (!timeRange || rangeStart === null || rangeEnd === null) return null;
 
   const dayMarkers = getDayMarkers();
-  const smoothPath = generateSmoothPath(visibleDewPointDifferences);
-
-  // Calculate opacity based on data availability
-  const curveOpacity = visibleDewPointDifferences.length > 0 ? 1 : 0;
+  const smoothPath = generateSmoothPath(dewPointDifferences);
 
   return (
     <LiquidGlassCard className="p-4">
@@ -608,17 +636,35 @@ export const TimelineControl = () => {
             onClick={handleTimelineClick}
             onWheel={handleWheel}
           >
-            {/* Dew Point Difference Curve - Ultra Smooth with Fade */}
-            {hasOutdoorData && visibleDewPointDifferences.length > 0 && (
+            {/* Gray base curve (all loaded data) */}
+            {hasOutdoorData && dewPointDifferences.length > 0 && (
               <svg
-                className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-500"
-                style={{ opacity: curveOpacity }}
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                preserveAspectRatio="none"
+                viewBox="0 0 100 100"
+              >
+                <path
+                  d={smoothPath}
+                  fill="none"
+                  stroke="rgba(156, 163, 175, 0.4)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            )}
+
+            {/* Colored curve (only in zone around cursor) */}
+            {hasOutdoorData && dewPointDifferences.length > 0 && (
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
                 preserveAspectRatio="none"
                 viewBox="0 0 100 100"
               >
                 <defs>
                   <linearGradient id="curveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    {visibleDewPointDifferences.map((point, idx) => {
+                    {dewPointDifferences.map((point, idx) => {
                       const position = getPosition(point.timestamp);
                       const color = getColorForDifference(point.difference);
                       return (
@@ -630,6 +676,16 @@ export const TimelineControl = () => {
                       );
                     })}
                   </linearGradient>
+                  <mask id="colorZoneMask">
+                    <rect x="0" y="0" width="100" height="100" fill="black" />
+                    <rect 
+                      x={`${Math.max(0, getPosition(currentTimestamp) - (COLOR_ZONE_RADIUS * 100))}`}
+                      y="0" 
+                      width={`${COLOR_ZONE_RADIUS * 200}`}
+                      height="100" 
+                      fill="white"
+                    />
+                  </mask>
                 </defs>
                 <path
                   d={smoothPath}
@@ -639,6 +695,7 @@ export const TimelineControl = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
+                  mask="url(#colorZoneMask)"
                 />
               </svg>
             )}
