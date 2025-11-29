@@ -23,26 +23,20 @@ export const createSensorSpheres = (
   console.log('🎯 Creating sensor spheres with:');
   console.log('   Model scale:', modelScale);
   console.log('   Original center:', originalCenter?.toArray());
-  console.log('   Model position:', modelPosition?.toArray());
+  console.log('   Model position (NOT USED):', modelPosition?.toArray());
   
   sensors.forEach((sensor) => {
-    // Apply the exact same transformation as the model
-    // Step 1: Subtract original center (centering)
+    // Apply ONLY centering and scale (same as model)
+    // DO NOT add model position - the model is at origin (0,0,0) after centering
     const x = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
     const y = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
     const z = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
     
-    // Step 2: Add model position (the model's position after centering)
-    const finalX = x + (modelPosition?.x || 0);
-    const finalY = y + (modelPosition?.y || 0);
-    const finalZ = z + (modelPosition?.z || 0);
-    
-    const transformedPosition = new THREE.Vector3(finalX, finalY, finalZ);
+    const transformedPosition = new THREE.Vector3(x, y, z);
     
     console.log(`   Sensor ${sensor.name}:`);
     console.log(`      Original: [${sensor.position.map(v => v.toFixed(3)).join(', ')}]`);
     console.log(`      After centering & scale: [${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}]`);
-    console.log(`      Final (with model offset): [${finalX.toFixed(3)}, ${finalY.toFixed(3)}, ${finalZ.toFixed(3)}]`);
     
     const initialColor = 0x4dabf7;
     const initialEmissive = 0x2563eb;

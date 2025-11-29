@@ -111,7 +111,7 @@ export const Scene3DViewer = () => {
       disposeInterpolationMesh(interpolationMesh);
     }
 
-    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter, sceneRef.current.modelGroup?.position || null);
+    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter);
     if (points.length === 0) {
       console.warn('⚠️ No interpolation points generated');
       return;
@@ -220,6 +220,11 @@ export const Scene3DViewer = () => {
           center: bounds.center.toArray(),
           size: bounds.size.toArray()
         });
+        
+        console.log('\n📍 SENSOR TRANSFORMATION (same as model):');
+        console.log('   Step 1: Subtract original center');
+        console.log('   Step 2: Multiply by scale');
+        console.log('   Step 3: Done! (model is at origin, no offset needed)');
         
         const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition);
         
@@ -349,8 +354,7 @@ const buildInterpolationPoints = (
   currentTimestamp: number,
   selectedMetric: string,
   modelScale: number,
-  originalCenter: THREE.Vector3 | null,
-  modelPosition: THREE.Vector3 | null
+  originalCenter: THREE.Vector3 | null
 ): Point3D[] => {
   const points: Point3D[] = [];
   
@@ -361,14 +365,11 @@ const buildInterpolationPoints = (
     const closestData = findClosestDataPoint(data, currentTimestamp);
     const value = getMetricValue(closestData, selectedMetric as any);
     
-    // Apply same transformation as sensor spheres
-    const xCentered = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
-    const yCentered = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
-    const zCentered = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
-    
-    const xScene = xCentered + (modelPosition?.x || 0);
-    const yScene = yCentered + (modelPosition?.y || 0);
-    const zScene = zCentered + (modelPosition?.z || 0);
+    // Apply ONLY centering and scale (same as sensor spheres)
+    // DO NOT add model position - model is at origin after centering
+    const xScene = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
+    const yScene = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
+    const zScene = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
     
     points.push({ x: xScene, y: yScene, z: zScene, value });
   });
