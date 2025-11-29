@@ -631,25 +631,36 @@ const createVolumeMesh = (
   const colors: number[] = [];
   const indices: number[] = [];
   
-  const step = Math.max(1, Math.floor(meshResolution / 10));
+  // Calculate grid spacing based on resolution
+  const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
+  const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
+  const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
+  
+  // Cube size is half the minimum step to prevent overlapping
+  const cubeSize = Math.min(stepX, stepY, stepZ) * 0.45;
+  
+  console.log(`🔲 Mesh resolution: ${meshResolution}³`);
+  console.log(`📏 Grid steps: X=${stepX.toFixed(3)}, Y=${stepY.toFixed(3)}, Z=${stepZ.toFixed(3)}`);
+  console.log(`📦 Cube size: ${cubeSize.toFixed(3)} (45% of min step)`);
+  
   let vertexIndex = 0;
   
-  for (let i = 0; i < gridValues.length - step; i += step) {
+  for (let i = 0; i < gridValues.length; i++) {
     const point = gridValues[i];
-    const size = 0.2;
     
     const x = point.x, y = point.y, z = point.z;
     const color = getColorFromValueSaturated(point.value, minValue, maxValue, selectedMetric as any);
     
+    // Create cube vertices centered on the grid point
     const vertices = [
-      [x - size, y - size, z - size],
-      [x + size, y - size, z - size],
-      [x + size, y + size, z - size],
-      [x - size, y + size, z - size],
-      [x - size, y - size, z + size],
-      [x + size, y - size, z + size],
-      [x + size, y + size, z + size],
-      [x - size, y + size, z + size],
+      [x - cubeSize, y - cubeSize, z - cubeSize],
+      [x + cubeSize, y - cubeSize, z - cubeSize],
+      [x + cubeSize, y + cubeSize, z - cubeSize],
+      [x - cubeSize, y + cubeSize, z - cubeSize],
+      [x - cubeSize, y - cubeSize, z + cubeSize],
+      [x + cubeSize, y - cubeSize, z + cubeSize],
+      [x + cubeSize, y + cubeSize, z + cubeSize],
+      [x - cubeSize, y + cubeSize, z + cubeSize],
     ];
     
     vertices.forEach(v => {
@@ -657,13 +668,14 @@ const createVolumeMesh = (
       colors.push(color.r, color.g, color.b);
     });
     
+    // Define cube faces (12 triangles = 6 faces * 2 triangles per face)
     const faceIndices = [
-      [0, 1, 2], [0, 2, 3],
-      [4, 6, 5], [4, 7, 6],
-      [0, 4, 5], [0, 5, 1],
-      [2, 6, 7], [2, 7, 3],
-      [0, 3, 7], [0, 7, 4],
-      [1, 5, 6], [1, 6, 2],
+      [0, 1, 2], [0, 2, 3], // Front
+      [4, 6, 5], [4, 7, 6], // Back
+      [0, 4, 5], [0, 5, 1], // Bottom
+      [2, 6, 7], [2, 7, 3], // Top
+      [0, 3, 7], [0, 7, 4], // Left
+      [1, 5, 6], [1, 6, 2], // Right
     ];
     
     faceIndices.forEach(face => {
