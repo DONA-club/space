@@ -29,22 +29,46 @@ export const useSensorData = (
       try {
         const data = new Map<number, SensorDataPoint[]>();
 
-        console.log('📊 Loading ALL sensor data (no limit)...');
+        console.log('📊 Loading ALL sensor data (NO LIMIT - fetching everything)...');
         const loadStartTime = performance.now();
 
         for (const sensor of sensors) {
-          // NO LIMIT - fetch ALL data points for each sensor
-          const { data: rawData, error: fetchError, count } = await supabase
-            .from('sensor_data')
-            .select('*', { count: 'exact' })
-            .eq('space_id', currentSpace.id)
-            .eq('sensor_id', sensor.id)
-            .order('timestamp', { ascending: true });
+          console.log(`   🔄 Loading data for sensor ${sensor.name} (ID: ${sensor.id})...`);
+          
+          // Fetch ALL data in batches to avoid memory issues
+          let allData: any[] = [];
+          let from = 0;
+          const batchSize = 10000; // Fetch 10k at a time
+          let hasMore = true;
 
-          if (fetchError) throw fetchError;
+          while (hasMore) {
+            const { data: batchData, error: fetchError, count } = await supabase
+              .from('sensor_data')
+              .select('*', { count: 'exact' })
+              .eq('space_id', currentSpace.id)
+              .eq('sensor_id', sensor.id)
+              .order('timestamp', { ascending: true })
+              .range(from, from + batchSize - 1);
 
-          if (rawData && rawData.length > 0) {
-            const formattedData = rawData.map(d => ({
+            if (fetchError) throw fetchError;
+
+            if (batchData && batchData.length > 0) {
+              allData = allData.concat(batchData);
+              console.log(`      Batch ${Math.floor(from / batchSize) + 1}: ${batchData.length} points (total so far: ${allData.length})`);
+              
+              // Check if there's more data
+              if (batchData.length < batchSize) {
+                hasMore = false;
+              } else {
+                from += batchSize;
+              }
+            } else {
+              hasMore = false;
+            }
+          }
+
+          if (allData.length > 0) {
+            const formattedData = allData.map(d => ({
               timestamp: new Date(d.timestamp).getTime(),
               temperature: d.temperature,
               humidity: d.humidity,
@@ -53,7 +77,14 @@ export const useSensorData = (
             }));
 
             data.set(sensor.id, formattedData);
+            
+            // Log time range
+            const firstTimestamp = new Date(formattedData[0].timestamp);
+            const lastTimestamp = new Date(formattedData[formattedData.length - 1].timestamp);
             console.log(`   ✓ Sensor ${sensor.name}: ${formattedData.length.toLocaleString()} points loaded`);
+            console.log(`      Time range: ${firstTimestamp.toLocaleString('fr-FR')} → ${lastTimestamp.toLocaleString('fr-FR')}`);
+          } else {
+            console.warn(`   ⚠️ No data found for sensor ${sensor.name}`);
           }
         }
 
@@ -80,21 +111,42 @@ export const useSensorData = (
 
     const loadOutdoorData = async () => {
       try {
-        console.log('🌤️ Loading ALL outdoor data (no limit)...');
+        console.log('🌤️ Loading ALL outdoor data (NO LIMIT - fetching everything)...');
         const loadStartTime = performance.now();
 
-        // NO LIMIT - fetch ALL outdoor data points
-        const { data: rawData, error: fetchError } = await supabase
-          .from('sensor_data')
-          .select('*')
-          .eq('space_id', currentSpace.id)
-          .eq('sensor_id', 0)
-          .order('timestamp', { ascending: true });
+        // Fetch ALL outdoor data in batches
+        let allData: any[] = [];
+        let from = 0;
+        const batchSize = 10000;
+        let hasMore = true;
 
-        if (fetchError) throw fetchError;
+        while (hasMore) {
+          const { data: batchData, error: fetchError } = await supabase
+            .from('sensor_data')
+            .select('*')
+            .eq('space_id', currentSpace.id)
+            .eq('sensor_id', 0)
+            .order('timestamp', { ascending: true })
+            .range(from, from + batchSize - 1);
 
-        if (rawData && rawData.length > 0) {
-          const formattedData = rawData.map(d => ({
+          if (fetchError) throw fetchError;
+
+          if (batchData && batchData.length > 0) {
+            allData = allData.concat(batchData);
+            console.log(`   Batch ${Math.floor(from / batchSize) + 1}: ${batchData.length} points (total so far: ${allData.length})`);
+            
+            if (batchData.length < batchSize) {
+              hasMore = false;
+            } else {
+              from += batchSize;
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+
+        if (allData.length > 0) {
+          const formattedData = allData.map(d => ({
             timestamp: new Date(d.timestamp).getTime(),
             temperature: d.temperature,
             humidity: d.humidity,
@@ -103,8 +155,12 @@ export const useSensorData = (
           }));
 
           const loadEndTime = performance.now();
+          const firstTimestamp = new Date(formattedData[0].timestamp);
+          const lastTimestamp = new Date(formattedData[formattedData.length - 1].timestamp);
+          
           console.log(`✅ Outdoor data loaded in ${(loadEndTime - loadStartTime).toFixed(0)}ms`);
           console.log(`   Total: ${formattedData.length.toLocaleString()} outdoor data points`);
+          console.log(`   Time range: ${firstTimestamp.toLocaleString('fr-FR')} → ${lastTimestamp.toLocaleString('fr-FR')}`);
 
           setOutdoorData(formattedData);
         }
