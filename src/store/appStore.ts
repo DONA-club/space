@@ -126,7 +126,7 @@ export const useAppStore = create<AppState>((set) => ({
   gltfModel: null,
   roomVolume: null,
   sensors: [],
-  sensorOffset: { x: 0, y: 0, z: 0 },
+  sensorOffset: { x: 0, y: 1.80, z: 2.60 },
   outdoorData: null,
   hasOutdoorData: false,
   isPlaying: false,
