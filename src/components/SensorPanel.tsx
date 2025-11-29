@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Grid3x3, Upload, Download, Trash2, FolderUp, Loader2, Clock, Info } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Grid3x3, Upload, Download, Trash2, FolderUp, Loader2, Clock, Info, CloudSun } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -33,16 +33,20 @@ export const SensorPanel = () => {
   const setMeshResolution = useAppStore((state) => state.setMeshResolution);
   const visualizationType = useAppStore((state) => state.visualizationType);
   const setVisualizationType = useAppStore((state) => state.setVisualizationType);
+  const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
+  const setHasOutdoorData = useAppStore((state) => state.setHasOutdoorData);
   
   const [isExpanded, setIsExpanded] = useState(true);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [sensorDataCounts, setSensorDataCounts] = useState<Map<number, number>>(new Map());
   const [lastDataDates, setLastDataDates] = useState<Map<number, Date>>(new Map());
+  const [outdoorDataCount, setOutdoorDataCount] = useState(0);
 
   useEffect(() => {
     if (currentSpace && mode === 'replay') {
       loadSensorDataInfo();
+      loadOutdoorDataInfo();
     }
   }, [currentSpace, mode]);
 
@@ -86,6 +90,24 @@ export const SensorPanel = () => {
     }
   };
 
+  const loadOutdoorDataInfo = async () => {
+    if (!currentSpace) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('sensor_data')
+        .select('*', { count: 'exact', head: true })
+        .eq('space_id', currentSpace.id)
+        .eq('sensor_id', 0); // Outdoor sensor uses ID 0
+
+      if (error) throw error;
+      setOutdoorDataCount(count || 0);
+      setHasOutdoorData((count || 0) > 0);
+    } catch (error) {
+      console.error('Error loading outdoor data info:', error);
+    }
+  };
+
   const normalizeName = (name: string): string => {
     return name
       .toLowerCase()
@@ -100,6 +122,14 @@ export const SensorPanel = () => {
       .map(word => word[0])
       .join('')
       .toLowerCase();
+  };
+
+  const isOutdoorFile = (filename: string): boolean => {
+    const normalized = normalizeName(filename);
+    return normalized.includes('balcon') || 
+           normalized.includes('exterieur') || 
+           normalized.includes('outdoor') ||
+           normalized.includes('outside');
   };
 
   const calculateSimilarity = (str1: string, str2: string): number => {
@@ -135,10 +165,24 @@ export const SensorPanel = () => {
       const fileArray = Array.from(files);
       let matchedCount = 0;
       let unmatchedFiles: string[] = [];
+      let outdoorFileProcessed = false;
       const matchDetails: Array<{ file: string; sensor: string; score: number }> = [];
 
       for (const file of fileArray) {
         if (!file.name.endsWith('.csv')) continue;
+
+        // Check if it's an outdoor file
+        if (isOutdoorFile(file.name)) {
+          await handleOutdoorCSVUpload(file, false);
+          outdoorFileProcessed = true;
+          matchedCount++;
+          matchDetails.push({
+            file: file.name,
+            sensor: 'Extérieur',
+            score: 1.0,
+          });
+          continue;
+        }
 
         const fileNameWithoutExt = file.name.replace(/\.csv$/i, '');
         
@@ -176,8 +220,9 @@ export const SensorPanel = () => {
       }
 
       if (matchedCount > 0) {
-        showSuccess(`${matchedCount} fichier${matchedCount > 1 ? 's' : ''} CSV chargé${matchedCount > 1 ? 's' : ''} avec succès`);
+        showSuccess(`${matchedCount} fichier${matchedCount > 1 ? 's' : ''} CSV chargé${matchedCount > 1 ? 's' : ''} avec succès${outdoorFileProcessed ? ' (dont données extérieures)' : ''}`);
         loadSensorDataInfo();
+        loadOutdoorDataInfo();
       }
       
       if (unmatchedFiles.length > 0) {
@@ -189,6 +234,67 @@ export const SensorPanel = () => {
       showError('Erreur lors du chargement en masse');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOutdoorCSVUpload = async (file: File, showToast: boolean = true) => {
+    if (!currentSpace) return;
+
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      const dataLines = lines.slice(1);
+
+      const newData: any[] = [];
+
+      for (const line of dataLines) {
+        const values = line.replace(/"/g, '').split(',');
+        if (values.length < 5) continue;
+
+        const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
+        const timestamp = new Date(timestampStr.trim());
+
+        if (isNaN(timestamp.getTime())) continue;
+
+        const temp = parseFloat(tempStr);
+        const hum = parseFloat(humStr);
+        const absHum = parseFloat(absHumStr);
+        const dpt = parseFloat(dptStr);
+
+        if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
+
+        newData.push({
+          space_id: currentSpace.id,
+          sensor_id: 0, // Outdoor sensor uses ID 0
+          sensor_name: 'Extérieur',
+          timestamp: timestamp.toISOString(),
+          temperature: temp,
+          humidity: hum,
+          absolute_humidity: absHum,
+          dew_point: dpt,
+        });
+      }
+
+      if (newData.length === 0) {
+        throw new Error('Aucune donnée valide trouvée');
+      }
+
+      const { error } = await supabase
+        .from('sensor_data')
+        .upsert(newData, { onConflict: 'space_id,sensor_id,timestamp' });
+
+      if (error) throw error;
+
+      if (showToast) {
+        showSuccess(`${newData.length} points de données extérieures ajoutés`);
+        loadOutdoorDataInfo();
+      }
+    } catch (error) {
+      console.error('Error uploading outdoor CSV:', error);
+      if (showToast) {
+        showError(error instanceof Error ? error.message : 'Erreur lors du chargement du CSV extérieur');
+      }
+      throw error;
     }
   };
 
@@ -342,6 +448,30 @@ export const SensorPanel = () => {
     }
   };
 
+  const deleteOutdoorData = async () => {
+    if (!currentSpace) return;
+
+    if (!confirm('Supprimer toutes les données extérieures ?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('sensor_data')
+        .delete()
+        .eq('space_id', currentSpace.id)
+        .eq('sensor_id', 0);
+
+      if (error) throw error;
+
+      showSuccess('Données extérieures supprimées');
+      loadOutdoorDataInfo();
+    } catch (error) {
+      console.error('Error deleting outdoor data:', error);
+      showError('Erreur lors de la suppression');
+    }
+  };
+
   const handleSensorHover = (sensorId: number) => {
     setHoveredSensorId(sensorId);
     window.dispatchEvent(new CustomEvent('sensorHover', { detail: { sensorId } }));
@@ -376,6 +506,70 @@ export const SensorPanel = () => {
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
+      {/* Outdoor Sensor Card */}
+      {currentSpace && mode === 'replay' && (
+        <LiquidGlassCard className="flex-shrink-0">
+          <div className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <CloudSun size={14} className="text-blue-500" />
+                <h2 className="text-sm font-semibold">Extérieur</h2>
+                {hasOutdoorData && (
+                  <Badge variant="outline" className="text-xs h-5">
+                    {outdoorDataCount.toLocaleString()}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {hasOutdoorData ? (
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 h-7 text-[10px] bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
+                  disabled
+                >
+                  <CloudSun size={10} className="mr-1" />
+                  Données chargées
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 w-7 p-0"
+                  onClick={deleteOutdoorData}
+                >
+                  <Trash2 size={10} />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-[10px]"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.csv';
+                  input.onchange = (e) => {
+                    const file = (e.target as HTMLInputElement).files?.[0];
+                    if (file) handleOutdoorCSVUpload(file);
+                  };
+                  input.click();
+                }}
+                disabled={loading}
+              >
+                <Upload size={10} className="mr-1" />
+                Charger données extérieures
+              </Button>
+            )}
+            <p className="text-[9px] text-gray-500 dark:text-gray-400 mt-1 text-center">
+              Optionnel • Fichier: balcon_data.csv ou exterieur_data.csv
+            </p>
+          </div>
+        </LiquidGlassCard>
+      )}
+
       {/* Sensors List Card */}
       <LiquidGlassCard className="flex-shrink-0">
         <div className="p-3">
@@ -436,7 +630,7 @@ export const SensorPanel = () => {
                       )}
                     </Button>
                     <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center">
-                      Matching intelligent automatique
+                      Matching intelligent (capteurs + extérieur)
                     </p>
                   </div>
                 )}

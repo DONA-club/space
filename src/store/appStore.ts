@@ -14,6 +14,14 @@ interface Sensor {
   };
 }
 
+interface OutdoorData {
+  temperature: number;
+  humidity: number;
+  absoluteHumidity: number;
+  dewPoint: number;
+  timestamp: number;
+}
+
 type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint';
 type InterpolationMethod = 'idw' | 'rbf';
 type RBFKernel = 'gaussian' | 'multiquadric' | 'inverse_multiquadric' | 'thin_plate_spline';
@@ -50,6 +58,10 @@ interface AppState {
   // Sensors
   sensors: Sensor[];
   
+  // Outdoor sensor
+  outdoorData: OutdoorData | null;
+  hasOutdoorData: boolean;
+  
   // Replay
   isPlaying: boolean;
   currentTimestamp: number;
@@ -85,6 +97,8 @@ interface AppState {
   setSensors: (sensors: Sensor[]) => void;
   updateSensorData: (sensorId: number, data: any) => void;
   setSensorCsv: (sensorId: number, file: File) => void;
+  setOutdoorData: (data: OutdoorData | null) => void;
+  setHasOutdoorData: (has: boolean) => void;
   setPlaying: (playing: boolean) => void;
   setCurrentTimestamp: (timestamp: number | ((prev: number) => number)) => void;
   setTimeRange: (range: [number, number]) => void;
@@ -110,6 +124,8 @@ export const useAppStore = create<AppState>((set) => ({
   gltfModel: null,
   roomVolume: null,
   sensors: [],
+  outdoorData: null,
+  hasOutdoorData: false,
   isPlaying: false,
   currentTimestamp: 0,
   timeRange: null,
@@ -136,7 +152,9 @@ export const useAppStore = create<AppState>((set) => ({
     currentSpace: null,
     gltfModel: null,
     sensors: [],
-    dataReady: false
+    dataReady: false,
+    outdoorData: null,
+    hasOutdoorData: false
   }),
   setCurrentSpace: (space) => set({ currentSpace: space }),
   setMode: (mode) => set({ mode }),
@@ -153,6 +171,8 @@ export const useAppStore = create<AppState>((set) => ({
       s.id === sensorId ? { ...s, csvFile: file } : s
     )
   })),
+  setOutdoorData: (data) => set({ outdoorData: data }),
+  setHasOutdoorData: (has) => set({ hasOutdoorData: has }),
   setPlaying: (playing) => set({ isPlaying: playing }),
   setCurrentTimestamp: (timestamp) => set((state) => ({
     currentTimestamp: typeof timestamp === 'function' ? timestamp(state.currentTimestamp) : timestamp

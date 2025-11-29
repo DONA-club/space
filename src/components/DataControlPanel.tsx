@@ -67,35 +67,56 @@ export const DataControlPanel = () => {
     try {
       console.log('🔍 Starting data analysis from Supabase...');
       
-      // Get time range from all sensor data
-      const { data: timeRangeData, error: timeRangeError } = await supabase
+      // Get time range from all sensor data (no limit)
+      const { data: minData, error: minError } = await supabase
         .from('sensor_data')
         .select('timestamp')
         .eq('space_id', currentSpace.id)
-        .order('timestamp', { ascending: true });
+        .order('timestamp', { ascending: true })
+        .limit(1)
+        .single();
 
-      if (timeRangeError) throw timeRangeError;
+      if (minError) throw minError;
+
+      const { data: maxData, error: maxError } = await supabase
+        .from('sensor_data')
+        .select('timestamp')
+        .eq('space_id', currentSpace.id)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (maxError) throw maxError;
       
-      if (!timeRangeData || timeRangeData.length === 0) {
+      if (!minData || !maxData) {
         throw new Error('Aucune donnée trouvée');
       }
 
-      const timestamps = timeRangeData.map(d => new Date(d.timestamp).getTime());
-      const minTime = Math.min(...timestamps);
-      const maxTime = Math.max(...timestamps);
+      const minTime = new Date(minData.timestamp).getTime();
+      const maxTime = new Date(maxData.timestamp).getTime();
+      
+      // Get total count
+      const { count, error: countError } = await supabase
+        .from('sensor_data')
+        .select('*', { count: 'exact', head: true })
+        .eq('space_id', currentSpace.id);
+
+      if (countError) throw countError;
       
       setTimeRange([minTime, maxTime]);
       setCurrentTimestamp(minTime);
       setDataReady(true);
       
       const duration = (maxTime - minTime) / (1000 * 60 * 60);
+      const days = Math.floor(duration / 24);
+      const hours = Math.floor(duration % 24);
       
-      showSuccess(`Analyse terminée ! ${sensors.length} capteurs, ${timestamps.length.toLocaleString()} points sur ${duration.toFixed(1)}h`);
+      showSuccess(`Analyse terminée ! ${sensors.length} capteurs, ${(count || 0).toLocaleString()} points sur ${days}j ${hours}h`);
       
       console.log('✅ Data analysis complete:', {
         sensors: sensors.length,
-        points: timestamps.length,
-        duration: `${duration.toFixed(1)}h`,
+        points: count || 0,
+        duration: `${days}j ${hours}h`,
         timeRange: [new Date(minTime).toISOString(), new Date(maxTime).toISOString()]
       });
     } catch (error) {
