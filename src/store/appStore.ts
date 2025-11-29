@@ -51,10 +51,11 @@ interface AppState {
   idwPower: number;
   meshResolution: number;
   visualizationType: VisualizationType;
+  interpolationRange: { min: number; max: number } | null;
   
   // Filtered Point Cloud
   filteredPointCloud: Float32Array | null;
-  unfilteredPointCloud: Float32Array | null; // NEW: store unfiltered grid
+  unfilteredPointCloud: Float32Array | null;
   
   // WebSocket
   wsConnected: boolean;
@@ -79,8 +80,9 @@ interface AppState {
   setIdwPower: (power: number) => void;
   setMeshResolution: (resolution: number) => void;
   setVisualizationType: (type: VisualizationType) => void;
+  setInterpolationRange: (range: { min: number; max: number } | null) => void;
   setFilteredPointCloud: (points: Float32Array | null) => void;
-  setUnfilteredPointCloud: (points: Float32Array | null) => void; // NEW
+  setUnfilteredPointCloud: (points: Float32Array | null) => void;
   setWsConnected: (connected: boolean) => void;
 }
 
@@ -103,6 +105,7 @@ export const useAppStore = create<AppState>((set) => ({
   idwPower: 2,
   meshResolution: 40,
   visualizationType: 'points',
+  interpolationRange: null,
   filteredPointCloud: null,
   unfilteredPointCloud: null,
   wsConnected: false,
@@ -136,6 +139,7 @@ export const useAppStore = create<AppState>((set) => ({
   setIdwPower: (power) => set({ idwPower: power }),
   setMeshResolution: (resolution) => set({ meshResolution: resolution }),
   setVisualizationType: (type) => set({ visualizationType: type }),
+  setInterpolationRange: (range) => set({ interpolationRange: range }),
   setFilteredPointCloud: (points) => set({ filteredPointCloud: points }),
   setUnfilteredPointCloud: (points) => set({ unfilteredPointCloud: points }),
   setWsConnected: (connected) => set({ wsConnected: connected }),

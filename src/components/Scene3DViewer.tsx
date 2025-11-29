@@ -7,6 +7,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { AlertCircle } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
+import { ColorLegend } from "./ColorLegend";
 
 // Fixed offsets from calibration
 const INTERPOLATION_OFFSET_X = 0;
@@ -46,6 +47,7 @@ export const Scene3DViewer = () => {
   const visualizationType = useAppStore((state) => state.visualizationType);
   const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
   const setUnfilteredPointCloud = useAppStore((state) => state.setUnfilteredPointCloud);
+  const setInterpolationRange = useAppStore((state) => state.setInterpolationRange);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -253,6 +255,7 @@ export const Scene3DViewer = () => {
         }
         sceneRef.current.interpolationMesh = null;
       }
+      setInterpolationRange(null);
       return;
     }
 
@@ -363,7 +366,7 @@ export const Scene3DViewer = () => {
         }
       }
       
-      // NEW: Save unfiltered grid to store
+      // Save unfiltered grid to store
       const unfilteredArray = new Float32Array(validGridPoints.length * 3);
       validGridPoints.forEach((p, i) => {
         unfilteredArray[i * 3] = p.x;
@@ -396,6 +399,9 @@ export const Scene3DViewer = () => {
       minValue = Math.min(minValue, value);
       maxValue = Math.max(maxValue, value);
     });
+
+    // Store min/max for legend
+    setInterpolationRange({ min: minValue, max: maxValue });
 
     const getColorFromValue = (value: number): THREE.Color => {
       const normalized = (value - minValue) / (maxValue - minValue);
@@ -554,7 +560,7 @@ export const Scene3DViewer = () => {
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded, filteredPointCloud, setUnfilteredPointCloud]);
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded, filteredPointCloud, setUnfilteredPointCloud, setInterpolationRange]);
 
   useEffect(() => {
     if (!containerRef.current || !sceneRef.current) return;
@@ -955,6 +961,8 @@ export const Scene3DViewer = () => {
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
+      <ColorLegend />
+      
       {!gltfModel && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg">
           <div className="text-center text-gray-500 dark:text-gray-400">

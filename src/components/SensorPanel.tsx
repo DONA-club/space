@@ -389,8 +389,11 @@ export const SensorPanel = () => {
                           <TabsList className="grid grid-cols-4 bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 p-1 gap-1">
                             <TooltipPrimitive.Root>
                               <TooltipPrimitive.Trigger asChild>
-                                <TabsTrigger value="points" className="h-6 px-1">
+                                <TabsTrigger value="points" className="h-6 px-1 relative">
                                   <Circle size={12} />
+                                  {visualizationType === 'points' && (
+                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500"></div>
+                                  )}
                                 </TabsTrigger>
                               </TooltipPrimitive.Trigger>
                               <TooltipPrimitive.Portal>
@@ -402,8 +405,11 @@ export const SensorPanel = () => {
 
                             <TooltipPrimitive.Root>
                               <TooltipPrimitive.Trigger asChild>
-                                <TabsTrigger value="vectors" className="h-6 px-1">
+                                <TabsTrigger value="vectors" className="h-6 px-1 relative">
                                   <ArrowUpRight size={12} />
+                                  {visualizationType === 'vectors' && (
+                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                                  )}
                                 </TabsTrigger>
                               </TooltipPrimitive.Trigger>
                               <TooltipPrimitive.Portal>
@@ -415,8 +421,11 @@ export const SensorPanel = () => {
 
                             <TooltipPrimitive.Root>
                               <TooltipPrimitive.Trigger asChild>
-                                <TabsTrigger value="isosurface" className="h-6 px-1">
+                                <TabsTrigger value="isosurface" className="h-6 px-1 relative">
                                   <Layers size={12} />
+                                  {visualizationType === 'isosurface' && (
+                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500"></div>
+                                  )}
                                 </TabsTrigger>
                               </TooltipPrimitive.Trigger>
                               <TooltipPrimitive.Portal>
@@ -428,8 +437,11 @@ export const SensorPanel = () => {
 
                             <TooltipPrimitive.Root>
                               <TooltipPrimitive.Trigger asChild>
-                                <TabsTrigger value="mesh" className="h-6 px-1">
+                                <TabsTrigger value="mesh" className="h-6 px-1 relative">
                                   <Box size={12} />
+                                  {visualizationType === 'mesh' && (
+                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500"></div>
+                                  )}
                                 </TabsTrigger>
                               </TooltipPrimitive.Trigger>
                               <TooltipPrimitive.Portal>
