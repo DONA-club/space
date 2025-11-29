@@ -194,6 +194,30 @@ export const Scene3DViewer = () => {
         originalCenter = center;
         setModelBounds(bounds);
         
+        console.log('🏠 MODEL TRANSFORMATION:');
+        console.log('   Original center:', originalCenter.toArray());
+        console.log('   Model scale:', modelScale);
+        console.log('   Final bounds:', {
+          min: bounds.min.toArray(),
+          max: bounds.max.toArray(),
+          center: bounds.center.toArray(),
+          size: bounds.size.toArray()
+        });
+        console.log('   Model position after centering:', gltf.scene.position.toArray());
+        
+        console.log('📍 SENSOR POSITIONS:');
+        sensors.forEach((sensor, idx) => {
+          const original = sensor.position;
+          const transformed = [
+            (original[0] - originalCenter.x) * modelScale,
+            (original[1] - originalCenter.y) * modelScale,
+            (original[2] - originalCenter.z) * modelScale
+          ];
+          console.log(`   Sensor ${idx + 1} (${sensor.name}):`);
+          console.log(`      Original: [${original.map(v => v.toFixed(3)).join(', ')}]`);
+          console.log(`      Transformed: [${transformed.map(v => v.toFixed(3)).join(', ')}]`);
+        });
+        
         const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter);
         
         sensorMeshes.forEach((meshes) => {
@@ -359,6 +383,7 @@ const getValidGridPoints = (
   const validGridPoints: { x: number; y: number; z: number }[] = [];
   
   if (filteredPointCloud && filteredPointCloud.length > 0) {
+    console.log('📊 Using filtered point cloud:', filteredPointCloud.length / 3, 'points');
     for (let i = 0; i < filteredPointCloud.length; i += 3) {
       validGridPoints.push({
         x: filteredPointCloud[i],
@@ -367,6 +392,12 @@ const getValidGridPoints = (
       });
     }
   } else {
+    console.log('📊 Generating grid from model bounds:', {
+      min: modelBounds.min.toArray(),
+      max: modelBounds.max.toArray(),
+      resolution: meshResolution
+    });
+    
     const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
     const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
     const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
@@ -389,6 +420,10 @@ const getValidGridPoints = (
       unfilteredArray[i * 3 + 2] = p.z;
     });
     setUnfilteredPointCloud(unfilteredArray);
+    
+    console.log('📊 Grid generated:', validGridPoints.length, 'points');
+    console.log('   First point:', validGridPoints[0]);
+    console.log('   Last point:', validGridPoints[validGridPoints.length - 1]);
   }
 
   return validGridPoints;
@@ -655,24 +690,31 @@ const createVolumeMesh = (
 };
 
 const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
+  // Get original bounding box BEFORE any transformation
   const originalBox = new THREE.Box3().setFromObject(gltf.scene);
   const originalCenter = originalBox.getCenter(new THREE.Vector3());
   const originalSize = originalBox.getSize(new THREE.Vector3());
   
+  // Center the model at origin
   gltf.scene.position.sub(originalCenter);
   
+  // Calculate scale
   const maxDim = Math.max(originalSize.x, originalSize.y, originalSize.z);
   const modelScale = maxDim > 0 ? 10 / maxDim : 1;
   gltf.scene.scale.multiplyScalar(modelScale);
   
-  const bounds: ModelBounds = {
-    min: originalBox.min.clone().sub(originalCenter).multiplyScalar(modelScale),
-    max: originalBox.max.clone().sub(originalCenter).multiplyScalar(modelScale),
-    center: new THREE.Vector3(0, 0, 0),
-    size: originalSize.clone().multiplyScalar(modelScale)
-  };
-  
+  // Add to scene
   scene.add(gltf.scene);
+  
+  // Calculate bounds AFTER transformation by getting the actual bounding box from the scene
+  const transformedBox = new THREE.Box3().setFromObject(gltf.scene);
+  
+  const bounds: ModelBounds = {
+    min: transformedBox.min.clone(),
+    max: transformedBox.max.clone(),
+    center: transformedBox.getCenter(new THREE.Vector3()),
+    size: transformedBox.getSize(new THREE.Vector3())
+  };
   
   return { bounds, scale: modelScale, center: originalCenter };
 };
