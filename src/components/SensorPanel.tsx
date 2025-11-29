@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { Alert, AlertDescription } from './ui/alert';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import { InteriorVolumeSampler } from './InteriorVolumeSampler';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
@@ -34,6 +35,7 @@ export const SensorPanel = () => {
   const setVisualizationType = useAppStore((state) => state.setVisualizationType);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setHasOutdoorData = useAppStore((state) => state.setHasOutdoorData);
+  const gltfModel = useAppStore((state) => state.gltfModel);
   
   const [isExpanded, setIsExpanded] = useState(true);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
@@ -978,6 +980,19 @@ export const SensorPanel = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+          </div>
+        </LiquidGlassCard>
+      )}
+
+      {/* Volumetric Filter Card - NEW */}
+      {dataReady && meshingEnabled && gltfModel && (
+        <LiquidGlassCard className="flex-shrink-0">
+          <div className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Filter size={14} className="text-cyan-600" />
+              <h3 className="font-medium text-sm">Filtre Volumétrique</h3>
+            </div>
+            <InteriorVolumeSampler gltfUrl={gltfModel} />
           </div>
         </LiquidGlassCard>
       )}
