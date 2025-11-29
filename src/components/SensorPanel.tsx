@@ -41,33 +41,108 @@ export const SensorPanel = () => {
     setSensorCsv(sensorId, null as any);
   };
 
+  /**
+   * Normalise un nom pour le matching
+   * - Supprime les espaces, tirets, underscores
+   * - Convertit en minuscules
+   * - Supprime les suffixes courants (_data, _export, etc.)
+   */
+  const normalizeName = (name: string): string => {
+    return name
+      .toLowerCase()
+      .replace(/[\s\-_]/g, '') // Supprime espaces, tirets, underscores
+      .replace(/_(data|export|capteur|sensor)$/i, '') // Supprime suffixes courants
+      .replace(/\.csv$/i, ''); // Supprime extension
+  };
+
+  /**
+   * Extrait les initiales d'un nom
+   * Ex: "Nord-Haut" -> "nh"
+   */
+  const getInitials = (name: string): string => {
+    return name
+      .split(/[\s\-_]/)
+      .map(word => word[0])
+      .join('')
+      .toLowerCase();
+  };
+
+  /**
+   * Calcule un score de similarité entre deux chaînes
+   * Retourne un nombre entre 0 (pas de match) et 1 (match parfait)
+   */
+  const calculateSimilarity = (str1: string, str2: string): number => {
+    const norm1 = normalizeName(str1);
+    const norm2 = normalizeName(str2);
+    
+    // Match exact
+    if (norm1 === norm2) return 1.0;
+    
+    // Match par initiales
+    const initials1 = getInitials(str1);
+    const initials2 = getInitials(str2);
+    if (initials1 === norm2 || initials2 === norm1) return 0.9;
+    
+    // Match si l'un contient l'autre
+    if (norm1.includes(norm2) || norm2.includes(norm1)) return 0.8;
+    
+    // Calcul de distance de Levenshtein simplifiée
+    const maxLen = Math.max(norm1.length, norm2.length);
+    if (maxLen === 0) return 0;
+    
+    let matches = 0;
+    const minLen = Math.min(norm1.length, norm2.length);
+    for (let i = 0; i < minLen; i++) {
+      if (norm1[i] === norm2[i]) matches++;
+    }
+    
+    return matches / maxLen;
+  };
+
   const handleBulkUpload = async (files: FileList) => {
     const fileArray = Array.from(files);
     let matchedCount = 0;
     let unmatchedFiles: string[] = [];
+    const matchDetails: Array<{ file: string; sensor: string; score: number }> = [];
 
     for (const file of fileArray) {
       if (!file.name.endsWith('.csv')) continue;
 
       const fileNameWithoutExt = file.name.replace(/\.csv$/i, '');
       
-      const matchingSensor = sensors.find(sensor => {
-        if (sensor.name === fileNameWithoutExt) return true;
-        if (sensor.name.toLowerCase() === fileNameWithoutExt.toLowerCase()) return true;
+      // Trouver le meilleur match parmi les capteurs
+      let bestMatch: { sensor: typeof sensors[0]; score: number } | null = null;
+      
+      for (const sensor of sensors) {
+        const score = calculateSimilarity(sensor.name, fileNameWithoutExt);
         
-        const normalizedSensorName = sensor.name.replace(/[\s-_]/g, '').toLowerCase();
-        const normalizedFileName = fileNameWithoutExt.replace(/[\s-_]/g, '').toLowerCase();
-        if (normalizedSensorName === normalizedFileName) return true;
-        
-        return false;
-      });
+        if (score > 0.7 && (!bestMatch || score > bestMatch.score)) {
+          bestMatch = { sensor, score };
+        }
+      }
 
-      if (matchingSensor) {
-        setSensorCsv(matchingSensor.id, file);
+      if (bestMatch) {
+        setSensorCsv(bestMatch.sensor.id, file);
         matchedCount++;
+        matchDetails.push({
+          file: file.name,
+          sensor: bestMatch.sensor.name,
+          score: bestMatch.score,
+        });
       } else {
         unmatchedFiles.push(file.name);
       }
+    }
+
+    // Log des détails de matching
+    if (matchDetails.length > 0) {
+      console.log('📊 Fichiers CSV associés :');
+      matchDetails.forEach(detail => {
+        const confidence = detail.score === 1.0 ? 'exact' : 
+                          detail.score >= 0.9 ? 'très bon' :
+                          detail.score >= 0.8 ? 'bon' : 'acceptable';
+        console.log(`   ✓ ${detail.file} → ${detail.sensor} (${confidence}, score: ${detail.score.toFixed(2)})`);
+      });
     }
 
     if (matchedCount > 0) {
@@ -75,6 +150,7 @@ export const SensorPanel = () => {
     }
     
     if (unmatchedFiles.length > 0) {
+      console.warn('⚠️ Fichiers non associés :', unmatchedFiles);
       showError(`${unmatchedFiles.length} fichier${unmatchedFiles.length > 1 ? 's' : ''} non associé${unmatchedFiles.length > 1 ? 's' : ''}: ${unmatchedFiles.slice(0, 3).join(', ')}${unmatchedFiles.length > 3 ? '...' : ''}`);
     }
   };
@@ -156,7 +232,7 @@ export const SensorPanel = () => {
                   Charger plusieurs CSV
                 </Button>
                 <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-2 text-center">
-                  Les fichiers seront associés automatiquement par nom
+                  Matching intelligent : exact, initiales, suffixes (_data, etc.)
                 </p>
               </div>
             )}
