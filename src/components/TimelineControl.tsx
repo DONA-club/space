@@ -149,6 +149,11 @@ export const TimelineControl = () => {
     return { minDiff: min, maxDiff: max, diffRange: range };
   }, [dewPointDifferences]);
 
+  // Filter points up to current timestamp for dynamic loading
+  const visibleDewPointDifferences = useMemo(() => {
+    return dewPointDifferences.filter(point => point.timestamp <= currentTimestamp);
+  }, [dewPointDifferences, currentTimestamp]);
+
   // Playback loop
   useEffect(() => {
     if (!isPlaying || !rangeStart || !rangeEnd) return;
@@ -281,19 +286,53 @@ export const TimelineControl = () => {
     // Normalize difference to 0-1 range
     const normalized = (difference - minDiff) / diffRange;
 
-    // Blue (cold) to Red (hot) gradient
-    // Blue: rgb(59, 130, 246) - low difference
-    // Red: rgb(239, 68, 68) - high difference
-    const r = Math.round(59 + (239 - 59) * normalized);
-    const g = Math.round(130 - (130 - 68) * normalized);
-    const b = Math.round(246 - (246 - 68) * normalized);
+    // Green (max) to Blue (min) gradient
+    // Green: rgb(34, 197, 94) - high difference (max)
+    // Blue: rgb(59, 130, 246) - low difference (min)
+    const r = Math.round(34 + (59 - 34) * (1 - normalized));
+    const g = Math.round(197 - (197 - 130) * (1 - normalized));
+    const b = Math.round(94 + (246 - 94) * (1 - normalized));
 
     return `rgb(${r}, ${g}, ${b})`;
+  };
+
+  // Generate smooth Bezier curve path
+  const generateSmoothPath = (points: DewPointDifference[]): string => {
+    if (points.length === 0) return '';
+    if (points.length === 1) {
+      const x = getPosition(points[0].timestamp);
+      const y = diffRange > 0 
+        ? 100 - ((points[0].difference - minDiff) / diffRange) * 80 - 10
+        : 50;
+      return `M ${x},${y}`;
+    }
+
+    const coords = points.map(point => ({
+      x: getPosition(point.timestamp),
+      y: diffRange > 0 
+        ? 100 - ((point.difference - minDiff) / diffRange) * 80 - 10
+        : 50
+    }));
+
+    let path = `M ${coords[0].x},${coords[0].y}`;
+
+    for (let i = 0; i < coords.length - 1; i++) {
+      const current = coords[i];
+      const next = coords[i + 1];
+      
+      // Calculate control points for smooth Bezier curve
+      const controlPointX = (current.x + next.x) / 2;
+      
+      path += ` C ${controlPointX},${current.y} ${controlPointX},${next.y} ${next.x},${next.y}`;
+    }
+
+    return path;
   };
 
   if (!timeRange || rangeStart === null || rangeEnd === null) return null;
 
   const dayMarkers = getDayMarkers();
+  const smoothPath = generateSmoothPath(visibleDewPointDifferences);
 
   return (
     <LiquidGlassCard className="p-4">
@@ -489,8 +528,8 @@ export const TimelineControl = () => {
             onClick={handleTimelineClick}
             onWheel={handleWheel}
           >
-            {/* Dew Point Difference Curve */}
-            {hasOutdoorData && dewPointDifferences.length > 0 && (
+            {/* Dew Point Difference Curve - Smooth & Dynamic */}
+            {hasOutdoorData && visibleDewPointDifferences.length > 0 && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
                 preserveAspectRatio="none"
@@ -498,7 +537,7 @@ export const TimelineControl = () => {
               >
                 <defs>
                   <linearGradient id="curveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    {dewPointDifferences.map((point, idx) => {
+                    {visibleDewPointDifferences.map((point, idx) => {
                       const position = getPosition(point.timestamp);
                       const color = getColorForDifference(point.difference);
                       return (
@@ -511,20 +550,13 @@ export const TimelineControl = () => {
                     })}
                   </linearGradient>
                 </defs>
-                <polyline
-                  points={dewPointDifferences
-                    .map((point) => {
-                      const x = getPosition(point.timestamp);
-                      // Invert Y so higher differences are at top
-                      const y = diffRange > 0 
-                        ? 100 - ((point.difference - minDiff) / diffRange) * 80 - 10
-                        : 50;
-                      return `${x},${y}`;
-                    })
-                    .join(' ')}
+                <path
+                  d={smoothPath}
                   fill="none"
                   stroke="url(#curveGradient)"
-                  strokeWidth="2"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
                 />
               </svg>
@@ -606,7 +638,7 @@ export const TimelineControl = () => {
             </div>
             {hasOutdoorData && dewPointDifferences.length > 0 && (
               <div className="flex items-center gap-1.5">
-                <div className="w-8 h-2 bg-gradient-to-r from-blue-500 to-red-500 rounded-full"></div>
+                <div className="w-8 h-2 bg-gradient-to-r from-blue-500 to-green-500 rounded-full"></div>
                 <span>ΔPR: {minDiff.toFixed(1)}°C → {maxDiff.toFixed(1)}°C</span>
               </div>
             )}
