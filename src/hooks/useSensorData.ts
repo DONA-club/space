@@ -9,8 +9,9 @@ interface UseSensorDataReturn {
   error: string | null;
 }
 
-// Cache window: load ±12 hours around current timestamp
-const CACHE_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
+// Load 500 points before and 500 points after current timestamp
+const POINTS_BEFORE = 500;
+const POINTS_AFTER = 500;
 
 export const useSensorData = (
   currentSpace: any,
@@ -30,19 +31,18 @@ export const useSensorData = (
 
     const loadDataWindow = async () => {
       try {
-        const windowStart = new Date(currentTimestamp - CACHE_WINDOW_MS).toISOString();
-        const windowEnd = new Date(currentTimestamp + CACHE_WINDOW_MS).toISOString();
+        const targetDate = new Date(currentTimestamp).toISOString();
 
-        console.log(`📊 Loading data window: ${new Date(windowStart).toLocaleString('fr-FR')} → ${new Date(windowEnd).toLocaleString('fr-FR')}`);
+        console.log(`📊 Loading 500 points before and 500 after: ${new Date(currentTimestamp).toLocaleString('fr-FR')}`);
 
         const newData = new Map(sensorData);
 
         for (const sensor of sensors) {
-          // Check if we already have this range loaded
+          // Check if we already have data around this timestamp
           const ranges = loadedRanges.get(sensor.id) || [];
           const needsLoad = !ranges.some(r => 
-            r.start <= currentTimestamp - CACHE_WINDOW_MS && 
-            r.end >= currentTimestamp + CACHE_WINDOW_MS
+            r.start <= currentTimestamp && 
+            r.end >= currentTimestamp
           );
 
           if (!needsLoad) {
@@ -50,18 +50,33 @@ export const useSensorData = (
             continue;
           }
 
-          const { data: windowData, error: fetchError } = await supabase
+          // Load 500 points before current timestamp
+          const { data: beforeData, error: beforeError } = await supabase
             .from('sensor_data')
             .select('*')
             .eq('space_id', currentSpace.id)
             .eq('sensor_id', sensor.id)
-            .gte('timestamp', windowStart)
-            .lte('timestamp', windowEnd)
-            .order('timestamp', { ascending: true });
+            .lt('timestamp', targetDate)
+            .order('timestamp', { ascending: false })
+            .limit(POINTS_BEFORE);
 
-          if (fetchError) throw fetchError;
+          if (beforeError) throw beforeError;
 
-          if (windowData && windowData.length > 0) {
+          // Load 500 points after current timestamp (including current)
+          const { data: afterData, error: afterError } = await supabase
+            .from('sensor_data')
+            .select('*')
+            .eq('space_id', currentSpace.id)
+            .eq('sensor_id', sensor.id)
+            .gte('timestamp', targetDate)
+            .order('timestamp', { ascending: true })
+            .limit(POINTS_AFTER);
+
+          if (afterError) throw afterError;
+
+          const windowData = [...(beforeData || []).reverse(), ...(afterData || [])];
+
+          if (windowData.length > 0) {
             const formattedData = windowData.map(d => ({
               timestamp: new Date(d.timestamp).getTime(),
               temperature: d.temperature,
@@ -81,14 +96,19 @@ export const useSensorData = (
 
             newData.set(sensor.id, mergedData);
 
+            // Calculate actual time range loaded
+            const minTimestamp = Math.min(...formattedData.map(d => d.timestamp));
+            const maxTimestamp = Math.max(...formattedData.map(d => d.timestamp));
+
             // Update loaded ranges
             const newRanges = [...ranges, {
-              start: currentTimestamp - CACHE_WINDOW_MS,
-              end: currentTimestamp + CACHE_WINDOW_MS
+              start: minTimestamp,
+              end: maxTimestamp
             }];
             setLoadedRanges(prev => new Map(prev).set(sensor.id, newRanges));
 
-            console.log(`✓ Sensor ${sensor.name}: Loaded ${windowData.length} points (total: ${mergedData.length})`);
+            console.log(`✓ Sensor ${sensor.name}: Loaded ${windowData.length} points (${beforeData?.length || 0} before, ${afterData?.length || 0} after) - Total cache: ${mergedData.length}`);
+            console.log(`   Range: ${new Date(minTimestamp).toLocaleString('fr-FR')} → ${new Date(maxTimestamp).toLocaleString('fr-FR')}`);
           }
         }
 
@@ -107,21 +127,35 @@ export const useSensorData = (
 
     const loadOutdoorWindow = async () => {
       try {
-        const windowStart = new Date(currentTimestamp - CACHE_WINDOW_MS).toISOString();
-        const windowEnd = new Date(currentTimestamp + CACHE_WINDOW_MS).toISOString();
+        const targetDate = new Date(currentTimestamp).toISOString();
 
-        const { data: windowData, error: fetchError } = await supabase
+        // Load 500 points before current timestamp
+        const { data: beforeData, error: beforeError } = await supabase
           .from('sensor_data')
           .select('*')
           .eq('space_id', currentSpace.id)
           .eq('sensor_id', 0)
-          .gte('timestamp', windowStart)
-          .lte('timestamp', windowEnd)
-          .order('timestamp', { ascending: true });
+          .lt('timestamp', targetDate)
+          .order('timestamp', { ascending: false })
+          .limit(POINTS_BEFORE);
 
-        if (fetchError) throw fetchError;
+        if (beforeError) throw beforeError;
 
-        if (windowData && windowData.length > 0) {
+        // Load 500 points after current timestamp (including current)
+        const { data: afterData, error: afterError } = await supabase
+          .from('sensor_data')
+          .select('*')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', 0)
+          .gte('timestamp', targetDate)
+          .order('timestamp', { ascending: true })
+          .limit(POINTS_AFTER);
+
+        if (afterError) throw afterError;
+
+        const windowData = [...(beforeData || []).reverse(), ...(afterData || [])];
+
+        if (windowData.length > 0) {
           const formattedData = windowData.map(d => ({
             timestamp: new Date(d.timestamp).getTime(),
             temperature: d.temperature,
@@ -138,7 +172,7 @@ export const useSensorData = (
             );
 
           setOutdoorData(mergedData);
-          console.log(`✓ Outdoor: Loaded ${windowData.length} points (total: ${mergedData.length})`);
+          console.log(`✓ Outdoor: Loaded ${windowData.length} points (${beforeData?.length || 0} before, ${afterData?.length || 0} after) - Total cache: ${mergedData.length}`);
         }
       } catch (err) {
         console.error('❌ Error loading outdoor data window:', err);
