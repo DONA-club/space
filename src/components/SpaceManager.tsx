@@ -8,10 +8,16 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { showSuccess, showError } from '@/utils/toast';
-import { Loader2, Plus, Trash2, Download, Upload, FolderOpen, AlertCircle, Info, CheckCircle2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, Download, Upload, FolderOpen, AlertCircle, Info, CheckCircle2, Radio, History, MoreVertical } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 interface Space {
   id: string;
@@ -209,7 +215,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   };
 
   const deleteSpace = async (space: Space) => {
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer l'espace "${space.name}" ?`)) {
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer l'espace "${space.name}" ?\n\nCette action supprimera également toutes les données associées.`)) {
       return;
     }
 
@@ -450,15 +456,34 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
             >
-              <LiquidGlassCard className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
+              <LiquidGlassCard className="p-6 hover:shadow-lg transition-shadow">
                 <div className="space-y-4">
-                  <div>
-                    <h3 className="font-semibold text-lg mb-1">{space.name}</h3>
-                    {space.description && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                        {space.description}
-                      </p>
-                    )}
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg mb-1">{space.name}</h3>
+                      {space.description && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                          {space.description}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical size={16} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => deleteSpace(space)}
+                          className="text-red-600 dark:text-red-400"
+                        >
+                          <Trash2 size={14} className="mr-2" />
+                          Supprimer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   <div className="space-y-2">
@@ -483,21 +508,24 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                     </Alert>
                   )}
 
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       size="sm"
-                      className="flex-1"
+                      variant="outline"
+                      className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 border-purple-300 dark:border-purple-700"
                       onClick={() => onSpaceSelected(space)}
                     >
-                      <FolderOpen size={14} className="mr-2" />
-                      Ouvrir
+                      <History size={14} className="mr-2" />
+                      Replay
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => deleteSpace(space)}
+                      className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 hover:from-green-500/20 hover:to-emerald-500/20 border-green-300 dark:border-green-700"
+                      onClick={() => onSpaceSelected(space)}
                     >
-                      <Trash2 size={14} />
+                      <Radio size={14} className="mr-2" />
+                      Live
                     </Button>
                   </div>
                 </div>
