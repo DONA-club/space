@@ -15,6 +15,9 @@ interface DewPointDifference {
   difference: number; // interior - exterior
 }
 
+const POINTS_BEFORE = 500;
+const POINTS_AFTER = 500;
+
 export const TimelineControl = () => {
   const isPlaying = useAppStore((state) => state.isPlaying);
   const setPlaying = useAppStore((state) => state.setPlaying);
@@ -32,6 +35,7 @@ export const TimelineControl = () => {
   const [rangeEnd, setRangeEnd] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState<'start' | 'end' | 'current' | null>(null);
   const [dewPointDifferences, setDewPointDifferences] = useState<DewPointDifference[]>([]);
+  const [loadedRanges, setLoadedRanges] = useState<Array<{start: number, end: number}>>([]);
   const [loadingCurve, setLoadingCurve] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -43,64 +47,98 @@ export const TimelineControl = () => {
     }
   }, [timeRange, rangeStart, rangeEnd]);
 
-  // Load dew point differences for the curve
+  // Load dew point differences in streaming windows
   useEffect(() => {
     if (!currentSpace || !hasOutdoorData || !timeRange) {
       setDewPointDifferences([]);
+      setLoadedRanges([]);
       return;
     }
 
-    const loadDewPointDifferences = async () => {
-      setLoadingCurve(true);
+    const loadDewPointWindow = async () => {
       try {
-        // Load outdoor dew point data
-        const { data: outdoorData, error: outdoorError } = await supabase
+        const targetDate = new Date(currentTimestamp).toISOString();
+
+        // Check if we already have data for this range
+        const needsLoad = !loadedRanges.some(r => 
+          r.start <= currentTimestamp && 
+          r.end >= currentTimestamp
+        );
+
+        if (!needsLoad) return;
+
+        setLoadingCurve(true);
+
+        // Load outdoor data window (500 before + 500 after)
+        const { data: outdoorBefore, error: outdoorBeforeError } = await supabase
           .from('sensor_data')
           .select('timestamp, dew_point')
           .eq('space_id', currentSpace.id)
           .eq('sensor_id', 0)
-          .gte('timestamp', new Date(timeRange[0]).toISOString())
-          .lte('timestamp', new Date(timeRange[1]).toISOString())
-          .order('timestamp', { ascending: true });
+          .lt('timestamp', targetDate)
+          .order('timestamp', { ascending: false })
+          .limit(POINTS_BEFORE);
 
-        if (outdoorError) throw outdoorError;
-        if (!outdoorData || outdoorData.length === 0) {
-          setDewPointDifferences([]);
-          return;
-        }
+        if (outdoorBeforeError) throw outdoorBeforeError;
 
-        // Load all indoor sensor data
+        const { data: outdoorAfter, error: outdoorAfterError } = await supabase
+          .from('sensor_data')
+          .select('timestamp, dew_point')
+          .eq('space_id', 0)
+          .eq('sensor_id', 0)
+          .gte('timestamp', targetDate)
+          .order('timestamp', { ascending: true })
+          .limit(POINTS_AFTER);
+
+        if (outdoorAfterError) throw outdoorAfterError;
+
+        const outdoorWindow = [...(outdoorBefore || []).reverse(), ...(outdoorAfter || [])];
+
+        if (outdoorWindow.length === 0) return;
+
+        // Load indoor data for the same window
         const indoorDataPromises = sensors.map(async (sensor) => {
-          const { data, error } = await supabase
+          const { data: beforeData, error: beforeError } = await supabase
             .from('sensor_data')
             .select('timestamp, dew_point')
             .eq('space_id', currentSpace.id)
             .eq('sensor_id', sensor.id)
-            .gte('timestamp', new Date(timeRange[0]).toISOString())
-            .lte('timestamp', new Date(timeRange[1]).toISOString())
-            .order('timestamp', { ascending: true });
+            .lt('timestamp', targetDate)
+            .order('timestamp', { ascending: false })
+            .limit(POINTS_BEFORE);
 
-          if (error) throw error;
-          return { sensorId: sensor.id, data: data || [] };
+          if (beforeError) throw beforeError;
+
+          const { data: afterData, error: afterError } = await supabase
+            .from('sensor_data')
+            .select('timestamp, dew_point')
+            .eq('space_id', currentSpace.id)
+            .eq('sensor_id', sensor.id)
+            .gte('timestamp', targetDate)
+            .order('timestamp', { ascending: true })
+            .limit(POINTS_AFTER);
+
+          if (afterError) throw afterError;
+
+          const windowData = [...(beforeData || []).reverse(), ...(afterData || [])];
+          return { sensorId: sensor.id, data: windowData };
         });
 
         const indoorDataResults = await Promise.all(indoorDataPromises);
 
-        // Calculate differences for each outdoor timestamp
-        const differences: DewPointDifference[] = [];
+        // Calculate differences for this window
+        const newDifferences: DewPointDifference[] = [];
 
-        outdoorData.forEach((outdoorPoint) => {
+        outdoorWindow.forEach((outdoorPoint) => {
           const timestamp = new Date(outdoorPoint.timestamp).getTime();
           const outdoorDewPoint = outdoorPoint.dew_point;
 
-          // Calculate average indoor dew point at this timestamp
           let totalIndoorDewPoint = 0;
           let count = 0;
 
           indoorDataResults.forEach(({ data }) => {
             if (data.length === 0) return;
 
-            // Find closest indoor data point
             const closestIndoor = findClosestDataPoint(
               data.map(d => ({
                 timestamp: new Date(d.timestamp).getTime(),
@@ -119,21 +157,38 @@ export const TimelineControl = () => {
           if (count > 0) {
             const avgIndoorDewPoint = totalIndoorDewPoint / count;
             const difference = avgIndoorDewPoint - outdoorDewPoint;
-            differences.push({ timestamp, difference });
+            newDifferences.push({ timestamp, difference });
           }
         });
 
-        setDewPointDifferences(differences);
+        // Merge with existing data
+        const mergedData = [...dewPointDifferences, ...newDifferences]
+          .sort((a, b) => a.timestamp - b.timestamp)
+          .filter((item, index, arr) => 
+            index === 0 || item.timestamp !== arr[index - 1].timestamp
+          );
+
+        setDewPointDifferences(mergedData);
+
+        // Update loaded ranges
+        if (newDifferences.length > 0) {
+          const minTimestamp = Math.min(...newDifferences.map(d => d.timestamp));
+          const maxTimestamp = Math.max(...newDifferences.map(d => d.timestamp));
+          
+          setLoadedRanges(prev => [...prev, {
+            start: minTimestamp,
+            end: maxTimestamp
+          }]);
+        }
       } catch (error) {
-        console.error('Error loading dew point differences:', error);
-        setDewPointDifferences([]);
+        console.error('Error loading dew point window:', error);
       } finally {
         setLoadingCurve(false);
       }
     };
 
-    loadDewPointDifferences();
-  }, [currentSpace, hasOutdoorData, timeRange, sensors]);
+    loadDewPointWindow();
+  }, [currentSpace, hasOutdoorData, timeRange, sensors, currentTimestamp]);
 
   // Calculate min/max difference for scaling
   const { minDiff, maxDiff, diffRange } = useMemo(() => {
@@ -149,10 +204,24 @@ export const TimelineControl = () => {
     return { minDiff: min, maxDiff: max, diffRange: range };
   }, [dewPointDifferences]);
 
-  // Filter points up to current timestamp for dynamic loading
+  // Filter visible points with fade-out at edges
   const visibleDewPointDifferences = useMemo(() => {
-    return dewPointDifferences.filter(point => point.timestamp <= currentTimestamp);
-  }, [dewPointDifferences, currentTimestamp]);
+    if (dewPointDifferences.length === 0) return [];
+
+    // Find the loaded range that contains current timestamp
+    const currentRange = loadedRanges.find(r => 
+      r.start <= currentTimestamp && 
+      r.end >= currentTimestamp
+    );
+
+    if (!currentRange) return [];
+
+    // Get points in the loaded range
+    return dewPointDifferences.filter(point => 
+      point.timestamp >= currentRange.start && 
+      point.timestamp <= currentRange.end
+    );
+  }, [dewPointDifferences, currentTimestamp, loadedRanges]);
 
   // Playback loop
   useEffect(() => {
@@ -296,7 +365,31 @@ export const TimelineControl = () => {
     return `rgb(${r}, ${g}, ${b})`;
   };
 
-  // Generate smooth Bezier curve path
+  // Calculate opacity for fade-out effect at edges
+  const getOpacityForPoint = (timestamp: number, index: number, totalPoints: number): number => {
+    const currentRange = loadedRanges.find(r => 
+      r.start <= currentTimestamp && 
+      r.end >= currentTimestamp
+    );
+
+    if (!currentRange) return 0;
+
+    const fadeZone = 50; // Number of points for fade effect
+    
+    // Fade at start
+    if (index < fadeZone) {
+      return index / fadeZone;
+    }
+    
+    // Fade at end
+    if (index > totalPoints - fadeZone) {
+      return (totalPoints - index) / fadeZone;
+    }
+    
+    return 1;
+  };
+
+  // Generate ultra-smooth Bezier curve path with tension control
   const generateSmoothPath = (points: DewPointDifference[]): string => {
     if (points.length === 0) return '';
     if (points.length === 1) {
@@ -316,14 +409,22 @@ export const TimelineControl = () => {
 
     let path = `M ${coords[0].x},${coords[0].y}`;
 
+    // Use Catmull-Rom spline for ultra-smooth curves
+    const tension = 0.5; // 0 = sharp corners, 1 = very smooth
+
     for (let i = 0; i < coords.length - 1; i++) {
-      const current = coords[i];
-      const next = coords[i + 1];
-      
-      // Calculate control points for smooth Bezier curve
-      const controlPointX = (current.x + next.x) / 2;
-      
-      path += ` C ${controlPointX},${current.y} ${controlPointX},${next.y} ${next.x},${next.y}`;
+      const p0 = coords[Math.max(i - 1, 0)];
+      const p1 = coords[i];
+      const p2 = coords[i + 1];
+      const p3 = coords[Math.min(i + 2, coords.length - 1)];
+
+      // Calculate control points using Catmull-Rom
+      const cp1x = p1.x + (p2.x - p0.x) / 6 * tension;
+      const cp1y = p1.y + (p2.y - p0.y) / 6 * tension;
+      const cp2x = p2.x - (p3.x - p1.x) / 6 * tension;
+      const cp2y = p2.y - (p3.y - p1.y) / 6 * tension;
+
+      path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
     }
 
     return path;
@@ -333,6 +434,9 @@ export const TimelineControl = () => {
 
   const dayMarkers = getDayMarkers();
   const smoothPath = generateSmoothPath(visibleDewPointDifferences);
+
+  // Calculate opacity based on data availability
+  const curveOpacity = visibleDewPointDifferences.length > 0 ? 1 : 0;
 
   return (
     <LiquidGlassCard className="p-4">
@@ -528,10 +632,11 @@ export const TimelineControl = () => {
             onClick={handleTimelineClick}
             onWheel={handleWheel}
           >
-            {/* Dew Point Difference Curve - Smooth & Dynamic */}
+            {/* Dew Point Difference Curve - Ultra Smooth with Fade */}
             {hasOutdoorData && visibleDewPointDifferences.length > 0 && (
               <svg
-                className="absolute inset-0 w-full h-full pointer-events-none"
+                className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-500"
+                style={{ opacity: curveOpacity }}
                 preserveAspectRatio="none"
                 viewBox="0 0 100 100"
               >
