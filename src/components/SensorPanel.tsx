@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Grid3x3, Upload, Download, Trash2, FolderUp, Loader2, Clock, Info, CloudSun, Sparkles, Zap, Waves, Activity, Box, Layers, GitBranch, Move } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Grid3x3, Upload, Download, Trash2, FolderUp, Loader2, Clock, Info, CloudSun, Sparkles, Zap, Waves, Activity, Box, Layers, GitBranch } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -167,7 +167,6 @@ export const SensorPanel = () => {
       let matchedCount = 0;
       let unmatchedFiles: string[] = [];
       let outdoorFileProcessed = false;
-      const matchDetails: Array<{ file: string; sensor: string; score: number }> = [];
 
       for (const file of fileArray) {
         if (!file.name.endsWith('.csv')) continue;
@@ -176,11 +175,6 @@ export const SensorPanel = () => {
           await handleOutdoorCSVUpload(file, false);
           outdoorFileProcessed = true;
           matchedCount++;
-          matchDetails.push({
-            file: file.name,
-            sensor: 'Extérieur',
-            score: 1.0,
-          });
           continue;
         }
 
@@ -199,11 +193,6 @@ export const SensorPanel = () => {
         if (bestMatch) {
           await handleCSVUpload(bestMatch.sensor.id, file, false);
           matchedCount++;
-          matchDetails.push({
-            file: file.name,
-            sensor: bestMatch.sensor.name,
-            score: bestMatch.score,
-          });
         } else {
           unmatchedFiles.push(file.name);
         }
@@ -495,12 +484,12 @@ export const SensorPanel = () => {
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
-      {/* Position Adjustment Card */}
+      {/* Sensor Position Adjustment */}
       <LiquidGlassCard className="flex-shrink-0">
         <div className="p-3">
           <div className="flex items-center gap-2 mb-3">
-            <Move size={14} className="text-orange-600" />
-            <h2 className="text-sm font-semibold">Ajustement Position</h2>
+            <Activity size={14} className="text-orange-600" />
+            <h2 className="text-sm font-semibold">Position Capteurs</h2>
           </div>
 
           <div className="space-y-3">

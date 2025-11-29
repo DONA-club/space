@@ -51,6 +51,7 @@ export const Scene3DViewer = () => {
   const setInterpolationRange = useAppStore((state) => state.setInterpolationRange);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setOutdoorData = useAppStore((state) => state.setOutdoorData);
+  const sensorOffset = useAppStore((state) => state.sensorOffset);
 
   const { sensorData, outdoorData, loading: dataLoading } = useSensorData(currentSpace, sensors, hasOutdoorData);
 
@@ -87,13 +88,35 @@ export const Scene3DViewer = () => {
     dataReady
   });
 
-  // Real-time interpolation update - triggers on timestamp change
+  // Update sensor positions when offset changes
   useEffect(() => {
-    console.log(`🔔 Interpolation useEffect triggered - timestamp: ${new Date(currentTimestamp).toLocaleString('fr-FR')}`);
-    console.log(`   Conditions: dataReady=${dataReady}, meshingEnabled=${meshingEnabled}, modelBounds=${!!modelBounds}, sensorData.size=${sensorData.size}`);
+    if (!sceneRef.current || !modelLoaded) return;
+
+    const { scene, sensorMeshes, modelScale, originalCenter, modelGroup } = sceneRef.current;
+    const modelPosition = modelGroup?.position || new THREE.Vector3(0, 0, 0);
+
+    // Remove old sensor meshes
+    sensorMeshes.forEach((meshes) => {
+      scene.remove(meshes.sphere);
+      scene.remove(meshes.glow);
+      scene.remove(meshes.sprite);
+    });
+
+    // Create new sensor meshes with updated offset
+    const newSensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition, sensorOffset);
     
+    newSensorMeshes.forEach((meshes) => {
+      scene.add(meshes.sphere);
+      scene.add(meshes.glow);
+      scene.add(meshes.sprite);
+    });
+
+    sceneRef.current.sensorMeshes = newSensorMeshes;
+  }, [sensorOffset, sensors, modelLoaded]);
+
+  // Real-time interpolation update
+  useEffect(() => {
     if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || sensorData.size === 0) {
-      console.log(`   ⏭️ Skipping interpolation update - conditions not met`);
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
         disposeInterpolationMesh(sceneRef.current.interpolationMesh);
@@ -105,9 +128,6 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const updateStartTime = performance.now();
-    console.log(`🔄 Interpolation update STARTING for timestamp: ${new Date(currentTimestamp).toLocaleString('fr-FR')}`);
-
     const { scene, interpolationMesh, modelScale, originalCenter, modelGroup } = sceneRef.current;
 
     if (interpolationMesh) {
@@ -115,28 +135,17 @@ export const Scene3DViewer = () => {
       disposeInterpolationMesh(interpolationMesh);
     }
 
-    // Get model position (after centering)
     const modelPosition = modelGroup?.position || new THREE.Vector3(0, 0, 0);
 
-    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter, modelPosition);
-    if (points.length === 0) {
-      console.warn('⚠️ No interpolation points generated');
-      return;
-    }
-
-    console.log(`   📊 Built ${points.length} interpolation points from sensor data`);
-    points.forEach((p, idx) => {
-      console.log(`      Point ${idx + 1}: [${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}] = ${p.value.toFixed(2)}`);
-    });
+    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter, modelPosition, sensorOffset);
+    if (points.length === 0) return;
 
     const { min: minValue, max: maxValue } = getValueRange(points);
-    console.log(`   📈 Value range: ${minValue.toFixed(2)} - ${maxValue.toFixed(2)}`);
 
     const validGridPoints = getValidGridPoints(modelBounds, meshResolution, filteredPointCloud, setUnfilteredPointCloud);
     
     const gridValues = interpolateGridValues(points, validGridPoints, interpolationMethod, rbfKernel, idwPower, minValue, maxValue);
 
-    // Calculate weighted average from interpolation points
     const average = calculateWeightedAverage(gridValues);
     setVolumetricAverage(average);
     setInterpolationPointCount(gridValues.length);
@@ -156,9 +165,6 @@ export const Scene3DViewer = () => {
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
-
-    const updateEndTime = performance.now();
-    console.log(`✅ Interpolation update COMPLETED in ${(updateEndTime - updateStartTime).toFixed(0)}ms`);
   }, [
     currentTimestamp,
     dataReady,
@@ -175,7 +181,8 @@ export const Scene3DViewer = () => {
     filteredPointCloud,
     setUnfilteredPointCloud,
     setInterpolationRange,
-    sensorData
+    sensorData,
+    sensorOffset
   ]);
 
   useLayoutEffect(() => {
@@ -217,23 +224,7 @@ export const Scene3DViewer = () => {
         originalCenter = center;
         setModelBounds(bounds);
         
-        console.log('🏠 MODEL TRANSFORMATION:');
-        console.log('   Original center:', originalCenter.toArray());
-        console.log('   Model scale:', modelScale);
-        console.log('   Model position after centering:', modelPosition.toArray());
-        console.log('   Final model bounds (after transformation):', {
-          min: bounds.min.toArray(),
-          max: bounds.max.toArray(),
-          center: bounds.center.toArray(),
-          size: bounds.size.toArray()
-        });
-        
-        console.log('\n📍 SENSOR TRANSFORMATION (SAME as model):');
-        console.log('   Step 1: Subtract original center');
-        console.log('   Step 2: Multiply by scale');
-        console.log('   Step 3: Add model position (to match model)');
-        
-        const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition);
+        const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition, sensorOffset);
         
         sensorMeshes.forEach((meshes) => {
           scene.add(meshes.sphere);
@@ -362,47 +353,37 @@ const buildInterpolationPoints = (
   selectedMetric: string,
   modelScale: number,
   originalCenter: THREE.Vector3 | null,
-  modelPosition: THREE.Vector3
+  modelPosition: THREE.Vector3,
+  manualOffset: { x: number; y: number; z: number }
 ): Point3D[] => {
   const points: Point3D[] = [];
   
-  console.log(`   🔍 Building interpolation points for ${sensors.length} sensors at timestamp ${currentTimestamp}`);
-  
   sensors.forEach((sensor) => {
-    if (!sensorData.has(sensor.id)) {
-      console.warn(`      ⚠️ No data for sensor ${sensor.id} (${sensor.name})`);
-      return;
-    }
+    if (!sensorData.has(sensor.id)) return;
     
     const data = sensorData.get(sensor.id)!;
-    console.log(`      📊 Sensor ${sensor.name}: ${data.length} data points available`);
-    
     const closestData = findClosestDataPoint(data, currentTimestamp);
-    console.log(`         Found closest data at timestamp: ${new Date(closestData.timestamp).toLocaleString('fr-FR')}`);
-    
     const value = getMetricValue(closestData, selectedMetric as any);
-    console.log(`         Value: ${value.toFixed(2)}`);
     
-    // Apply EXACT SAME transformation as the model:
-    // Step 1: Center
     const xCentered = sensor.position[0] - (originalCenter?.x || 0);
     const yCentered = sensor.position[1] - (originalCenter?.y || 0);
     const zCentered = sensor.position[2] - (originalCenter?.z || 0);
     
-    // Step 2: Scale
     const xScaled = xCentered * modelScale;
     const yScaled = yCentered * modelScale;
     const zScaled = zCentered * modelScale;
     
-    // Step 3: Add model position
-    const xFinal = xScaled + modelPosition.x;
-    const yFinal = yScaled + modelPosition.y;
-    const zFinal = zScaled + modelPosition.z;
+    const xWithModel = xScaled + modelPosition.x;
+    const yWithModel = yScaled + modelPosition.y;
+    const zWithModel = zScaled + modelPosition.z;
+    
+    const xFinal = xWithModel + manualOffset.x;
+    const yFinal = yWithModel + manualOffset.y;
+    const zFinal = zWithModel + manualOffset.z;
     
     points.push({ x: xFinal, y: yFinal, z: zFinal, value });
   });
 
-  console.log(`   ✅ Built ${points.length} interpolation points`);
   return points;
 };
 
