@@ -23,20 +23,32 @@ export const createSensorSpheres = (
   console.log('🎯 Creating sensor spheres with:');
   console.log('   Model scale:', modelScale);
   console.log('   Original center:', originalCenter?.toArray());
-  console.log('   Model position (NOT USED):', modelPosition?.toArray());
+  console.log('   Model position:', modelPosition?.toArray());
   
   sensors.forEach((sensor) => {
-    // Apply ONLY centering and scale (same as model)
-    // DO NOT add model position - the model is at origin (0,0,0) after centering
-    const x = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
-    const y = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
-    const z = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
+    // Apply EXACT same transformation as model:
+    // Step 1: Center (subtract original center)
+    const xCentered = sensor.position[0] - (originalCenter?.x || 0);
+    const yCentered = sensor.position[1] - (originalCenter?.y || 0);
+    const zCentered = sensor.position[2] - (originalCenter?.z || 0);
     
-    const transformedPosition = new THREE.Vector3(x, y, z);
+    // Step 2: Scale
+    const xScaled = xCentered * modelScale;
+    const yScaled = yCentered * modelScale;
+    const zScaled = zCentered * modelScale;
+    
+    // Step 3: Add model position offset (this was missing!)
+    const xFinal = xScaled + (modelPosition?.x || 0);
+    const yFinal = yScaled + (modelPosition?.y || 0);
+    const zFinal = zScaled + (modelPosition?.z || 0);
+    
+    const transformedPosition = new THREE.Vector3(xFinal, yFinal, zFinal);
     
     console.log(`   Sensor ${sensor.name}:`);
     console.log(`      Original: [${sensor.position.map(v => v.toFixed(3)).join(', ')}]`);
-    console.log(`      After centering & scale: [${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}]`);
+    console.log(`      After centering: [${xCentered.toFixed(3)}, ${yCentered.toFixed(3)}, ${zCentered.toFixed(3)}]`);
+    console.log(`      After scale: [${xScaled.toFixed(3)}, ${yScaled.toFixed(3)}, ${zScaled.toFixed(3)}]`);
+    console.log(`      Final (with offset): [${xFinal.toFixed(3)}, ${yFinal.toFixed(3)}, ${zFinal.toFixed(3)}]`);
     
     const initialColor = 0x4dabf7;
     const initialEmissive = 0x2563eb;
