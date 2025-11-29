@@ -1,10 +1,11 @@
 "use client";
 
-import { Wind, Scale, Thermometer, Droplets } from 'lucide-react';
+import { Wind, Scale, Thermometer, Droplets, CloudRain } from 'lucide-react';
 
 interface AirVolumeInfoBadgeProps {
   airVolume: number | null;
   airMass: number | null;
+  waterMass: number | null;
   averageTemperature: number | null;
   averageHumidity: number | null;
   meshingEnabled: boolean;
@@ -14,6 +15,7 @@ interface AirVolumeInfoBadgeProps {
 export const AirVolumeInfoBadge = ({
   airVolume,
   airMass,
+  waterMass,
   averageTemperature,
   averageHumidity,
   meshingEnabled,
@@ -45,12 +47,24 @@ export const AirVolumeInfoBadge = ({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-1">
                 <Scale size={10} className="text-purple-600" />
-                <span className="text-[10px] text-gray-600 dark:text-gray-400">Masse:</span>
+                <span className="text-[10px] text-gray-600 dark:text-gray-400">Masse air:</span>
               </div>
               <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">
                 {airMass.toFixed(2)} kg
               </span>
             </div>
+            
+            {waterMass !== null && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1">
+                  <CloudRain size={10} className="text-blue-600" />
+                  <span className="text-[10px] text-gray-600 dark:text-gray-400">Masse H₂O:</span>
+                </div>
+                <span className="text-xs font-semibold text-blue-700 dark:text-blue-400">
+                  {waterMass.toFixed(1)} g
+                </span>
+              </div>
+            )}
             
             {averageTemperature !== null && (
               <div className="flex items-center justify-between gap-3">

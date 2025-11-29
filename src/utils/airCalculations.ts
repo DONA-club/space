@@ -91,3 +91,23 @@ export function calculateAbsoluteHumidity(
   // Conversion en g/m³
   return absoluteHumidity * 1000;
 }
+
+/**
+ * Calcule la masse d'eau (vapeur) présente dans un volume d'air donné
+ * 
+ * @param volume - Volume en m³
+ * @param temperature - Température en °C
+ * @param relativeHumidity - Humidité relative en % (0-100)
+ * @returns Masse d'eau en grammes
+ */
+export function calculateWaterMass(
+  volume: number,
+  temperature: number,
+  relativeHumidity: number
+): number {
+  // Humidité absolue en g/m³
+  const absoluteHumidity = calculateAbsoluteHumidity(temperature, relativeHumidity);
+  
+  // Masse d'eau totale en grammes
+  return absoluteHumidity * volume;
+}
