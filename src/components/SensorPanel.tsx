@@ -12,10 +12,12 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import { CSVManager } from './CSVManager';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
   const mode = useAppStore((state) => state.mode);
+  const currentSpace = useAppStore((state) => state.currentSpace);
   const setSensorCsv = useAppStore((state) => state.setSensorCsv);
   const dataReady = useAppStore((state) => state.dataReady);
   const meshingEnabled = useAppStore((state) => state.meshingEnabled);
@@ -41,24 +43,14 @@ export const SensorPanel = () => {
     setSensorCsv(sensorId, null as any);
   };
 
-  /**
-   * Normalise un nom pour le matching
-   * - Supprime les espaces, tirets, underscores
-   * - Convertit en minuscules
-   * - Supprime les suffixes courants (_data, _export, etc.)
-   */
   const normalizeName = (name: string): string => {
     return name
       .toLowerCase()
-      .replace(/[\s\-_]/g, '') // Supprime espaces, tirets, underscores
-      .replace(/_(data|export|capteur|sensor)$/i, '') // Supprime suffixes courants
-      .replace(/\.csv$/i, ''); // Supprime extension
+      .replace(/[\s\-_]/g, '')
+      .replace(/_(data|export|capteur|sensor)$/i, '')
+      .replace(/\.csv$/i, '');
   };
 
-  /**
-   * Extrait les initiales d'un nom
-   * Ex: "Nord-Haut" -> "nh"
-   */
   const getInitials = (name: string): string => {
     return name
       .split(/[\s\-_]/)
@@ -67,26 +59,18 @@ export const SensorPanel = () => {
       .toLowerCase();
   };
 
-  /**
-   * Calcule un score de similarité entre deux chaînes
-   * Retourne un nombre entre 0 (pas de match) et 1 (match parfait)
-   */
   const calculateSimilarity = (str1: string, str2: string): number => {
     const norm1 = normalizeName(str1);
     const norm2 = normalizeName(str2);
     
-    // Match exact
     if (norm1 === norm2) return 1.0;
     
-    // Match par initiales
     const initials1 = getInitials(str1);
     const initials2 = getInitials(str2);
     if (initials1 === norm2 || initials2 === norm1) return 0.9;
     
-    // Match si l'un contient l'autre
     if (norm1.includes(norm2) || norm2.includes(norm1)) return 0.8;
     
-    // Calcul de distance de Levenshtein simplifiée
     const maxLen = Math.max(norm1.length, norm2.length);
     if (maxLen === 0) return 0;
     
@@ -110,7 +94,6 @@ export const SensorPanel = () => {
 
       const fileNameWithoutExt = file.name.replace(/\.csv$/i, '');
       
-      // Trouver le meilleur match parmi les capteurs
       let bestMatch: { sensor: typeof sensors[0]; score: number } | null = null;
       
       for (const sensor of sensors) {
@@ -134,7 +117,6 @@ export const SensorPanel = () => {
       }
     }
 
-    // Log des détails de matching
     if (matchDetails.length > 0) {
       console.log('📊 Fichiers CSV associés :');
       matchDetails.forEach(detail => {
@@ -210,7 +192,13 @@ export const SensorPanel = () => {
           </div>
         ) : (
           <div className="flex-1 overflow-hidden flex flex-col">
-            {mode === 'replay' && isExpanded && (
+            {currentSpace && mode === 'replay' && (
+              <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <CSVManager />
+              </div>
+            )}
+
+            {mode === 'replay' && isExpanded && !currentSpace && (
               <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <Button
                   size="sm"
@@ -284,7 +272,7 @@ export const SensorPanel = () => {
                         </div>
                       )}
 
-                      {mode === 'replay' && (
+                      {mode === 'replay' && !currentSpace && (
                         <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
                           {!sensor.csvFile ? (
                             <Button
@@ -362,7 +350,6 @@ export const SensorPanel = () => {
 
                 {meshingEnabled && (
                   <>
-                    {/* Resolution */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <Label className="text-xs">Résolution</Label>
@@ -381,7 +368,6 @@ export const SensorPanel = () => {
                       </p>
                     </div>
 
-                    {/* Visualization Type */}
                     <div className="space-y-1">
                       <Label className="text-xs">Type de visualisation</Label>
                       <TooltipPrimitive.Provider delayDuration={300}>

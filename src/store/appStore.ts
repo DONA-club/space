@@ -19,11 +19,26 @@ type InterpolationMethod = 'idw' | 'rbf';
 type RBFKernel = 'gaussian' | 'multiquadric' | 'inverse_multiquadric' | 'thin_plate_spline';
 type VisualizationType = 'points' | 'vectors' | 'isosurface' | 'mesh';
 
+interface Space {
+  id: string;
+  name: string;
+  description: string | null;
+  gltf_file_path: string | null;
+  gltf_file_name: string | null;
+  json_file_path: string | null;
+  json_file_name: string | null;
+  last_csv_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface AppState {
   // Auth
   isAuthenticated: boolean;
-  token: string | null;
-  machineId: string | null;
+  user: any | null;
+  
+  // Current Space
+  currentSpace: Space | null;
   
   // Mode
   mode: 'live' | 'replay';
@@ -61,8 +76,9 @@ interface AppState {
   wsConnected: boolean;
   
   // Actions
-  setAuth: (token: string, machineId: string) => void;
+  setAuth: (user: any) => void;
   logout: () => void;
+  setCurrentSpace: (space: Space | null) => void;
   setMode: (mode: 'live' | 'replay') => void;
   setGltfModel: (model: string | null) => void;
   setRoomVolume: (volume: string | null) => void;
@@ -88,8 +104,8 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   isAuthenticated: false,
-  token: null,
-  machineId: null,
+  user: null,
+  currentSpace: null,
   mode: 'replay',
   gltfModel: null,
   roomVolume: null,
@@ -110,8 +126,9 @@ export const useAppStore = create<AppState>((set) => ({
   unfilteredPointCloud: null,
   wsConnected: false,
   
-  setAuth: (token, machineId) => set({ isAuthenticated: true, token, machineId }),
-  logout: () => set({ isAuthenticated: false, token: null, machineId: null }),
+  setAuth: (user) => set({ isAuthenticated: true, user }),
+  logout: () => set({ isAuthenticated: false, user: null, currentSpace: null }),
+  setCurrentSpace: (space) => set({ currentSpace: space }),
   setMode: (mode) => set({ mode }),
   setGltfModel: (model) => set({ gltfModel: model }),
   setRoomVolume: (volume) => set({ roomVolume: volume }),

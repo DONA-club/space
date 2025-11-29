@@ -6,15 +6,20 @@ import { Scene3DViewer } from './Scene3DViewer';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Radio, History, LogOut, Layers } from 'lucide-react';
+import { Radio, History, LogOut, Layers, ArrowLeft } from 'lucide-react';
 import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
 import { FileUploadPanel } from './FileUploadPanel';
 import { DataControlPanel } from './DataControlPanel';
 import { InteriorVolumeSampler } from './InteriorVolumeSampler';
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
-export const Dashboard = () => {
+interface DashboardProps {
+  onBackToSpaces: () => void;
+}
+
+export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   const mode = useAppStore((state) => state.mode);
   const setMode = useAppStore((state) => state.setMode);
   const wsConnected = useAppStore((state) => state.wsConnected);
@@ -22,11 +27,11 @@ export const Dashboard = () => {
   const sensors = useAppStore((state) => state.sensors);
   const gltfModel = useAppStore((state) => state.gltfModel);
   const dataReady = useAppStore((state) => state.dataReady);
+  const currentSpace = useAppStore((state) => state.currentSpace);
   const [showVolumeSampler, setShowVolumeSampler] = useState(false);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('machineId');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     logout();
   };
 
@@ -42,13 +47,27 @@ export const Dashboard = () => {
         >
           <LiquidGlassCard className="p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Space
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Visualisation environnementale 3D - {sensors.length} capteurs
-                </p>
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onBackToSpaces}
+                  className="hover:bg-white/50 dark:hover:bg-black/50"
+                >
+                  <ArrowLeft size={16} className="mr-2" />
+                  Espaces
+                </Button>
+                
+                <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>
+                
+                <div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    {currentSpace?.name || 'Space'}
+                  </h1>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {currentSpace?.description || `Visualisation environnementale 3D - ${sensors.length} capteurs`}
+                  </p>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
