@@ -8,6 +8,7 @@ import { AlertCircle } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 import { ColorLegend } from "./ColorLegend";
 import { OutdoorBadge } from "./scene3d/OutdoorBadge";
+import { AverageTemperatureBadge } from "./scene3d/AverageTemperatureBadge";
 import { useSensorData } from "@/hooks/useSensorData";
 import { useSceneBackground } from "@/hooks/useSceneBackground";
 import { useSensorMeshUpdates } from "@/hooks/useSensorMeshUpdates";
@@ -29,6 +30,8 @@ export const Scene3DViewer = () => {
   const [modelBounds, setModelBounds] = useState<ModelBounds | null>(null);
   const [currentOutdoorData, setCurrentOutdoorData] = useState<any>(null);
   const [indoorAverage, setIndoorAverage] = useState<any>(null);
+  const [volumetricAverage, setVolumetricAverage] = useState<number | null>(null);
+  const [interpolationPointCount, setInterpolationPointCount] = useState<number>(0);
   
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
@@ -93,6 +96,8 @@ export const Scene3DViewer = () => {
         sceneRef.current.interpolationMesh = null;
       }
       setInterpolationRange(null);
+      setVolumetricAverage(null);
+      setInterpolationPointCount(0);
       return;
     }
 
@@ -110,6 +115,11 @@ export const Scene3DViewer = () => {
     const validGridPoints = getValidGridPoints(modelBounds, meshResolution, filteredPointCloud, setUnfilteredPointCloud);
     
     const gridValues = interpolateGridValues(points, validGridPoints, interpolationMethod, rbfKernel, idwPower, minValue, maxValue);
+
+    // Calculate weighted average from interpolation points
+    const average = calculateWeightedAverage(gridValues);
+    setVolumetricAverage(average);
+    setInterpolationPointCount(gridValues.length);
 
     setInterpolationRange({ min: minValue, max: maxValue });
 
@@ -184,32 +194,6 @@ export const Scene3DViewer = () => {
         originalCenter = center;
         setModelBounds(bounds);
         
-        // DEBUG: Log model transformation
-        console.log('🏠 MODEL TRANSFORMATION:');
-        console.log('   Original center:', originalCenter.toArray());
-        console.log('   Model scale:', modelScale);
-        console.log('   Final bounds:', {
-          min: bounds.min.toArray(),
-          max: bounds.max.toArray(),
-          center: bounds.center.toArray(),
-          size: bounds.size.toArray()
-        });
-        console.log('   Model position after centering:', gltf.scene.position.toArray());
-        
-        // DEBUG: Log sensor positions
-        console.log('📍 SENSOR POSITIONS:');
-        sensors.forEach((sensor, idx) => {
-          const original = sensor.position;
-          const transformed = [
-            (original[0] - originalCenter.x) * modelScale,
-            (original[1] - originalCenter.y) * modelScale,
-            (original[2] - originalCenter.z) * modelScale
-          ];
-          console.log(`   Sensor ${idx + 1} (${sensor.name}):`);
-          console.log(`      Original: [${original.map(v => v.toFixed(3)).join(', ')}]`);
-          console.log(`      Transformed: [${transformed.map(v => v.toFixed(3)).join(', ')}]`);
-        });
-        
         const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter);
         
         sensorMeshes.forEach((meshes) => {
@@ -258,6 +242,15 @@ export const Scene3DViewer = () => {
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
+      <AverageTemperatureBadge
+        averageValue={volumetricAverage}
+        selectedMetric={selectedMetric}
+        interpolationRange={interpolationRange}
+        meshingEnabled={meshingEnabled}
+        dataReady={dataReady}
+        pointCount={interpolationPointCount}
+      />
+      
       <ColorLegend />
       
       <OutdoorBadge
@@ -366,7 +359,6 @@ const getValidGridPoints = (
   const validGridPoints: { x: number; y: number; z: number }[] = [];
   
   if (filteredPointCloud && filteredPointCloud.length > 0) {
-    console.log('📊 Using filtered point cloud:', filteredPointCloud.length / 3, 'points');
     for (let i = 0; i < filteredPointCloud.length; i += 3) {
       validGridPoints.push({
         x: filteredPointCloud[i],
@@ -375,12 +367,6 @@ const getValidGridPoints = (
       });
     }
   } else {
-    console.log('📊 Generating grid from bounds:', {
-      min: modelBounds.min.toArray(),
-      max: modelBounds.max.toArray(),
-      resolution: meshResolution
-    });
-    
     const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
     const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
     const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
@@ -403,10 +389,6 @@ const getValidGridPoints = (
       unfilteredArray[i * 3 + 2] = p.z;
     });
     setUnfilteredPointCloud(unfilteredArray);
-    
-    console.log('📊 Grid generated:', validGridPoints.length, 'points');
-    console.log('   First point:', validGridPoints[0]);
-    console.log('   Last point:', validGridPoints[validGridPoints.length - 1]);
   }
 
   return validGridPoints;
@@ -436,6 +418,18 @@ const interpolateGridValues = (
     value = Math.max(minValue, Math.min(maxValue, value));
     return { x, y, z, value };
   });
+};
+
+const calculateWeightedAverage = (
+  gridValues: { x: number; y: number; z: number; value: number }[]
+): number => {
+  if (gridValues.length === 0) return 0;
+  
+  // Simple arithmetic mean (all points have equal weight)
+  // For a true volumetric average, we would need to weight by cell volume
+  // but since we have a uniform grid, all cells have the same volume
+  const sum = gridValues.reduce((acc, point) => acc + point.value, 0);
+  return sum / gridValues.length;
 };
 
 const createVisualizationMesh = (
@@ -665,14 +659,12 @@ const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
   const originalCenter = originalBox.getCenter(new THREE.Vector3());
   const originalSize = originalBox.getSize(new THREE.Vector3());
   
-  // Center the model at origin
   gltf.scene.position.sub(originalCenter);
   
   const maxDim = Math.max(originalSize.x, originalSize.y, originalSize.z);
   const modelScale = maxDim > 0 ? 10 / maxDim : 1;
   gltf.scene.scale.multiplyScalar(modelScale);
   
-  // Calculate bounds AFTER transformation
   const bounds: ModelBounds = {
     min: originalBox.min.clone().sub(originalCenter).multiplyScalar(modelScale),
     max: originalBox.max.clone().sub(originalCenter).multiplyScalar(modelScale),
