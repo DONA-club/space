@@ -389,36 +389,35 @@ export const TimelineControl = () => {
     return `rgb(${r}, ${g}, ${b})`;
   };
 
-  // Check if a point is in the color zone around cursor
-  const isInColorZone = (timestamp: number): boolean => {
-    if (!timeRange) return false;
-    const totalRange = timeRange[1] - timeRange[0];
-    const colorRadius = totalRange * COLOR_ZONE_RADIUS;
-    return Math.abs(timestamp - currentTimestamp) <= colorRadius;
+  // Calculate Y position for a given value
+  const getYPosition = (value: number): number => {
+    if (diffRange === 0) return 50;
+    return 100 - ((value - minDiff) / diffRange) * 80 - 10;
   };
 
-  // Generate ultra-smooth Bezier curve path
+  // Calculate Y position for zero line
+  const getZeroLineY = (): number => {
+    return getYPosition(0);
+  };
+
+  // Generate ultra-smooth Bezier curve path with higher tension
   const generateSmoothPath = (points: DewPointDifference[]): string => {
     if (points.length === 0) return '';
     if (points.length === 1) {
       const x = getPosition(points[0].timestamp);
-      const y = diffRange > 0 
-        ? 100 - ((points[0].difference - minDiff) / diffRange) * 80 - 10
-        : 50;
+      const y = getYPosition(points[0].difference);
       return `M ${x},${y}`;
     }
 
     const coords = points.map(point => ({
       x: getPosition(point.timestamp),
-      y: diffRange > 0 
-        ? 100 - ((point.difference - minDiff) / diffRange) * 80 - 10
-        : 50
+      y: getYPosition(point.difference)
     }));
 
     let path = `M ${coords[0].x},${coords[0].y}`;
 
-    // Use Catmull-Rom spline for ultra-smooth curves
-    const tension = 0.5;
+    // Use Catmull-Rom spline with HIGHER tension for ultra-smooth curves
+    const tension = 0.7; // Increased from 0.5 to 0.7 for even smoother curves
 
     for (let i = 0; i < coords.length - 1; i++) {
       const p0 = coords[Math.max(i - 1, 0)];
@@ -437,10 +436,54 @@ export const TimelineControl = () => {
     return path;
   };
 
+  // Generate path for orange fill (negative values only)
+  const generateNegativeFillPath = (points: DewPointDifference[]): string => {
+    if (points.length === 0) return '';
+    
+    const zeroY = getZeroLineY();
+    const coords = points.map(point => ({
+      x: getPosition(point.timestamp),
+      y: getYPosition(point.difference),
+      isNegative: point.difference < 0
+    }));
+
+    // Find segments where curve is below zero
+    let path = '';
+    let inNegativeZone = false;
+    
+    for (let i = 0; i < coords.length; i++) {
+      const point = coords[i];
+      
+      if (point.isNegative && !inNegativeZone) {
+        // Start new negative zone
+        path += `M ${point.x},${zeroY} L ${point.x},${point.y}`;
+        inNegativeZone = true;
+      } else if (point.isNegative && inNegativeZone) {
+        // Continue in negative zone
+        path += ` L ${point.x},${point.y}`;
+      } else if (!point.isNegative && inNegativeZone) {
+        // End negative zone
+        path += ` L ${point.x},${zeroY} Z`;
+        inNegativeZone = false;
+      }
+    }
+    
+    // Close last zone if still open
+    if (inNegativeZone && coords.length > 0) {
+      const lastPoint = coords[coords.length - 1];
+      path += ` L ${lastPoint.x},${zeroY} Z`;
+    }
+    
+    return path;
+  };
+
   if (!timeRange || rangeStart === null || rangeEnd === null) return null;
 
   const dayMarkers = getDayMarkers();
   const smoothPath = generateSmoothPath(dewPointDifferences);
+  const negativeFillPath = generateNegativeFillPath(dewPointDifferences);
+  const zeroLineY = getZeroLineY();
+  const hasNegativeValues = dewPointDifferences.some(d => d.difference < 0);
 
   return (
     <LiquidGlassCard className="p-4">
@@ -636,6 +679,41 @@ export const TimelineControl = () => {
             onClick={handleTimelineClick}
             onWheel={handleWheel}
           >
+            {/* Orange fill for negative values */}
+            {hasOutdoorData && hasNegativeValues && (
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                preserveAspectRatio="none"
+                viewBox="0 0 100 100"
+              >
+                <path
+                  d={negativeFillPath}
+                  fill="rgba(249, 115, 22, 0.2)"
+                  stroke="none"
+                />
+              </svg>
+            )}
+
+            {/* Zero reference line (orange) */}
+            {hasOutdoorData && hasNegativeValues && (
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                preserveAspectRatio="none"
+                viewBox="0 0 100 100"
+              >
+                <line
+                  x1="0"
+                  y1={zeroLineY}
+                  x2="100"
+                  y2={zeroLineY}
+                  stroke="rgba(249, 115, 22, 0.6)"
+                  strokeWidth="0.5"
+                  strokeDasharray="2,2"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            )}
+
             {/* Gray base curve (all loaded data) */}
             {hasOutdoorData && dewPointDifferences.length > 0 && (
               <svg
