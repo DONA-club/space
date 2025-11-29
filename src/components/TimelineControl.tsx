@@ -12,13 +12,13 @@ import { findClosestDataPoint } from '@/utils/sensorUtils';
 
 interface DewPointDifference {
   timestamp: number;
-  difference: number; // interior - exterior
+  difference: number;
 }
 
 const POINTS_BEFORE = 500;
 const POINTS_AFTER = 500;
-const PRELOAD_THRESHOLD = 0.3; // Start preloading when cursor is 30% away from edge
-const COLOR_ZONE_RADIUS = 0.15; // Color zone is 15% of total range on each side
+const PRELOAD_THRESHOLD = 0.3;
+const COLOR_ZONE_RADIUS = 0.15;
 
 export const TimelineControl = () => {
   const isPlaying = useAppStore((state) => state.isPlaying);
@@ -41,7 +41,6 @@ export const TimelineControl = () => {
   const [loadingRanges, setLoadingRanges] = useState<Set<string>>(new Set());
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  // Initialize range when timeRange changes
   useEffect(() => {
     if (timeRange && rangeStart === null && rangeEnd === null) {
       setRangeStart(timeRange[0]);
@@ -49,7 +48,6 @@ export const TimelineControl = () => {
     }
   }, [timeRange, rangeStart, rangeEnd]);
 
-  // Smart preloading: load data around cursor with anticipation
   useEffect(() => {
     if (!currentSpace || !hasOutdoorData || !timeRange) {
       setDewPointDifferences([]);
@@ -62,10 +60,8 @@ export const TimelineControl = () => {
         const targetDate = new Date(targetTimestamp).toISOString();
         const rangeKey = `${targetTimestamp}`;
 
-        // Check if already loading
         if (loadingRanges.has(rangeKey)) return;
 
-        // Check if we already have data for this range
         const alreadyLoaded = loadedRanges.some(r => 
           r.start <= targetTimestamp && 
           r.end >= targetTimestamp
@@ -73,10 +69,8 @@ export const TimelineControl = () => {
 
         if (alreadyLoaded) return;
 
-        // Mark as loading
         setLoadingRanges(prev => new Set(prev).add(rangeKey));
 
-        // Load outdoor data window (500 before + 500 after)
         const { data: outdoorBefore, error: outdoorBeforeError } = await supabase
           .from('sensor_data')
           .select('timestamp, dew_point')
@@ -110,7 +104,6 @@ export const TimelineControl = () => {
           return;
         }
 
-        // Load indoor data for the same window
         const indoorDataPromises = sensors.map(async (sensor) => {
           const { data: beforeData, error: beforeError } = await supabase
             .from('sensor_data')
@@ -140,7 +133,6 @@ export const TimelineControl = () => {
 
         const indoorDataResults = await Promise.all(indoorDataPromises);
 
-        // Calculate differences for this window
         const newDifferences: DewPointDifference[] = [];
 
         outdoorWindow.forEach((outdoorPoint) => {
@@ -175,7 +167,6 @@ export const TimelineControl = () => {
           }
         });
 
-        // Merge with existing data (keep all loaded data)
         setDewPointDifferences(prev => {
           const merged = [...prev, ...newDifferences]
             .sort((a, b) => a.timestamp - b.timestamp)
@@ -185,7 +176,6 @@ export const TimelineControl = () => {
           return merged;
         });
 
-        // Update loaded ranges
         if (newDifferences.length > 0) {
           const minTimestamp = Math.min(...newDifferences.map(d => d.timestamp));
           const maxTimestamp = Math.max(...newDifferences.map(d => d.timestamp));
@@ -196,7 +186,6 @@ export const TimelineControl = () => {
           }]);
         }
 
-        // Remove from loading set
         setLoadingRanges(prev => {
           const next = new Set(prev);
           next.delete(rangeKey);
@@ -212,22 +201,18 @@ export const TimelineControl = () => {
       }
     };
 
-    // Load current position
     loadDewPointWindow(currentTimestamp);
 
-    // Anticipate and preload ahead if playing or near edge
     if (timeRange && rangeStart && rangeEnd) {
       const totalRange = rangeEnd - rangeStart;
       const distanceToEnd = rangeEnd - currentTimestamp;
       const distanceToStart = currentTimestamp - rangeStart;
       
-      // Preload ahead if close to end
       if (distanceToEnd < totalRange * PRELOAD_THRESHOLD) {
-        const preloadTimestamp = currentTimestamp + (POINTS_AFTER * 60 * 1000); // Estimate 1 point per minute
+        const preloadTimestamp = currentTimestamp + (POINTS_AFTER * 60 * 1000);
         loadDewPointWindow(preloadTimestamp);
       }
       
-      // Preload behind if close to start
       if (distanceToStart < totalRange * PRELOAD_THRESHOLD) {
         const preloadTimestamp = currentTimestamp - (POINTS_BEFORE * 60 * 1000);
         loadDewPointWindow(preloadTimestamp);
@@ -235,7 +220,6 @@ export const TimelineControl = () => {
     }
   }, [currentSpace, hasOutdoorData, timeRange, sensors, currentTimestamp, rangeStart, rangeEnd]);
 
-  // Calculate min/max difference for scaling
   const { minDiff, maxDiff, diffRange } = useMemo(() => {
     if (dewPointDifferences.length === 0) {
       return { minDiff: 0, maxDiff: 0, diffRange: 0 };
@@ -249,7 +233,6 @@ export const TimelineControl = () => {
     return { minDiff: min, maxDiff: max, diffRange: range };
   }, [dewPointDifferences]);
 
-  // Playback loop
   useEffect(() => {
     if (!isPlaying || !rangeStart || !rangeEnd) return;
 
@@ -266,6 +249,39 @@ export const TimelineControl = () => {
 
     return () => clearInterval(interval);
   }, [isPlaying, playbackSpeed, rangeStart, rangeEnd, setCurrentTimestamp, setPlaying]);
+
+  // Handle wheel event with proper non-passive listener
+  useEffect(() => {
+    const timelineElement = timelineRef.current;
+    if (!timelineElement || !timeRange || !rangeStart || !rangeEnd) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Prevent default scroll behavior
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Use both deltaX (horizontal scroll) and deltaY (vertical scroll)
+      const delta = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+      
+      if (delta === 0) return;
+
+      const rangeSize = rangeEnd - rangeStart;
+      // Adjust sensitivity: 1% of range per 100px scroll
+      const timeShift = (delta / 100) * rangeSize * 0.01;
+
+      const newTimestamp = currentTimestamp + timeShift;
+      const clampedTimestamp = Math.max(rangeStart, Math.min(newTimestamp, rangeEnd));
+      
+      setCurrentTimestamp(clampedTimestamp);
+    };
+
+    // Add listener with { passive: false } to allow preventDefault
+    timelineElement.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      timelineElement.removeEventListener('wheel', handleWheel);
+    };
+  }, [timeRange, rangeStart, rangeEnd, currentTimestamp, setCurrentTimestamp]);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -323,24 +339,6 @@ export const TimelineControl = () => {
     setIsDragging(null);
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!timeRange || !rangeStart || !rangeEnd) return;
-
-    e.preventDefault();
-
-    const delta = e.deltaX !== 0 ? e.deltaX : (e.shiftKey ? e.deltaY : 0);
-    
-    if (delta === 0) return;
-
-    const rangeSize = rangeEnd - rangeStart;
-    const timeShift = (delta / 100) * rangeSize * 0.01;
-
-    const newTimestamp = currentTimestamp + timeShift;
-    const clampedTimestamp = Math.max(rangeStart, Math.min(newTimestamp, rangeEnd));
-    
-    setCurrentTimestamp(clampedTimestamp);
-  };
-
   useEffect(() => {
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
@@ -378,10 +376,8 @@ export const TimelineControl = () => {
   const getColorForDifference = (difference: number): string => {
     if (diffRange === 0) return 'rgb(128, 128, 128)';
 
-    // Normalize difference to 0-1 range
     const normalized = (difference - minDiff) / diffRange;
 
-    // Green (max) to Blue (min) gradient
     const r = Math.round(34 + (59 - 34) * (1 - normalized));
     const g = Math.round(197 - (197 - 130) * (1 - normalized));
     const b = Math.round(94 + (246 - 94) * (1 - normalized));
@@ -389,18 +385,15 @@ export const TimelineControl = () => {
     return `rgb(${r}, ${g}, ${b})`;
   };
 
-  // Calculate Y position for a given value
   const getYPosition = (value: number): number => {
     if (diffRange === 0) return 50;
     return 100 - ((value - minDiff) / diffRange) * 80 - 10;
   };
 
-  // Calculate Y position for zero line
   const getZeroLineY = (): number => {
     return getYPosition(0);
   };
 
-  // Generate ultra-smooth Bezier curve path with higher tension
   const generateSmoothPath = (points: DewPointDifference[]): string => {
     if (points.length === 0) return '';
     if (points.length === 1) {
@@ -416,8 +409,7 @@ export const TimelineControl = () => {
 
     let path = `M ${coords[0].x},${coords[0].y}`;
 
-    // Use Catmull-Rom spline with HIGHER tension for ultra-smooth curves
-    const tension = 0.7; // Increased from 0.5 to 0.7 for even smoother curves
+    const tension = 0.7;
 
     for (let i = 0; i < coords.length - 1; i++) {
       const p0 = coords[Math.max(i - 1, 0)];
@@ -436,7 +428,6 @@ export const TimelineControl = () => {
     return path;
   };
 
-  // Generate path for orange fill (negative values only)
   const generateNegativeFillPath = (points: DewPointDifference[]): string => {
     if (points.length === 0) return '';
     
@@ -447,7 +438,6 @@ export const TimelineControl = () => {
       isNegative: point.difference < 0
     }));
 
-    // Find segments where curve is below zero
     let path = '';
     let inNegativeZone = false;
     
@@ -455,20 +445,16 @@ export const TimelineControl = () => {
       const point = coords[i];
       
       if (point.isNegative && !inNegativeZone) {
-        // Start new negative zone
         path += `M ${point.x},${zeroY} L ${point.x},${point.y}`;
         inNegativeZone = true;
       } else if (point.isNegative && inNegativeZone) {
-        // Continue in negative zone
         path += ` L ${point.x},${point.y}`;
       } else if (!point.isNegative && inNegativeZone) {
-        // End negative zone
         path += ` L ${point.x},${zeroY} Z`;
         inNegativeZone = false;
       }
     }
     
-    // Close last zone if still open
     if (inNegativeZone && coords.length > 0) {
       const lastPoint = coords[coords.length - 1];
       path += ` L ${lastPoint.x},${zeroY} Z`;
@@ -488,9 +474,7 @@ export const TimelineControl = () => {
   return (
     <LiquidGlassCard className="p-4">
       <div className="space-y-4">
-        {/* Top Controls Row */}
         <div className="relative flex items-center justify-between gap-4">
-          {/* Left: Metric selector */}
           <TooltipPrimitive.Provider delayDuration={300}>
             <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
               <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-9 p-1 gap-1">
@@ -581,7 +565,6 @@ export const TimelineControl = () => {
             </Tabs>
           </TooltipPrimitive.Provider>
 
-          {/* Center: Playback controls */}
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
             <TooltipPrimitive.Provider delayDuration={300}>
               <TooltipPrimitive.Root>
@@ -639,7 +622,6 @@ export const TimelineControl = () => {
             </TooltipPrimitive.Provider>
           </div>
 
-          {/* Right: Playback speed */}
           <TooltipPrimitive.Provider delayDuration={300}>
             <TooltipPrimitive.Root>
               <TooltipPrimitive.Trigger asChild>
@@ -665,7 +647,6 @@ export const TimelineControl = () => {
           </TooltipPrimitive.Provider>
         </div>
 
-        {/* Timeline */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
             <span>{formatTime(rangeStart)}</span>
@@ -677,9 +658,7 @@ export const TimelineControl = () => {
             ref={timelineRef}
             className="relative h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
             onClick={handleTimelineClick}
-            onWheel={handleWheel}
           >
-            {/* Orange fill for negative values */}
             {hasOutdoorData && hasNegativeValues && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
@@ -694,7 +673,6 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Zero reference line (orange) */}
             {hasOutdoorData && hasNegativeValues && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
@@ -714,7 +692,6 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Gray base curve (all loaded data) */}
             {hasOutdoorData && dewPointDifferences.length > 0 && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
@@ -733,7 +710,6 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Colored curve (only in zone around cursor) */}
             {hasOutdoorData && dewPointDifferences.length > 0 && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
@@ -778,7 +754,6 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Day markers */}
             {dayMarkers.map((marker, idx) => {
               const pos = getPosition(marker);
               return (
@@ -795,7 +770,6 @@ export const TimelineControl = () => {
               );
             })}
 
-            {/* Selected range highlight */}
             <div
               className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm pointer-events-none"
               style={{
@@ -804,7 +778,6 @@ export const TimelineControl = () => {
               }}
             />
 
-            {/* Range start handle */}
             <div
               className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
               style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-6px' }}
@@ -814,7 +787,6 @@ export const TimelineControl = () => {
               <div className="absolute inset-0 bg-white/20 rounded-full"></div>
             </div>
 
-            {/* Range end handle */}
             <div
               className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
               style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-6px' }}
@@ -824,7 +796,6 @@ export const TimelineControl = () => {
               <div className="absolute inset-0 bg-white/20 rounded-full"></div>
             </div>
 
-            {/* Current position cursor */}
             <div
               className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-yellow-400 to-orange-500 cursor-ew-resize shadow-lg z-20"
               style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px' }}
@@ -837,7 +808,6 @@ export const TimelineControl = () => {
           </div>
         </div>
 
-        {/* Info */}
         <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
