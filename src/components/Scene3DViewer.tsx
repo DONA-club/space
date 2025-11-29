@@ -156,7 +156,14 @@ export const Scene3DViewer = () => {
 
   // Update outdoor data based on current timestamp
   useEffect(() => {
-    if (!sceneRef.current?.outdoorData || !dataReady) return;
+    if (!sceneRef.current?.outdoorData || !dataReady || sceneRef.current.outdoorData.length === 0) {
+      // Reset to default background if no outdoor data
+      if (sceneRef.current?.scene) {
+        sceneRef.current.scene.background = new THREE.Color(0xf0f4f8);
+        sceneRef.current.scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
+      }
+      return;
+    }
 
     const outdoorData = sceneRef.current.outdoorData;
     let closestData = outdoorData[0];
