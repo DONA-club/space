@@ -20,7 +20,7 @@ import { createSensorSpheres } from "./scene3d/SensorSpheres";
 import { createScene, createCamera, createRenderer, setupLights, createControls } from "./scene3d/SceneSetup";
 import { SceneRef, ModelBounds } from "@/types/scene.types";
 import { INTERPOLATION_OFFSET, INTERPOLATION_DEFAULTS, VISUALIZATION_DEFAULTS } from "@/constants/interpolation";
-import { calculateAirDensity, calculateAirMass } from "@/utils/airCalculations";
+import { calculateAirDensity } from "@/utils/airCalculations";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -30,6 +30,7 @@ export const Scene3DViewer = () => {
   const [loading, setLoading] = useState(true);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelBounds, setModelBounds] = useState<ModelBounds | null>(null);
+  const [originalModelBounds, setOriginalModelBounds] = useState<ModelBounds | null>(null);
   const [currentOutdoorData, setCurrentOutdoorData] = useState<any>(null);
   const [indoorAverage, setIndoorAverage] = useState<any>(null);
   const [volumetricAverage, setVolumetricAverage] = useState<number | null>(null);
@@ -118,7 +119,7 @@ export const Scene3DViewer = () => {
   }, [sensorOffset, sensors, modelLoaded]);
 
   useEffect(() => {
-    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || sensorData.size === 0) {
+    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || !originalModelBounds || sensorData.size === 0) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
         disposeInterpolationMesh(sceneRef.current.interpolationMesh);
@@ -158,7 +159,7 @@ export const Scene3DViewer = () => {
 
     setInterpolationRange({ min: minValue, max: maxValue });
 
-    // Calculate air volume and mass
+    // Calculate air volume and mass using ORIGINAL model dimensions
     const { volume, mass, avgTemp, avgHumidity } = calculateAirProperties(
       gridValues,
       points,
@@ -166,7 +167,7 @@ export const Scene3DViewer = () => {
       interpolationMethod,
       rbfKernel,
       idwPower,
-      modelBounds,
+      originalModelBounds, // Use original bounds for real-world measurements
       meshResolution
     );
     
@@ -193,6 +194,7 @@ export const Scene3DViewer = () => {
     dataReady,
     meshingEnabled,
     modelBounds,
+    originalModelBounds,
     selectedMetric,
     interpolationMethod,
     rbfKernel,
@@ -242,10 +244,11 @@ export const Scene3DViewer = () => {
         setError(null);
         setLoading(false);
         
-        const { bounds, scale, center, modelPosition } = processLoadedModel(gltf, scene);
+        const { bounds, originalBounds, scale, center, modelPosition } = processLoadedModel(gltf, scene);
         modelScale = scale;
         originalCenter = center;
         setModelBounds(bounds);
+        setOriginalModelBounds(originalBounds);
         
         const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition, sensorOffset);
         
@@ -512,14 +515,15 @@ const calculateAirProperties = (
   interpolationMethod: string,
   rbfKernel: string,
   idwPower: number,
-  modelBounds: ModelBounds,
+  originalModelBounds: ModelBounds, // Use original bounds for real measurements
   meshResolution: number
 ): { volume: number; mass: number; avgTemp: number; avgHumidity: number } => {
-  const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
-  const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
-  const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
+  // Calculate voxel volume using ORIGINAL model dimensions (in meters)
+  const stepX = (originalModelBounds.max.x - originalModelBounds.min.x) / (meshResolution - 1);
+  const stepY = (originalModelBounds.max.y - originalModelBounds.min.y) / (meshResolution - 1);
+  const stepZ = (originalModelBounds.max.z - originalModelBounds.min.z) / (meshResolution - 1);
   
-  const voxelVolume = stepX * stepY * stepZ;
+  const voxelVolume = stepX * stepY * stepZ; // Volume in m³
   const totalVolume = voxelVolume * validGridPoints.length;
 
   // Build temperature and humidity points from sensor data
@@ -555,6 +559,7 @@ const calculateAirProperties = (
       humidity = rbfHumidityInterpolator!.interpolate({ x, y, z });
     }
 
+    // Calculate air density at this point (kg/m³)
     const density = calculateAirDensity(temperature, humidity);
     const voxelMass = density * voxelVolume;
     
@@ -799,10 +804,20 @@ const createVolumeMesh = (
 };
 
 const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
+  // Get ORIGINAL bounds BEFORE any transformation
   const originalBox = new THREE.Box3().setFromObject(gltf.scene);
   const originalCenter = originalBox.getCenter(new THREE.Vector3());
   const originalSize = originalBox.getSize(new THREE.Vector3());
   
+  // Store original bounds for real-world measurements
+  const originalBounds: ModelBounds = {
+    min: originalBox.min.clone(),
+    max: originalBox.max.clone(),
+    center: originalCenter.clone(),
+    size: originalSize.clone()
+  };
+  
+  // Now apply transformations for display
   gltf.scene.position.sub(originalCenter);
   const modelPosition = gltf.scene.position.clone();
   
@@ -812,6 +827,7 @@ const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
   
   scene.add(gltf.scene);
   
+  // Get transformed bounds for visualization
   const transformedBox = new THREE.Box3().setFromObject(gltf.scene);
   
   const bounds: ModelBounds = {
@@ -821,7 +837,7 @@ const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
     size: transformedBox.getSize(new THREE.Vector3())
   };
   
-  return { bounds, scale: modelScale, center: originalCenter, modelPosition };
+  return { bounds, originalBounds, scale: modelScale, center: originalCenter, modelPosition };
 };
 
 const positionCamera = (
