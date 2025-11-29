@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Grid3x3, Upload, Download, Trash2, FolderUp, Loader2, Clock, Info, CloudSun, Sparkles, Zap, Waves, Activity, Box, Layers, GitBranch } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -34,8 +34,6 @@ export const SensorPanel = () => {
   const setVisualizationType = useAppStore((state) => state.setVisualizationType);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setHasOutdoorData = useAppStore((state) => state.setHasOutdoorData);
-  const sensorOffset = useAppStore((state) => state.sensorOffset);
-  const setSensorOffset = useAppStore((state) => state.setSensorOffset);
   
   const [isExpanded, setIsExpanded] = useState(true);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
@@ -484,72 +482,6 @@ export const SensorPanel = () => {
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
-      {/* Sensor Position Adjustment */}
-      <LiquidGlassCard className="flex-shrink-0">
-        <div className="p-3">
-          <div className="flex items-center gap-2 mb-3">
-            <Activity size={14} className="text-orange-600" />
-            <h2 className="text-sm font-semibold">Position Capteurs</h2>
-          </div>
-
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Offset X</Label>
-                <span className="text-xs font-medium text-orange-600">{sensorOffset.x.toFixed(2)}</span>
-              </div>
-              <Slider
-                value={[sensorOffset.x]}
-                onValueChange={(v) => setSensorOffset({ ...sensorOffset, x: v[0] })}
-                min={-10}
-                max={10}
-                step={0.1}
-                className="h-1"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Offset Y</Label>
-                <span className="text-xs font-medium text-orange-600">{sensorOffset.y.toFixed(2)}</span>
-              </div>
-              <Slider
-                value={[sensorOffset.y]}
-                onValueChange={(v) => setSensorOffset({ ...sensorOffset, y: v[0] })}
-                min={-10}
-                max={10}
-                step={0.1}
-                className="h-1"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Offset Z</Label>
-                <span className="text-xs font-medium text-orange-600">{sensorOffset.z.toFixed(2)}</span>
-              </div>
-              <Slider
-                value={[sensorOffset.z]}
-                onValueChange={(v) => setSensorOffset({ ...sensorOffset, z: v[0] })}
-                min={-10}
-                max={10}
-                step={0.1}
-                className="h-1"
-              />
-            </div>
-
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full"
-              onClick={() => setSensorOffset({ x: 0, y: 0, z: 0 })}
-            >
-              Réinitialiser
-            </Button>
-          </div>
-        </div>
-      </LiquidGlassCard>
-
       {/* Outdoor Sensor Card */}
       {currentSpace && mode === 'replay' && (
         <LiquidGlassCard className="flex-shrink-0">

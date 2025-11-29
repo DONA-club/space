@@ -17,8 +17,14 @@ export const findClosestDataPoint = (
   let right = data.length - 1;
   
   // Handle edge cases
-  if (targetTimestamp <= data[left].timestamp) return data[left];
-  if (targetTimestamp >= data[right].timestamp) return data[right];
+  if (targetTimestamp <= data[left].timestamp) {
+    console.log(`🔍 Target ${new Date(targetTimestamp).toLocaleString('fr-FR')} is before first data point, returning first: ${new Date(data[left].timestamp).toLocaleString('fr-FR')}`);
+    return data[left];
+  }
+  if (targetTimestamp >= data[right].timestamp) {
+    console.log(`🔍 Target ${new Date(targetTimestamp).toLocaleString('fr-FR')} is after last data point, returning last: ${new Date(data[right].timestamp).toLocaleString('fr-FR')}`);
+    return data[right];
+  }
   
   // Binary search
   while (left <= right) {
@@ -26,6 +32,7 @@ export const findClosestDataPoint = (
     const midTimestamp = data[mid].timestamp;
     
     if (midTimestamp === targetTimestamp) {
+      console.log(`🎯 Exact match found at ${new Date(targetTimestamp).toLocaleString('fr-FR')}`);
       return data[mid];
     }
     
@@ -45,7 +52,10 @@ export const findClosestDataPoint = (
   const leftDiff = Math.abs(data[left].timestamp - targetTimestamp);
   const rightDiff = Math.abs(data[right].timestamp - targetTimestamp);
   
-  return leftDiff < rightDiff ? data[left] : data[right];
+  const closest = leftDiff < rightDiff ? data[left] : data[right];
+  console.log(`🔍 Closest to ${new Date(targetTimestamp).toLocaleString('fr-FR')} is ${new Date(closest.timestamp).toLocaleString('fr-FR')} (diff: ${Math.min(leftDiff, rightDiff)}ms)`);
+  
+  return closest;
 };
 
 export const calculateIndoorAverage = (
