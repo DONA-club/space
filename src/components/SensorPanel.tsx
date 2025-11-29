@@ -691,11 +691,13 @@ export const SensorPanel = () => {
                           )}
 
                           {lastDate && (
-                            <Alert className={`mb-1 py-1 ${isOld ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'}`}>
-                              <Clock className={`h-3 w-3 ${isOld ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`} />
-                              <AlertDescription className={`text-[10px] ${isOld ? 'text-orange-800 dark:text-orange-200' : 'text-green-800 dark:text-green-200'}`}>
-                                Dernières données : {formatRelativeTime(lastDate)}
-                              </AlertDescription>
+                            <Alert className={`mb-1 py-1 px-2 ${isOld ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'}`}>
+                              <div className="flex items-center gap-1.5">
+                                <Clock className={`h-3 w-3 flex-shrink-0 ${isOld ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`} />
+                                <AlertDescription className={`text-[10px] leading-tight ${isOld ? 'text-orange-800 dark:text-orange-200' : 'text-green-800 dark:text-green-200'}`}>
+                                  Dernières données : {formatRelativeTime(lastDate)}
+                                </AlertDescription>
+                              </div>
                             </Alert>
                           )}
 

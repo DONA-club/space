@@ -180,7 +180,7 @@ export const Scene3DViewer = () => {
     setCurrentOutdoorData(closestData);
     setOutdoorData(closestData);
 
-    // Update scene background color
+    // Update scene background color with lighter, liquid glass effect
     if (sceneRef.current?.scene) {
       const value = selectedMetric === 'temperature' ? closestData.temperature :
                     selectedMetric === 'humidity' ? closestData.humidity :
@@ -188,8 +188,10 @@ export const Scene3DViewer = () => {
                     closestData.dewPoint;
 
       const color = getColorFromMetric(selectedMetric, value);
-      sceneRef.current.scene.background = new THREE.Color(color).multiplyScalar(0.3);
-      sceneRef.current.scene.fog = new THREE.Fog(color, 20, 100);
+      // Much lighter background - multiply by 0.85 instead of 0.3 for liquid glass effect
+      const lightColor = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.7);
+      sceneRef.current.scene.background = lightColor;
+      sceneRef.current.scene.fog = new THREE.Fog(lightColor.getHex(), 20, 100);
     }
   }, [currentTimestamp, dataReady, selectedMetric, hasOutdoorData, setOutdoorData]);
 
