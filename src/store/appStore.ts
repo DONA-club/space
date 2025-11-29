@@ -76,7 +76,7 @@ interface AppState {
   wsConnected: boolean;
   
   // Actions
-  setAuth: (user: any) => void;
+  setAuth: (user: any | null) => void;
   logout: () => void;
   setCurrentSpace: (space: Space | null) => void;
   setMode: (mode: 'live' | 'replay') => void;
@@ -126,8 +126,18 @@ export const useAppStore = create<AppState>((set) => ({
   unfilteredPointCloud: null,
   wsConnected: false,
   
-  setAuth: (user) => set({ isAuthenticated: true, user }),
-  logout: () => set({ isAuthenticated: false, user: null, currentSpace: null }),
+  setAuth: (user) => set({ 
+    isAuthenticated: !!user, 
+    user 
+  }),
+  logout: () => set({ 
+    isAuthenticated: false, 
+    user: null, 
+    currentSpace: null,
+    gltfModel: null,
+    sensors: [],
+    dataReady: false
+  }),
   setCurrentSpace: (space) => set({ currentSpace: space }),
   setMode: (mode) => set({ mode }),
   setGltfModel: (model) => set({ gltfModel: model }),
