@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Thermometer, Droplets, Wind, CloudRain } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 import { ColorLegend } from "./ColorLegend";
 
@@ -26,6 +26,7 @@ export const Scene3DViewer = () => {
     sensorMeshes: Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>;
     boundingSphere: THREE.Sphere;
     sensorData: Map<number, Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>>;
+    outdoorData: Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>;
     interpolationMesh: THREE.Points | THREE.Group | THREE.Mesh | null;
     modelScale: number;
     modelGroup: THREE.Group | null;
@@ -50,7 +51,10 @@ export const Scene3DViewer = () => {
   const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
   const setUnfilteredPointCloud = useAppStore((state) => state.setUnfilteredPointCloud);
   const setInterpolationRange = useAppStore((state) => state.setInterpolationRange);
+  const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
+  const setOutdoorData = useAppStore((state) => state.setOutdoorData);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
+  const [currentOutdoorData, setCurrentOutdoorData] = useState<{ temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number } | null>(null);
 
   useEffect(() => {
     const handleSensorHover = (event: CustomEvent) => {
@@ -112,6 +116,105 @@ export const Scene3DViewer = () => {
 
     loadSensorData();
   }, [sensors, currentSpace]);
+
+  // Load outdoor data
+  useEffect(() => {
+    if (!sceneRef.current || !currentSpace || !hasOutdoorData) return;
+
+    const loadOutdoorData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('sensor_data')
+          .select('*')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', 0)
+          .order('timestamp', { ascending: true });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const formattedData = data.map(d => ({
+            timestamp: new Date(d.timestamp).getTime(),
+            temperature: d.temperature,
+            humidity: d.humidity,
+            absoluteHumidity: d.absolute_humidity,
+            dewPoint: d.dew_point
+          }));
+
+          if (sceneRef.current) {
+            sceneRef.current.outdoorData = formattedData;
+          }
+          console.log(`✅ Loaded ${formattedData.length} outdoor data points`);
+        }
+      } catch (error) {
+        console.error('Error loading outdoor data:', error);
+      }
+    };
+
+    loadOutdoorData();
+  }, [currentSpace, hasOutdoorData]);
+
+  // Update outdoor data based on current timestamp
+  useEffect(() => {
+    if (!sceneRef.current?.outdoorData || !dataReady) return;
+
+    const outdoorData = sceneRef.current.outdoorData;
+    let closestData = outdoorData[0];
+    let minDiff = Math.abs(outdoorData[0].timestamp - currentTimestamp);
+    
+    for (const point of outdoorData) {
+      const diff = Math.abs(point.timestamp - currentTimestamp);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestData = point;
+      }
+    }
+    
+    setCurrentOutdoorData(closestData);
+    setOutdoorData(closestData);
+
+    // Update scene background color
+    if (sceneRef.current?.scene) {
+      const value = selectedMetric === 'temperature' ? closestData.temperature :
+                    selectedMetric === 'humidity' ? closestData.humidity :
+                    selectedMetric === 'absoluteHumidity' ? closestData.absoluteHumidity :
+                    closestData.dewPoint;
+
+      const color = getColorFromMetric(selectedMetric, value);
+      sceneRef.current.scene.background = new THREE.Color(color).multiplyScalar(0.3);
+      sceneRef.current.scene.fog = new THREE.Fog(color, 20, 100);
+    }
+  }, [currentTimestamp, dataReady, selectedMetric, hasOutdoorData, setOutdoorData]);
+
+  const getColorFromMetric = (metric: string, value: number): number => {
+    const color = new THREE.Color();
+    
+    switch (metric) {
+      case 'temperature':
+        if (value < 15) color.setHSL(0.6, 0.8, 0.5);
+        else if (value < 20) color.setHSL(0.5, 0.8, 0.5);
+        else if (value < 25) color.setHSL(0.3, 0.8, 0.5);
+        else color.setHSL(0.05, 0.8, 0.5);
+        break;
+      case 'humidity':
+        if (value < 40) color.setHSL(0.1, 0.8, 0.5);
+        else if (value < 60) color.setHSL(0.3, 0.8, 0.5);
+        else color.setHSL(0.55, 0.8, 0.5);
+        break;
+      case 'absoluteHumidity':
+        if (value < 8) color.setHSL(0.15, 0.8, 0.5);
+        else if (value < 12) color.setHSL(0.35, 0.8, 0.5);
+        else color.setHSL(0.5, 0.8, 0.5);
+        break;
+      case 'dewPoint':
+        if (value < 10) color.setHSL(0.65, 0.8, 0.5);
+        else if (value < 15) color.setHSL(0.55, 0.8, 0.5);
+        else color.setHSL(0.45, 0.8, 0.5);
+        break;
+    }
+    
+    return color.getHex();
+  };
 
   useEffect(() => {
     if (!sceneRef.current) return;
@@ -322,6 +425,10 @@ export const Scene3DViewer = () => {
 
     if (points.length === 0) return;
 
+    // Calculate min/max from actual sensor data
+    let minValue = Math.min(...points.map(p => p.value));
+    let maxValue = Math.max(...points.map(p => p.value));
+
     const positions: number[] = [];
     const colors: number[] = [];
     
@@ -370,9 +477,6 @@ export const Scene3DViewer = () => {
     if (interpolationMethod === 'rbf') {
       rbfInterpolator = new RBFInterpolator(points, rbfKernel, 1.0);
     }
-
-    let minValue = Infinity;
-    let maxValue = -Infinity;
     
     const gridValues: { x: number; y: number; z: number; value: number }[] = [];
     
@@ -384,9 +488,9 @@ export const Scene3DViewer = () => {
         value = rbfInterpolator!.interpolate({ x, y, z });
       }
 
+      // Clamp interpolated values to sensor data range
+      value = Math.max(minValue, Math.min(maxValue, value));
       gridValues.push({ x, y, z, value });
-      minValue = Math.min(minValue, value);
-      maxValue = Math.max(maxValue, value);
     });
 
     setInterpolationRange({ min: minValue, max: maxValue });
@@ -714,6 +818,7 @@ export const Scene3DViewer = () => {
 
     const sensorMeshes = new Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>();
     const sensorData = new Map();
+    const outdoorData: any[] = [];
 
     const loader = new GLTFLoader();
 
@@ -890,6 +995,7 @@ export const Scene3DViewer = () => {
       sensorMeshes,
       boundingSphere,
       sensorData,
+      outdoorData,
       interpolationMesh: null,
       modelScale,
       modelGroup: null,
@@ -946,9 +1052,52 @@ export const Scene3DViewer = () => {
     };
   }, [gltfModel, sensors]);
 
+  const getMetricIcon = () => {
+    switch (selectedMetric) {
+      case 'temperature':
+        return <Thermometer size={16} className="text-red-500" />;
+      case 'humidity':
+        return <Droplets size={16} className="text-blue-500" />;
+      case 'absoluteHumidity':
+        return <Wind size={16} className="text-cyan-500" />;
+      case 'dewPoint':
+        return <CloudRain size={16} className="text-purple-500" />;
+    }
+  };
+
+  const getMetricValue = () => {
+    if (!currentOutdoorData) return '--';
+    
+    switch (selectedMetric) {
+      case 'temperature':
+        return `${currentOutdoorData.temperature.toFixed(1)}°C`;
+      case 'humidity':
+        return `${currentOutdoorData.humidity.toFixed(1)}%`;
+      case 'absoluteHumidity':
+        return `${currentOutdoorData.absoluteHumidity.toFixed(2)} g/m³`;
+      case 'dewPoint':
+        return `${currentOutdoorData.dewPoint.toFixed(1)}°C`;
+    }
+  };
+
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
       <ColorLegend />
+      
+      {/* Outdoor data badge */}
+      {hasOutdoorData && currentOutdoorData && dataReady && (
+        <div className="absolute bottom-4 right-4 z-10">
+          <div className="bg-white/80 dark:bg-black/80 backdrop-blur-xl rounded-xl p-3 shadow-lg border border-white/40">
+            <div className="flex items-center gap-2">
+              {getMetricIcon()}
+              <div>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">Extérieur</p>
+                <p className="text-sm font-semibold">{getMetricValue()}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {!gltfModel && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg">
