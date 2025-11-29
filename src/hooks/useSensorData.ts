@@ -29,11 +29,14 @@ export const useSensorData = (
       try {
         const data = new Map<number, SensorDataPoint[]>();
 
+        console.log('📊 Loading ALL sensor data (no limit)...');
+        const loadStartTime = performance.now();
+
         for (const sensor of sensors) {
           // NO LIMIT - fetch ALL data points for each sensor
-          const { data: rawData, error: fetchError } = await supabase
+          const { data: rawData, error: fetchError, count } = await supabase
             .from('sensor_data')
-            .select('*')
+            .select('*', { count: 'exact' })
             .eq('space_id', currentSpace.id)
             .eq('sensor_id', sensor.id)
             .order('timestamp', { ascending: true });
@@ -50,13 +53,20 @@ export const useSensorData = (
             }));
 
             data.set(sensor.id, formattedData);
+            console.log(`   ✓ Sensor ${sensor.name}: ${formattedData.length.toLocaleString()} points loaded`);
           }
         }
+
+        const loadEndTime = performance.now();
+        const totalPoints = Array.from(data.values()).reduce((sum, arr) => sum + arr.length, 0);
+        console.log(`✅ All sensor data loaded in ${(loadEndTime - loadStartTime).toFixed(0)}ms`);
+        console.log(`   Total: ${totalPoints.toLocaleString()} data points across ${sensors.length} sensors`);
 
         setSensorData(data);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error loading sensor data';
         setError(errorMessage);
+        console.error('❌ Error loading sensor data:', err);
       } finally {
         setLoading(false);
       }
@@ -70,6 +80,9 @@ export const useSensorData = (
 
     const loadOutdoorData = async () => {
       try {
+        console.log('🌤️ Loading ALL outdoor data (no limit)...');
+        const loadStartTime = performance.now();
+
         // NO LIMIT - fetch ALL outdoor data points
         const { data: rawData, error: fetchError } = await supabase
           .from('sensor_data')
@@ -89,10 +102,14 @@ export const useSensorData = (
             dewPoint: d.dew_point
           }));
 
+          const loadEndTime = performance.now();
+          console.log(`✅ Outdoor data loaded in ${(loadEndTime - loadStartTime).toFixed(0)}ms`);
+          console.log(`   Total: ${formattedData.length.toLocaleString()} outdoor data points`);
+
           setOutdoorData(formattedData);
         }
       } catch (err) {
-        console.error('Error loading outdoor data:', err);
+        console.error('❌ Error loading outdoor data:', err);
       }
     };
 

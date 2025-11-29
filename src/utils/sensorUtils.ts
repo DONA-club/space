@@ -1,5 +1,9 @@
 import { SensorDataPoint } from '@/types/sensor.types';
 
+/**
+ * Find the closest data point to a target timestamp using binary search
+ * This is much faster than linear search for large datasets
+ */
 export const findClosestDataPoint = (
   data: SensorDataPoint[],
   targetTimestamp: number
@@ -8,18 +12,40 @@ export const findClosestDataPoint = (
     throw new Error('No data points available');
   }
 
-  let closestData = data[0];
-  let minDiff = Math.abs(data[0].timestamp - targetTimestamp);
+  // Binary search for the closest timestamp
+  let left = 0;
+  let right = data.length - 1;
   
-  for (const point of data) {
-    const diff = Math.abs(point.timestamp - targetTimestamp);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closestData = point;
+  // Handle edge cases
+  if (targetTimestamp <= data[left].timestamp) return data[left];
+  if (targetTimestamp >= data[right].timestamp) return data[right];
+  
+  // Binary search
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    const midTimestamp = data[mid].timestamp;
+    
+    if (midTimestamp === targetTimestamp) {
+      return data[mid];
+    }
+    
+    if (midTimestamp < targetTimestamp) {
+      left = mid + 1;
+    } else {
+      right = mid - 1;
     }
   }
   
-  return closestData;
+  // At this point, right < left
+  // data[right].timestamp < targetTimestamp < data[left].timestamp
+  // Return the closest one
+  if (left >= data.length) return data[right];
+  if (right < 0) return data[left];
+  
+  const leftDiff = Math.abs(data[left].timestamp - targetTimestamp);
+  const rightDiff = Math.abs(data[right].timestamp - targetTimestamp);
+  
+  return leftDiff < rightDiff ? data[left] : data[right];
 };
 
 export const calculateIndoorAverage = (

@@ -52,7 +52,7 @@ export const Scene3DViewer = () => {
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setOutdoorData = useAppStore((state) => state.setOutdoorData);
 
-  const { sensorData, outdoorData } = useSensorData(currentSpace, sensors, hasOutdoorData);
+  const { sensorData, outdoorData, loading: dataLoading } = useSensorData(currentSpace, sensors, hasOutdoorData);
 
   useSceneBackground({
     scene: sceneRef.current?.scene || null,
@@ -101,6 +101,9 @@ export const Scene3DViewer = () => {
       return;
     }
 
+    const updateStartTime = performance.now();
+    console.log(`🔄 Interpolation update triggered for timestamp: ${new Date(currentTimestamp).toLocaleString('fr-FR')}`);
+
     const { scene, interpolationMesh, modelScale, originalCenter } = sceneRef.current;
 
     if (interpolationMesh) {
@@ -109,9 +112,19 @@ export const Scene3DViewer = () => {
     }
 
     const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter, sceneRef.current.modelGroup?.position || null);
-    if (points.length === 0) return;
+    if (points.length === 0) {
+      console.warn('⚠️ No interpolation points generated');
+      return;
+    }
+
+    console.log(`   📊 Built ${points.length} interpolation points from sensor data`);
+    points.forEach((p, idx) => {
+      console.log(`      Point ${idx + 1}: [${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}] = ${p.value.toFixed(2)}`);
+    });
 
     const { min: minValue, max: maxValue } = getValueRange(points);
+    console.log(`   📈 Value range: ${minValue.toFixed(2)} - ${maxValue.toFixed(2)}`);
+
     const validGridPoints = getValidGridPoints(modelBounds, meshResolution, filteredPointCloud, setUnfilteredPointCloud);
     
     const gridValues = interpolateGridValues(points, validGridPoints, interpolationMethod, rbfKernel, idwPower, minValue, maxValue);
@@ -136,6 +149,9 @@ export const Scene3DViewer = () => {
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
+
+    const updateEndTime = performance.now();
+    console.log(`✅ Interpolation update completed in ${(updateEndTime - updateStartTime).toFixed(0)}ms`);
   }, [
     currentTimestamp,
     dataReady,
@@ -204,65 +220,6 @@ export const Scene3DViewer = () => {
           center: bounds.center.toArray(),
           size: bounds.size.toArray()
         });
-        
-        console.log('\n📍 SENSOR POSITIONS ANALYSIS:');
-        console.log('   Original JSON positions → Transformed scene positions');
-        
-        // Calculate sensor bounds
-        let sensorMinX = Infinity, sensorMinY = Infinity, sensorMinZ = Infinity;
-        let sensorMaxX = -Infinity, sensorMaxY = -Infinity, sensorMaxZ = -Infinity;
-        
-        sensors.forEach((sensor, idx) => {
-          const original = sensor.position;
-          const afterCentering = [
-            (original[0] - originalCenter.x) * modelScale,
-            (original[1] - originalCenter.y) * modelScale,
-            (original[2] - originalCenter.z) * modelScale
-          ];
-          const transformed = [
-            afterCentering[0] + modelPosition.x,
-            afterCentering[1] + modelPosition.y,
-            afterCentering[2] + modelPosition.z
-          ];
-          
-          sensorMinX = Math.min(sensorMinX, transformed[0]);
-          sensorMinY = Math.min(sensorMinY, transformed[1]);
-          sensorMinZ = Math.min(sensorMinZ, transformed[2]);
-          sensorMaxX = Math.max(sensorMaxX, transformed[0]);
-          sensorMaxY = Math.max(sensorMaxY, transformed[1]);
-          sensorMaxZ = Math.max(sensorMaxZ, transformed[2]);
-          
-          console.log(`   Sensor ${idx + 1} (${sensor.name}):`);
-          console.log(`      JSON: [${original.map(v => v.toFixed(3)).join(', ')}]`);
-          console.log(`      After centering & scale: [${afterCentering.map(v => v.toFixed(3)).join(', ')}]`);
-          console.log(`      Final (with model offset): [${transformed.map(v => v.toFixed(3)).join(', ')}]`);
-        });
-        
-        const sensorCenter = [
-          (sensorMinX + sensorMaxX) / 2,
-          (sensorMinY + sensorMaxY) / 2,
-          (sensorMinZ + sensorMaxZ) / 2
-        ];
-        
-        console.log('\n📊 BOUNDS COMPARISON:');
-        console.log('   Model bounds:');
-        console.log('      min:', bounds.min.toArray().map(v => v.toFixed(3)));
-        console.log('      max:', bounds.max.toArray().map(v => v.toFixed(3)));
-        console.log('      center:', bounds.center.toArray().map(v => v.toFixed(3)));
-        console.log('   Sensor bounds:');
-        console.log('      min:', [sensorMinX.toFixed(3), sensorMinY.toFixed(3), sensorMinZ.toFixed(3)]);
-        console.log('      max:', [sensorMaxX.toFixed(3), sensorMaxY.toFixed(3), sensorMaxZ.toFixed(3)]);
-        console.log('      center:', sensorCenter.map(v => v.toFixed(3)));
-        
-        console.log('\n🎯 OFFSET CALCULATION:');
-        const offsetX = bounds.center.x - sensorCenter[0];
-        const offsetY = bounds.center.y - sensorCenter[1];
-        const offsetZ = bounds.center.z - sensorCenter[2];
-        console.log('   Offset needed (model center - sensor center):');
-        console.log('      X:', offsetX.toFixed(3));
-        console.log('      Y:', offsetY.toFixed(3));
-        console.log('      Z:', offsetZ.toFixed(3));
-        console.log('   Total offset magnitude:', Math.sqrt(offsetX*offsetX + offsetY*offsetY + offsetZ*offsetZ).toFixed(3));
         
         const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition);
         
@@ -340,12 +297,12 @@ export const Scene3DViewer = () => {
         </div>
       )}
       
-      {gltfModel && loading && (
+      {gltfModel && (loading || dataLoading) && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg z-10">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600 dark:text-gray-300">
-              Chargement du modèle 3D...
+              {loading ? 'Chargement du modèle 3D...' : 'Chargement des données...'}
             </p>
           </div>
         </div>
