@@ -57,6 +57,7 @@ interface AppState {
   
   // Sensors
   sensors: Sensor[];
+  sensorOffset: { x: number; y: number; z: number };
   
   // Outdoor sensor
   outdoorData: OutdoorData | null;
@@ -95,6 +96,7 @@ interface AppState {
   setGltfModel: (model: string | null) => void;
   setRoomVolume: (volume: string | null) => void;
   setSensors: (sensors: Sensor[]) => void;
+  setSensorOffset: (offset: { x: number; y: number; z: number }) => void;
   updateSensorData: (sensorId: number, data: any) => void;
   setSensorCsv: (sensorId: number, file: File) => void;
   setOutdoorData: (data: OutdoorData | null) => void;
@@ -124,6 +126,7 @@ export const useAppStore = create<AppState>((set) => ({
   gltfModel: null,
   roomVolume: null,
   sensors: [],
+  sensorOffset: { x: 0, y: 0, z: 0 },
   outdoorData: null,
   hasOutdoorData: false,
   isPlaying: false,
@@ -161,6 +164,7 @@ export const useAppStore = create<AppState>((set) => ({
   setGltfModel: (model) => set({ gltfModel: model }),
   setRoomVolume: (volume) => set({ roomVolume: volume }),
   setSensors: (sensors) => set({ sensors }),
+  setSensorOffset: (offset) => set({ sensorOffset: offset }),
   updateSensorData: (sensorId, data) => set((state) => ({
     sensors: state.sensors.map(s => 
       s.id === sensorId ? { ...s, currentData: data } : s
