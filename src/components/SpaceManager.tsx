@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { showSuccess, showError } from '@/utils/toast';
-import { Loader2, Plus, Trash2, Download, Upload, FolderOpen, AlertCircle, Info } from 'lucide-react';
+import { Loader2, Plus, Trash2, Download, Upload, FolderOpen, AlertCircle, Info, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
@@ -39,6 +39,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [newSpaceDescription, setNewSpaceDescription] = useState('');
   const [gltfFile, setGltfFile] = useState<File | null>(null);
   const [jsonFile, setJsonFile] = useState<File | null>(null);
+  const [jsonValidation, setJsonValidation] = useState<{ valid: boolean; message: string; sensorCount?: number } | null>(null);
 
   useEffect(() => {
     loadSpaces();
@@ -61,6 +62,81 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     }
   };
 
+  const parseNumber = (value: any): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      return parseFloat(value.replace(',', '.'));
+    }
+    return NaN;
+  };
+
+  const validateJsonFile = async (file: File) => {
+    try {
+      let text = await file.text();
+      
+      // Fix JSON: replace commas with dots in numeric values
+      text = text.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+      
+      console.log('Validating JSON:', text);
+      
+      const data = JSON.parse(text);
+
+      if (!data.points || !Array.isArray(data.points)) {
+        setJsonValidation({
+          valid: false,
+          message: 'Le fichier doit contenir un tableau "points"'
+        });
+        return;
+      }
+
+      if (data.points.length === 0) {
+        setJsonValidation({
+          valid: false,
+          message: 'Le tableau "points" est vide'
+        });
+        return;
+      }
+
+      // Validate each point
+      const invalidPoints: string[] = [];
+      data.points.forEach((point: any, index: number) => {
+        const x = parseNumber(point.x);
+        const y = parseNumber(point.y);
+        const z = parseNumber(point.z);
+        
+        if (isNaN(x) || isNaN(y) || isNaN(z)) {
+          invalidPoints.push(`Point ${index + 1} (${point.name || 'sans nom'}): coordonnées invalides`);
+        }
+      });
+
+      if (invalidPoints.length > 0) {
+        setJsonValidation({
+          valid: false,
+          message: `Points invalides:\n${invalidPoints.join('\n')}`
+        });
+        return;
+      }
+
+      setJsonValidation({
+        valid: true,
+        message: `✓ ${data.points.length} capteur${data.points.length > 1 ? 's' : ''} détecté${data.points.length > 1 ? 's' : ''}`,
+        sensorCount: data.points.length
+      });
+    } catch (error) {
+      console.error('JSON validation error:', error);
+      setJsonValidation({
+        valid: false,
+        message: error instanceof Error ? error.message : 'Format JSON invalide'
+      });
+    }
+  };
+
+  const handleJsonFileSelect = (file: File) => {
+    setJsonFile(file);
+    setJsonValidation(null);
+    validateJsonFile(file);
+  };
+
   const createSpace = async () => {
     if (!newSpaceName.trim()) {
       showError('Le nom de l\'espace est requis');
@@ -69,6 +145,11 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
     if (!gltfFile || !jsonFile) {
       showError('Les fichiers 3D et JSON sont requis');
+      return;
+    }
+
+    if (!jsonValidation?.valid) {
+      showError('Le fichier JSON n\'est pas valide');
       return;
     }
 
@@ -117,6 +198,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
       setNewSpaceDescription('');
       setGltfFile(null);
       setJsonFile(null);
+      setJsonValidation(null);
       loadSpaces();
     } catch (error) {
       console.error('Error creating space:', error);
@@ -256,7 +338,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
                 <div>
                   <Label>Positions des capteurs (JSON) *</Label>
-                  <div className="mt-2">
+                  <div className="mt-2 space-y-2">
                     <Button
                       variant="outline"
                       className="w-full"
@@ -266,7 +348,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         input.accept = '.json';
                         input.onchange = (e) => {
                           const file = (e.target as HTMLInputElement).files?.[0];
-                          if (file) setJsonFile(file);
+                          if (file) handleJsonFileSelect(file);
                         };
                         input.click();
                       }}
@@ -274,13 +356,50 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                       <Upload size={16} className="mr-2" />
                       {jsonFile ? jsonFile.name : 'Choisir un fichier'}
                     </Button>
+
+                    {jsonValidation && (
+                      <Alert className={jsonValidation.valid 
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                      }>
+                        {jsonValidation.valid ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                        )}
+                        <AlertDescription className={`text-xs whitespace-pre-line ${
+                          jsonValidation.valid 
+                            ? 'text-green-800 dark:text-green-200'
+                            : 'text-red-800 dark:text-red-200'
+                        }`}>
+                          {jsonValidation.message}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <p className="font-medium mb-1">Format JSON attendu :</p>
+                    <pre className="text-xs overflow-x-auto bg-white dark:bg-black p-2 rounded">
+{`{
+  "points": [
+    {
+      "name": "Capteur 1",
+      "x": -2.046877,
+      "y": 2.426022,
+      "z": 3.303156
+    }
+  ]
+}`}
+                    </pre>
+                    <p className="mt-2">✓ Supporte les virgules comme séparateurs décimaux</p>
                   </div>
                 </div>
 
                 <div className="flex gap-2">
                   <Button
                     onClick={createSpace}
-                    disabled={creating || !newSpaceName || !gltfFile || !jsonFile}
+                    disabled={creating || !newSpaceName || !gltfFile || !jsonFile || !jsonValidation?.valid}
                     className="flex-1"
                   >
                     {creating ? (
@@ -300,6 +419,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                       setNewSpaceDescription('');
                       setGltfFile(null);
                       setJsonFile(null);
+                      setJsonValidation(null);
                     }}
                   >
                     Annuler
