@@ -4,12 +4,11 @@ import { useState, useEffect } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Grid3x3, Upload, Download, Trash2, FolderUp, Loader2, Clock, Info, CloudSun } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Grid3x3, Upload, Download, Trash2, FolderUp, Loader2, Clock, Info, CloudSun, Sparkles, Zap, Waves, Activity, Box, Layers, GitBranch } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { Alert, AlertDescription } from './ui/alert';
@@ -98,7 +97,7 @@ export const SensorPanel = () => {
         .from('sensor_data')
         .select('*', { count: 'exact', head: true })
         .eq('space_id', currentSpace.id)
-        .eq('sensor_id', 0); // Outdoor sensor uses ID 0
+        .eq('sensor_id', 0);
 
       if (error) throw error;
       setOutdoorDataCount(count || 0);
@@ -171,7 +170,6 @@ export const SensorPanel = () => {
       for (const file of fileArray) {
         if (!file.name.endsWith('.csv')) continue;
 
-        // Check if it's an outdoor file
         if (isOutdoorFile(file.name)) {
           await handleOutdoorCSVUpload(file, false);
           outdoorFileProcessed = true;
@@ -265,7 +263,7 @@ export const SensorPanel = () => {
 
         newData.push({
           space_id: currentSpace.id,
-          sensor_id: 0, // Outdoor sensor uses ID 0
+          sensor_id: 0,
           sensor_name: 'Extérieur',
           timestamp: timestamp.toISOString(),
           temperature: temp,
@@ -764,13 +762,13 @@ export const SensorPanel = () => {
         </div>
       </LiquidGlassCard>
 
-      {/* Interpolation Card */}
+      {/* Interpolation Card - Modern Design */}
       {dataReady && (
         <LiquidGlassCard className="flex-shrink-0">
-          <div className="p-3 space-y-2">
+          <div className="p-3 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Grid3x3 size={14} className="text-purple-600" />
+                <Sparkles size={14} className="text-purple-600" />
                 <h3 className="font-medium text-sm">Interpolation</h3>
               </div>
               <Switch
@@ -787,45 +785,104 @@ export const SensorPanel = () => {
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="space-y-2"
+                  className="space-y-3"
                 >
-                  {/* Visualization Type */}
-                  <div className="space-y-1">
-                    <Label className="text-xs flex items-center gap-1">
-                      Type de visualisation
+                  {/* Visualization Type - Icon Grid */}
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600 dark:text-gray-400">Visualisation</Label>
+                    <div className="grid grid-cols-4 gap-2">
                       <TooltipPrimitive.Provider delayDuration={300}>
                         <TooltipPrimitive.Root>
                           <TooltipPrimitive.Trigger asChild>
-                            <Info size={12} className="text-gray-400 cursor-help" />
+                            <button
+                              onClick={() => setVisualizationType('points')}
+                              className={`relative p-3 rounded-xl transition-all ${
+                                visualizationType === 'points'
+                                  ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-2 border-blue-400 dark:border-blue-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Sparkles size={18} className={visualizationType === 'points' ? 'text-blue-600' : 'text-gray-500'} />
+                            </button>
                           </TooltipPrimitive.Trigger>
                           <TooltipPrimitive.Portal>
                             <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
-                              <p className="font-medium mb-1">Types de visualisation :</p>
-                              <ul className="space-y-1 text-gray-300">
-                                <li>• <strong>Points :</strong> Nuage de points colorés (rapide)</li>
-                                <li>• <strong>Vecteurs :</strong> Champ de gradients (direction)</li>
-                                <li>• <strong>Isosurface :</strong> Niveaux de valeurs (contours)</li>
-                                <li>• <strong>Mesh :</strong> Maillage volumique (dense)</li>
-                              </ul>
+                              <p className="font-medium">Points</p>
+                              <p className="text-gray-300">Nuage de points colorés</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setVisualizationType('vectors')}
+                              className={`relative p-3 rounded-xl transition-all ${
+                                visualizationType === 'vectors'
+                                  ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-2 border-green-400 dark:border-green-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <GitBranch size={18} className={visualizationType === 'vectors' ? 'text-green-600' : 'text-gray-500'} />
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium">Vecteurs</p>
+                              <p className="text-gray-300">Champ de gradients</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setVisualizationType('isosurface')}
+                              className={`relative p-3 rounded-xl transition-all ${
+                                visualizationType === 'isosurface'
+                                  ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-2 border-purple-400 dark:border-purple-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Layers size={18} className={visualizationType === 'isosurface' ? 'text-purple-600' : 'text-gray-500'} />
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium">Isosurface</p>
+                              <p className="text-gray-300">Niveaux de valeurs</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setVisualizationType('mesh')}
+                              className={`relative p-3 rounded-xl transition-all ${
+                                visualizationType === 'mesh'
+                                  ? 'bg-gradient-to-br from-orange-500/20 to-red-500/20 border-2 border-orange-400 dark:border-orange-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Box size={18} className={visualizationType === 'mesh' ? 'text-orange-600' : 'text-gray-500'} />
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium">Mesh</p>
+                              <p className="text-gray-300">Maillage volumique</p>
                             </TooltipPrimitive.Content>
                           </TooltipPrimitive.Portal>
                         </TooltipPrimitive.Root>
                       </TooltipPrimitive.Provider>
-                    </Label>
-                    <Tabs value={visualizationType} onValueChange={(v) => setVisualizationType(v as any)}>
-                      <TabsList className="grid grid-cols-4 w-full h-8">
-                        <TabsTrigger value="points" className="text-[10px] px-1">Points</TabsTrigger>
-                        <TabsTrigger value="vectors" className="text-[10px] px-1">Vecteurs</TabsTrigger>
-                        <TabsTrigger value="isosurface" className="text-[10px] px-1">ISO</TabsTrigger>
-                        <TabsTrigger value="mesh" className="text-[10px] px-1">Mesh</TabsTrigger>
-                      </TabsList>
-                    </Tabs>
+                    </div>
                   </div>
 
-                  {/* Resolution */}
+                  {/* Resolution Slider */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs">Résolution</Label>
+                      <Label className="text-xs text-gray-600 dark:text-gray-400">Résolution</Label>
                       <span className="text-xs font-medium text-purple-600">{meshResolution}³</span>
                     </div>
                     <Slider
@@ -836,42 +893,60 @@ export const SensorPanel = () => {
                       step={5}
                       className="h-1"
                     />
-                    <p className="text-[9px] text-gray-500 dark:text-gray-400">
-                      {Math.pow(meshResolution, 3).toLocaleString()} points
-                    </p>
                   </div>
 
-                  {/* Interpolation Method */}
-                  <div className="space-y-1">
-                    <Label className="text-xs flex items-center gap-1">
-                      Méthode
+                  {/* Interpolation Method - Icon Buttons */}
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600 dark:text-gray-400">Méthode</Label>
+                    <div className="grid grid-cols-2 gap-2">
                       <TooltipPrimitive.Provider delayDuration={300}>
                         <TooltipPrimitive.Root>
                           <TooltipPrimitive.Trigger asChild>
-                            <Info size={12} className="text-gray-400 cursor-help" />
+                            <button
+                              onClick={() => setInterpolationMethod('idw')}
+                              className={`relative p-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                                interpolationMethod === 'idw'
+                                  ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-2 border-blue-400 dark:border-blue-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Zap size={16} className={interpolationMethod === 'idw' ? 'text-blue-600' : 'text-gray-500'} />
+                              <span className={`text-xs font-medium ${interpolationMethod === 'idw' ? 'text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}>IDW</span>
+                            </button>
                           </TooltipPrimitive.Trigger>
                           <TooltipPrimitive.Portal>
                             <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
-                              <p className="font-medium mb-1">Méthodes d'interpolation :</p>
-                              <ul className="space-y-1 text-gray-300">
-                                <li>• <strong>IDW :</strong> Inverse Distance Weighting</li>
-                                <li className="ml-3 text-[10px]">✓ Rapide et simple</li>
-                                <li className="ml-3 text-[10px]">✓ Bon pour données uniformes</li>
-                                <li>• <strong>RBF :</strong> Radial Basis Functions</li>
-                                <li className="ml-3 text-[10px]">✓ Surfaces très lisses</li>
-                                <li className="ml-3 text-[10px]">✗ Plus coûteux en calcul</li>
-                              </ul>
+                              <p className="font-medium mb-1">Inverse Distance Weighting</p>
+                              <p className="text-gray-300">✓ Rapide et simple</p>
+                              <p className="text-gray-300">✓ Bon pour données uniformes</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setInterpolationMethod('rbf')}
+                              className={`relative p-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                                interpolationMethod === 'rbf'
+                                  ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-2 border-purple-400 dark:border-purple-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Waves size={16} className={interpolationMethod === 'rbf' ? 'text-purple-600' : 'text-gray-500'} />
+                              <span className={`text-xs font-medium ${interpolationMethod === 'rbf' ? 'text-purple-700 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400'}`}>RBF</span>
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium mb-1">Radial Basis Functions</p>
+                              <p className="text-gray-300">✓ Surfaces très lisses</p>
+                              <p className="text-gray-300">✗ Plus coûteux en calcul</p>
                             </TooltipPrimitive.Content>
                           </TooltipPrimitive.Portal>
                         </TooltipPrimitive.Root>
                       </TooltipPrimitive.Provider>
-                    </Label>
-                    <Tabs value={interpolationMethod} onValueChange={(v) => setInterpolationMethod(v as any)}>
-                      <TabsList className="grid grid-cols-2 w-full h-8">
-                        <TabsTrigger value="idw" className="text-xs">IDW</TabsTrigger>
-                        <TabsTrigger value="rbf" className="text-xs">RBF</TabsTrigger>
-                      </TabsList>
-                    </Tabs>
+                    </div>
                   </div>
 
                   {/* IDW Power */}
@@ -884,26 +959,7 @@ export const SensorPanel = () => {
                       className="space-y-1"
                     >
                       <div className="flex items-center justify-between">
-                        <Label className="text-xs flex items-center gap-1">
-                          Exposant (p)
-                          <TooltipPrimitive.Provider delayDuration={300}>
-                            <TooltipPrimitive.Root>
-                              <TooltipPrimitive.Trigger asChild>
-                                <Info size={12} className="text-gray-400 cursor-help" />
-                              </TooltipPrimitive.Trigger>
-                              <TooltipPrimitive.Portal>
-                                <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
-                                  <p className="font-medium mb-1">Exposant de pondération :</p>
-                                  <ul className="space-y-1 text-gray-300">
-                                    <li>• p=1 : Influence linéaire</li>
-                                    <li>• p=2 : Standard (recommandé)</li>
-                                    <li>• p&gt;2 : Influence locale forte</li>
-                                  </ul>
-                                </TooltipPrimitive.Content>
-                              </TooltipPrimitive.Portal>
-                            </TooltipPrimitive.Root>
-                          </TooltipPrimitive.Provider>
-                        </Label>
+                        <Label className="text-xs text-gray-600 dark:text-gray-400">Exposant</Label>
                         <span className="text-xs font-medium text-blue-600">{idwPower}</span>
                       </div>
                       <Slider
@@ -926,31 +982,11 @@ export const SensorPanel = () => {
                       transition={{ duration: 0.2 }}
                       className="space-y-1"
                     >
-                      <Label className="text-xs flex items-center gap-1">
-                        Fonction de base
-                        <TooltipPrimitive.Provider delayDuration={300}>
-                          <TooltipPrimitive.Root>
-                            <TooltipPrimitive.Trigger asChild>
-                              <Info size={12} className="text-gray-400 cursor-help" />
-                            </TooltipPrimitive.Trigger>
-                            <TooltipPrimitive.Portal>
-                              <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
-                                <p className="font-medium mb-1">Fonctions RBF :</p>
-                                <ul className="space-y-1 text-gray-300">
-                                  <li>• <strong>Multiquadric :</strong> Polyvalent (recommandé)</li>
-                                  <li>• <strong>Gaussienne :</strong> Lisse et locale</li>
-                                  <li>• <strong>Inverse MQ :</strong> Décroissance rapide</li>
-                                  <li>• <strong>Thin Plate :</strong> Surfaces naturelles</li>
-                                </ul>
-                              </TooltipPrimitive.Content>
-                            </TooltipPrimitive.Portal>
-                          </TooltipPrimitive.Root>
-                        </TooltipPrimitive.Provider>
-                      </Label>
+                      <Label className="text-xs text-gray-600 dark:text-gray-400">Fonction</Label>
                       <select
                         value={rbfKernel}
                         onChange={(e) => setRbfKernel(e.target.value as any)}
-                        className="w-full text-xs bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-lg px-2 py-1.5 border border-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full text-xs bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-lg px-2 py-2 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
                       >
                         <option value="multiquadric">Multiquadric</option>
                         <option value="gaussian">Gaussienne</option>
