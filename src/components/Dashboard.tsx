@@ -55,7 +55,9 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                   className="hover:bg-white/50 dark:hover:bg-black/50"
                 >
                   <ArrowLeft size={16} className="mr-2" />
-                  Espaces
+                  <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-semibold">
+                    Space
+                  </span>
                 </Button>
                 
                 <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>

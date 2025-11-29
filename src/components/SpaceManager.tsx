@@ -270,7 +270,9 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Mes Espaces</h2>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Space
+          </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Gérez vos modèles 3D et données de capteurs
           </p>
