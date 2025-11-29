@@ -1,9 +1,5 @@
 import { SensorDataPoint } from '@/types/sensor.types';
 
-/**
- * Find the closest data point to a target timestamp using binary search
- * This is much faster than linear search for large datasets
- */
 export const findClosestDataPoint = (
   data: SensorDataPoint[],
   targetTimestamp: number
@@ -12,27 +8,21 @@ export const findClosestDataPoint = (
     throw new Error('No data points available');
   }
 
-  // Binary search for the closest timestamp
   let left = 0;
   let right = data.length - 1;
   
-  // Handle edge cases
   if (targetTimestamp <= data[left].timestamp) {
-    console.log(`🔍 Target ${new Date(targetTimestamp).toLocaleString('fr-FR')} is before first data point, returning first: ${new Date(data[left].timestamp).toLocaleString('fr-FR')}`);
     return data[left];
   }
   if (targetTimestamp >= data[right].timestamp) {
-    console.log(`🔍 Target ${new Date(targetTimestamp).toLocaleString('fr-FR')} is after last data point, returning last: ${new Date(data[right].timestamp).toLocaleString('fr-FR')}`);
     return data[right];
   }
   
-  // Binary search
   while (left <= right) {
     const mid = Math.floor((left + right) / 2);
     const midTimestamp = data[mid].timestamp;
     
     if (midTimestamp === targetTimestamp) {
-      console.log(`🎯 Exact match found at ${new Date(targetTimestamp).toLocaleString('fr-FR')}`);
       return data[mid];
     }
     
@@ -43,19 +33,13 @@ export const findClosestDataPoint = (
     }
   }
   
-  // At this point, right < left
-  // data[right].timestamp < targetTimestamp < data[left].timestamp
-  // Return the closest one
   if (left >= data.length) return data[right];
   if (right < 0) return data[left];
   
   const leftDiff = Math.abs(data[left].timestamp - targetTimestamp);
   const rightDiff = Math.abs(data[right].timestamp - targetTimestamp);
   
-  const closest = leftDiff < rightDiff ? data[left] : data[right];
-  console.log(`🔍 Closest to ${new Date(targetTimestamp).toLocaleString('fr-FR')} is ${new Date(closest.timestamp).toLocaleString('fr-FR')} (diff: ${Math.min(leftDiff, rightDiff)}ms)`);
-  
-  return closest;
+  return leftDiff < rightDiff ? data[left] : data[right];
 };
 
 export const calculateIndoorAverage = (

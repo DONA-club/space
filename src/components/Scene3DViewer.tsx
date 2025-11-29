@@ -9,6 +9,7 @@ import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpola
 import { ColorLegend } from "./ColorLegend";
 import { OutdoorBadge } from "./scene3d/OutdoorBadge";
 import { AverageTemperatureBadge } from "./scene3d/AverageTemperatureBadge";
+import { AirVolumeInfoBadge } from "./scene3d/AirVolumeInfoBadge";
 import { useSensorData } from "@/hooks/useSensorData";
 import { useSceneBackground } from "@/hooks/useSceneBackground";
 import { useSensorMeshUpdates } from "@/hooks/useSensorMeshUpdates";
@@ -19,6 +20,7 @@ import { createSensorSpheres } from "./scene3d/SensorSpheres";
 import { createScene, createCamera, createRenderer, setupLights, createControls } from "./scene3d/SceneSetup";
 import { SceneRef, ModelBounds } from "@/types/scene.types";
 import { INTERPOLATION_OFFSET, INTERPOLATION_DEFAULTS, VISUALIZATION_DEFAULTS } from "@/constants/interpolation";
+import { calculateAirDensity, calculateAirMass } from "@/utils/airCalculations";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,6 +34,10 @@ export const Scene3DViewer = () => {
   const [indoorAverage, setIndoorAverage] = useState<any>(null);
   const [volumetricAverage, setVolumetricAverage] = useState<number | null>(null);
   const [interpolationPointCount, setInterpolationPointCount] = useState<number>(0);
+  const [airVolume, setAirVolume] = useState<number | null>(null);
+  const [airMass, setAirMass] = useState<number | null>(null);
+  const [averageTemperature, setAverageTemperature] = useState<number | null>(null);
+  const [averageHumidity, setAverageHumidity] = useState<number | null>(null);
   
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
@@ -53,7 +59,7 @@ export const Scene3DViewer = () => {
   const setOutdoorData = useAppStore((state) => state.setOutdoorData);
   const sensorOffset = useAppStore((state) => state.sensorOffset);
 
-  const { sensorData, outdoorData, loading: dataLoading } = useSensorData(currentSpace, sensors, hasOutdoorData, currentTimestamp);
+  const { sensorData, outdoorData } = useSensorData(currentSpace, sensors, hasOutdoorData, currentTimestamp);
 
   useSceneBackground({
     scene: sceneRef.current?.scene || null,
@@ -88,21 +94,18 @@ export const Scene3DViewer = () => {
     dataReady
   });
 
-  // Update sensor positions when offset changes
   useEffect(() => {
     if (!sceneRef.current || !modelLoaded) return;
 
     const { scene, sensorMeshes, modelScale, originalCenter, modelGroup } = sceneRef.current;
     const modelPosition = modelGroup?.position || new THREE.Vector3(0, 0, 0);
 
-    // Remove old sensor meshes
     sensorMeshes.forEach((meshes) => {
       scene.remove(meshes.sphere);
       scene.remove(meshes.glow);
       scene.remove(meshes.sprite);
     });
 
-    // Create new sensor meshes with updated offset
     const newSensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition, sensorOffset);
     
     newSensorMeshes.forEach((meshes) => {
@@ -114,7 +117,6 @@ export const Scene3DViewer = () => {
     sceneRef.current.sensorMeshes = newSensorMeshes;
   }, [sensorOffset, sensors, modelLoaded]);
 
-  // Real-time interpolation update
   useEffect(() => {
     if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || sensorData.size === 0) {
       if (sceneRef.current?.interpolationMesh) {
@@ -125,6 +127,10 @@ export const Scene3DViewer = () => {
       setInterpolationRange(null);
       setVolumetricAverage(null);
       setInterpolationPointCount(0);
+      setAirVolume(null);
+      setAirMass(null);
+      setAverageTemperature(null);
+      setAverageHumidity(null);
       return;
     }
 
@@ -151,6 +157,23 @@ export const Scene3DViewer = () => {
     setInterpolationPointCount(gridValues.length);
 
     setInterpolationRange({ min: minValue, max: maxValue });
+
+    // Calculate air volume and mass
+    const { volume, mass, avgTemp, avgHumidity } = calculateAirProperties(
+      gridValues,
+      points,
+      validGridPoints,
+      interpolationMethod,
+      rbfKernel,
+      idwPower,
+      modelBounds,
+      meshResolution
+    );
+    
+    setAirVolume(volume);
+    setAirMass(mass);
+    setAverageTemperature(avgTemp);
+    setAverageHumidity(avgHumidity);
 
     const newMesh = createVisualizationMesh(
       gridValues,
@@ -281,6 +304,15 @@ export const Scene3DViewer = () => {
         pointCount={interpolationPointCount}
       />
       
+      <AirVolumeInfoBadge
+        airVolume={airVolume}
+        airMass={airMass}
+        averageTemperature={averageTemperature}
+        averageHumidity={averageHumidity}
+        meshingEnabled={meshingEnabled}
+        dataReady={dataReady}
+      />
+      
       <ColorLegend />
       
       <OutdoorBadge
@@ -300,12 +332,12 @@ export const Scene3DViewer = () => {
         </div>
       )}
       
-      {gltfModel && (loading || dataLoading) && (
+      {gltfModel && loading && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg z-10">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600 dark:text-gray-300">
-              {loading ? 'Chargement du modèle 3D...' : 'Chargement des données...'}
+              Chargement du modèle 3D...
             </p>
           </div>
         </div>
@@ -473,6 +505,75 @@ const calculateWeightedAverage = (
   return sum / gridValues.length;
 };
 
+const calculateAirProperties = (
+  gridValues: { x: number; y: number; z: number; value: number }[],
+  sensorPoints: Point3D[],
+  validGridPoints: { x: number; y: number; z: number }[],
+  interpolationMethod: string,
+  rbfKernel: string,
+  idwPower: number,
+  modelBounds: ModelBounds,
+  meshResolution: number
+): { volume: number; mass: number; avgTemp: number; avgHumidity: number } => {
+  const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
+  const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
+  const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
+  
+  const voxelVolume = stepX * stepY * stepZ;
+  const totalVolume = voxelVolume * validGridPoints.length;
+
+  // Build temperature and humidity points from sensor data
+  const tempPoints: Point3D[] = [];
+  const humidityPoints: Point3D[] = [];
+  
+  sensorPoints.forEach(point => {
+    tempPoints.push(point);
+    humidityPoints.push(point);
+  });
+
+  let rbfTempInterpolator: RBFInterpolator | null = null;
+  let rbfHumidityInterpolator: RBFInterpolator | null = null;
+  
+  if (interpolationMethod === 'rbf') {
+    rbfTempInterpolator = new RBFInterpolator(tempPoints, rbfKernel as any, 1.0);
+    rbfHumidityInterpolator = new RBFInterpolator(humidityPoints, rbfKernel as any, 1.0);
+  }
+
+  let totalMass = 0;
+  let totalTemp = 0;
+  let totalHumidity = 0;
+
+  validGridPoints.forEach(({ x, y, z }) => {
+    let temperature: number;
+    let humidity: number;
+
+    if (interpolationMethod === 'idw') {
+      temperature = interpolateIDW(tempPoints, { x, y, z }, idwPower);
+      humidity = interpolateIDW(humidityPoints, { x, y, z }, idwPower);
+    } else {
+      temperature = rbfTempInterpolator!.interpolate({ x, y, z });
+      humidity = rbfHumidityInterpolator!.interpolate({ x, y, z });
+    }
+
+    const density = calculateAirDensity(temperature, humidity);
+    const voxelMass = density * voxelVolume;
+    
+    totalMass += voxelMass;
+    totalTemp += temperature;
+    totalHumidity += humidity;
+  });
+
+  const avgTemp = totalTemp / validGridPoints.length;
+  const avgHumidity = totalHumidity / validGridPoints.length;
+
+  return {
+    volume: totalVolume,
+    mass: totalMass,
+    avgTemp,
+    avgHumidity
+  };
+};
+
 const createVisualizationMesh = (
   gridValues: { x: number; y: number; z: number; value: number }[],
   minValue: number,
@@ -631,17 +732,11 @@ const createVolumeMesh = (
   const colors: number[] = [];
   const indices: number[] = [];
   
-  // Calculate grid spacing based on resolution
   const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
   const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
   const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
   
-  // Cube size is half the minimum step to prevent overlapping
   const cubeSize = Math.min(stepX, stepY, stepZ) * 0.45;
-  
-  console.log(`🔲 Mesh resolution: ${meshResolution}³`);
-  console.log(`📏 Grid steps: X=${stepX.toFixed(3)}, Y=${stepY.toFixed(3)}, Z=${stepZ.toFixed(3)}`);
-  console.log(`📦 Cube size: ${cubeSize.toFixed(3)} (45% of min step)`);
   
   let vertexIndex = 0;
   
@@ -651,7 +746,6 @@ const createVolumeMesh = (
     const x = point.x, y = point.y, z = point.z;
     const color = getColorFromValueSaturated(point.value, minValue, maxValue, selectedMetric as any);
     
-    // Create cube vertices centered on the grid point
     const vertices = [
       [x - cubeSize, y - cubeSize, z - cubeSize],
       [x + cubeSize, y - cubeSize, z - cubeSize],
@@ -668,14 +762,13 @@ const createVolumeMesh = (
       colors.push(color.r, color.g, color.b);
     });
     
-    // Define cube faces (12 triangles = 6 faces * 2 triangles per face)
     const faceIndices = [
-      [0, 1, 2], [0, 2, 3], // Front
-      [4, 6, 5], [4, 7, 6], // Back
-      [0, 4, 5], [0, 5, 1], // Bottom
-      [2, 6, 7], [2, 7, 3], // Top
-      [0, 3, 7], [0, 7, 4], // Left
-      [1, 5, 6], [1, 6, 2], // Right
+      [0, 1, 2], [0, 2, 3],
+      [4, 6, 5], [4, 7, 6],
+      [0, 4, 5], [0, 5, 1],
+      [2, 6, 7], [2, 7, 3],
+      [0, 3, 7], [0, 7, 4],
+      [1, 5, 6], [1, 6, 2],
     ];
     
     faceIndices.forEach(face => {
