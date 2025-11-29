@@ -197,15 +197,21 @@ export const Scene3DViewer = () => {
         console.log('🏠 MODEL TRANSFORMATION:');
         console.log('   Original center:', originalCenter.toArray());
         console.log('   Model scale:', modelScale);
-        console.log('   Final bounds:', {
+        console.log('   Final model bounds (after transformation):', {
           min: bounds.min.toArray(),
           max: bounds.max.toArray(),
           center: bounds.center.toArray(),
           size: bounds.size.toArray()
         });
-        console.log('   Model position after centering:', gltf.scene.position.toArray());
+        console.log('   Model position in scene:', gltf.scene.position.toArray());
         
-        console.log('📍 SENSOR POSITIONS:');
+        console.log('\n📍 SENSOR POSITIONS ANALYSIS:');
+        console.log('   Original JSON positions → Transformed scene positions');
+        
+        // Calculate sensor bounds
+        let sensorMinX = Infinity, sensorMinY = Infinity, sensorMinZ = Infinity;
+        let sensorMaxX = -Infinity, sensorMaxY = -Infinity, sensorMaxZ = -Infinity;
+        
         sensors.forEach((sensor, idx) => {
           const original = sensor.position;
           const transformed = [
@@ -213,10 +219,44 @@ export const Scene3DViewer = () => {
             (original[1] - originalCenter.y) * modelScale,
             (original[2] - originalCenter.z) * modelScale
           ];
+          
+          sensorMinX = Math.min(sensorMinX, transformed[0]);
+          sensorMinY = Math.min(sensorMinY, transformed[1]);
+          sensorMinZ = Math.min(sensorMinZ, transformed[2]);
+          sensorMaxX = Math.max(sensorMaxX, transformed[0]);
+          sensorMaxY = Math.max(sensorMaxY, transformed[1]);
+          sensorMaxZ = Math.max(sensorMaxZ, transformed[2]);
+          
           console.log(`   Sensor ${idx + 1} (${sensor.name}):`);
-          console.log(`      Original: [${original.map(v => v.toFixed(3)).join(', ')}]`);
-          console.log(`      Transformed: [${transformed.map(v => v.toFixed(3)).join(', ')}]`);
+          console.log(`      JSON: [${original.map(v => v.toFixed(3)).join(', ')}]`);
+          console.log(`      Scene: [${transformed.map(v => v.toFixed(3)).join(', ')}]`);
         });
+        
+        const sensorCenter = [
+          (sensorMinX + sensorMaxX) / 2,
+          (sensorMinY + sensorMaxY) / 2,
+          (sensorMinZ + sensorMaxZ) / 2
+        ];
+        
+        console.log('\n📊 BOUNDS COMPARISON:');
+        console.log('   Model bounds:');
+        console.log('      min:', bounds.min.toArray().map(v => v.toFixed(3)));
+        console.log('      max:', bounds.max.toArray().map(v => v.toFixed(3)));
+        console.log('      center:', bounds.center.toArray().map(v => v.toFixed(3)));
+        console.log('   Sensor bounds:');
+        console.log('      min:', [sensorMinX.toFixed(3), sensorMinY.toFixed(3), sensorMinZ.toFixed(3)]);
+        console.log('      max:', [sensorMaxX.toFixed(3), sensorMaxY.toFixed(3), sensorMaxZ.toFixed(3)]);
+        console.log('      center:', sensorCenter.map(v => v.toFixed(3)));
+        
+        console.log('\n🎯 OFFSET CALCULATION:');
+        const offsetX = bounds.center.x - sensorCenter[0];
+        const offsetY = bounds.center.y - sensorCenter[1];
+        const offsetZ = bounds.center.z - sensorCenter[2];
+        console.log('   Offset needed (model center - sensor center):');
+        console.log('      X:', offsetX.toFixed(3));
+        console.log('      Y:', offsetY.toFixed(3));
+        console.log('      Z:', offsetZ.toFixed(3));
+        console.log('   Total offset magnitude:', Math.sqrt(offsetX*offsetX + offsetY*offsetY + offsetZ*offsetZ).toFixed(3));
         
         const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter);
         
@@ -383,7 +423,6 @@ const getValidGridPoints = (
   const validGridPoints: { x: number; y: number; z: number }[] = [];
   
   if (filteredPointCloud && filteredPointCloud.length > 0) {
-    console.log('📊 Using filtered point cloud:', filteredPointCloud.length / 3, 'points');
     for (let i = 0; i < filteredPointCloud.length; i += 3) {
       validGridPoints.push({
         x: filteredPointCloud[i],
@@ -392,12 +431,6 @@ const getValidGridPoints = (
       });
     }
   } else {
-    console.log('📊 Generating grid from model bounds:', {
-      min: modelBounds.min.toArray(),
-      max: modelBounds.max.toArray(),
-      resolution: meshResolution
-    });
-    
     const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
     const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
     const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
@@ -420,10 +453,6 @@ const getValidGridPoints = (
       unfilteredArray[i * 3 + 2] = p.z;
     });
     setUnfilteredPointCloud(unfilteredArray);
-    
-    console.log('📊 Grid generated:', validGridPoints.length, 'points');
-    console.log('   First point:', validGridPoints[0]);
-    console.log('   Last point:', validGridPoints[validGridPoints.length - 1]);
   }
 
   return validGridPoints;
@@ -460,9 +489,6 @@ const calculateWeightedAverage = (
 ): number => {
   if (gridValues.length === 0) return 0;
   
-  // Simple arithmetic mean (all points have equal weight)
-  // For a true volumetric average, we would need to weight by cell volume
-  // but since we have a uniform grid, all cells have the same volume
   const sum = gridValues.reduce((acc, point) => acc + point.value, 0);
   return sum / gridValues.length;
 };
@@ -492,7 +518,6 @@ const createVisualizationMesh = (
 
   const avgDim = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3;
   
-  // Different visualization types
   if (visualizationType === 'vectors') {
     return createVectorField(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution);
   } else if (visualizationType === 'isosurface') {
@@ -501,7 +526,6 @@ const createVisualizationMesh = (
     return createVolumeMesh(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution);
   }
   
-  // Default: points
   const pointSize = filteredPointCloud 
     ? avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR 
     : avgDim / meshResolution * 0.5;
@@ -690,23 +714,18 @@ const createVolumeMesh = (
 };
 
 const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
-  // Get original bounding box BEFORE any transformation
   const originalBox = new THREE.Box3().setFromObject(gltf.scene);
   const originalCenter = originalBox.getCenter(new THREE.Vector3());
   const originalSize = originalBox.getSize(new THREE.Vector3());
   
-  // Center the model at origin
   gltf.scene.position.sub(originalCenter);
   
-  // Calculate scale
   const maxDim = Math.max(originalSize.x, originalSize.y, originalSize.z);
   const modelScale = maxDim > 0 ? 10 / maxDim : 1;
   gltf.scene.scale.multiplyScalar(modelScale);
   
-  // Add to scene
   scene.add(gltf.scene);
   
-  // Calculate bounds AFTER transformation by getting the actual bounding box from the scene
   const transformedBox = new THREE.Box3().setFromObject(gltf.scene);
   
   const bounds: ModelBounds = {
