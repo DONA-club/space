@@ -65,9 +65,7 @@ export const DataControlPanel = () => {
     if (!currentSpace) return;
 
     try {
-      console.log('🔍 Starting data analysis from Supabase...');
-      
-      // Get time range from all sensor data (no limit)
+      // Get time range from all sensor data (NO LIMIT - fetch all data)
       const { data: minData, error: minError } = await supabase
         .from('sensor_data')
         .select('timestamp')
@@ -95,7 +93,7 @@ export const DataControlPanel = () => {
       const minTime = new Date(minData.timestamp).getTime();
       const maxTime = new Date(maxData.timestamp).getTime();
       
-      // Get total count
+      // Get total count across all sensors
       const { count, error: countError } = await supabase
         .from('sensor_data')
         .select('*', { count: 'exact', head: true })
@@ -112,13 +110,6 @@ export const DataControlPanel = () => {
       const hours = Math.floor(duration % 24);
       
       showSuccess(`Analyse terminée ! ${sensors.length} capteurs, ${(count || 0).toLocaleString()} points sur ${days}j ${hours}h`);
-      
-      console.log('✅ Data analysis complete:', {
-        sensors: sensors.length,
-        points: count || 0,
-        duration: `${days}j ${hours}h`,
-        timeRange: [new Date(minTime).toISOString(), new Date(maxTime).toISOString()]
-      });
     } catch (error) {
       console.error('Error analyzing data:', error);
       showError(error instanceof Error ? error.message : 'Erreur lors de l\'analyse des données');

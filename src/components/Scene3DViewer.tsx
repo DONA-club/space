@@ -108,6 +108,7 @@ export const Scene3DViewer = () => {
 
     const { min: minValue, max: maxValue } = getValueRange(points);
     const validGridPoints = getValidGridPoints(modelBounds, meshResolution, filteredPointCloud, setUnfilteredPointCloud);
+    
     const gridValues = interpolateGridValues(points, validGridPoints, interpolationMethod, rbfKernel, idwPower, minValue, maxValue);
 
     setInterpolationRange({ min: minValue, max: maxValue });
@@ -126,7 +127,7 @@ export const Scene3DViewer = () => {
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
   }, [
-    currentTimestamp, // Key dependency for real-time updates
+    currentTimestamp,
     dataReady,
     meshingEnabled,
     modelBounds,
@@ -462,12 +463,11 @@ const createVectorField = (
   meshResolution: number
 ): THREE.Group => {
   const group = new THREE.Group();
-  const step = Math.floor(meshResolution / VISUALIZATION_DEFAULTS.VECTOR_STEP_DIVISOR);
+  const step = Math.max(1, Math.floor(meshResolution / VISUALIZATION_DEFAULTS.VECTOR_STEP_DIVISOR));
   
   for (let i = 0; i < gridValues.length; i += step) {
     const point = gridValues[i];
     
-    // Calculate gradient direction (simplified)
     let gradX = 0, gradY = 0, gradZ = 0;
     const neighbors = gridValues.filter(p => {
       const dist = Math.sqrt(
@@ -561,7 +561,6 @@ const createVolumeMesh = (
   const colors: number[] = [];
   const indices: number[] = [];
   
-  // Create a simple voxel-based mesh
   const step = Math.max(1, Math.floor(meshResolution / 10));
   let vertexIndex = 0;
   
@@ -569,11 +568,9 @@ const createVolumeMesh = (
     const point = gridValues[i];
     const size = 0.2;
     
-    // Create a small cube at each point
     const x = point.x, y = point.y, z = point.z;
     const color = getColorFromValueSaturated(point.value, minValue, maxValue, selectedMetric as any);
     
-    // 8 vertices of cube
     const vertices = [
       [x - size, y - size, z - size],
       [x + size, y - size, z - size],
@@ -590,14 +587,13 @@ const createVolumeMesh = (
       colors.push(color.r, color.g, color.b);
     });
     
-    // 12 triangles (6 faces * 2 triangles)
     const faceIndices = [
-      [0, 1, 2], [0, 2, 3], // front
-      [4, 6, 5], [4, 7, 6], // back
-      [0, 4, 5], [0, 5, 1], // bottom
-      [2, 6, 7], [2, 7, 3], // top
-      [0, 3, 7], [0, 7, 4], // left
-      [1, 5, 6], [1, 6, 2], // right
+      [0, 1, 2], [0, 2, 3],
+      [4, 6, 5], [4, 7, 6],
+      [0, 4, 5], [0, 5, 1],
+      [2, 6, 7], [2, 7, 3],
+      [0, 3, 7], [0, 7, 4],
+      [1, 5, 6], [1, 6, 2],
     ];
     
     faceIndices.forEach(face => {

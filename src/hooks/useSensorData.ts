@@ -30,6 +30,7 @@ export const useSensorData = (
         const data = new Map<number, SensorDataPoint[]>();
 
         for (const sensor of sensors) {
+          // NO LIMIT - fetch ALL data points for each sensor
           const { data: rawData, error: fetchError } = await supabase
             .from('sensor_data')
             .select('*')
@@ -69,6 +70,7 @@ export const useSensorData = (
 
     const loadOutdoorData = async () => {
       try {
+        // NO LIMIT - fetch ALL outdoor data points
         const { data: rawData, error: fetchError } = await supabase
           .from('sensor_data')
           .select('*')
