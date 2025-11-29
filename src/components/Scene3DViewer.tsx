@@ -89,7 +89,11 @@ export const Scene3DViewer = () => {
 
   // Real-time interpolation update - triggers on timestamp change
   useEffect(() => {
+    console.log(`🔔 Interpolation useEffect triggered - timestamp: ${new Date(currentTimestamp).toLocaleString('fr-FR')}`);
+    console.log(`   Conditions: dataReady=${dataReady}, meshingEnabled=${meshingEnabled}, modelBounds=${!!modelBounds}, sensorData.size=${sensorData.size}`);
+    
     if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || sensorData.size === 0) {
+      console.log(`   ⏭️ Skipping interpolation update - conditions not met`);
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
         disposeInterpolationMesh(sceneRef.current.interpolationMesh);
@@ -102,7 +106,7 @@ export const Scene3DViewer = () => {
     }
 
     const updateStartTime = performance.now();
-    console.log(`🔄 Interpolation update triggered for timestamp: ${new Date(currentTimestamp).toLocaleString('fr-FR')}`);
+    console.log(`🔄 Interpolation update STARTING for timestamp: ${new Date(currentTimestamp).toLocaleString('fr-FR')}`);
 
     const { scene, interpolationMesh, modelScale, originalCenter } = sceneRef.current;
 
@@ -151,9 +155,9 @@ export const Scene3DViewer = () => {
     sceneRef.current.interpolationMesh = newMesh;
 
     const updateEndTime = performance.now();
-    console.log(`✅ Interpolation update completed in ${(updateEndTime - updateStartTime).toFixed(0)}ms`);
+    console.log(`✅ Interpolation update COMPLETED in ${(updateEndTime - updateStartTime).toFixed(0)}ms`);
   }, [
-    currentTimestamp,
+    currentTimestamp, // MUST be first to ensure it triggers
     dataReady,
     meshingEnabled,
     modelBounds,
@@ -358,12 +362,22 @@ const buildInterpolationPoints = (
 ): Point3D[] => {
   const points: Point3D[] = [];
   
+  console.log(`   🔍 Building interpolation points for ${sensors.length} sensors at timestamp ${currentTimestamp}`);
+  
   sensors.forEach((sensor) => {
-    if (!sensorData.has(sensor.id)) return;
+    if (!sensorData.has(sensor.id)) {
+      console.warn(`      ⚠️ No data for sensor ${sensor.id} (${sensor.name})`);
+      return;
+    }
     
     const data = sensorData.get(sensor.id)!;
+    console.log(`      📊 Sensor ${sensor.name}: ${data.length} data points available`);
+    
     const closestData = findClosestDataPoint(data, currentTimestamp);
+    console.log(`         Found closest data at timestamp: ${new Date(closestData.timestamp).toLocaleString('fr-FR')}`);
+    
     const value = getMetricValue(closestData, selectedMetric as any);
+    console.log(`         Value: ${value.toFixed(2)}`);
     
     // Apply ONLY centering and scale (same as sensor spheres)
     // DO NOT add model position - model is at origin after centering
@@ -374,6 +388,7 @@ const buildInterpolationPoints = (
     points.push({ x: xScene, y: yScene, z: zScene, value });
   });
 
+  console.log(`   ✅ Built ${points.length} interpolation points`);
   return points;
 };
 
