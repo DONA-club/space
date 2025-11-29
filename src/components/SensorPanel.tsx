@@ -221,14 +221,7 @@ export const SensorPanel = () => {
       const lines = text.split('\n').filter(line => line.trim());
       const dataLines = lines.slice(1);
 
-      console.log(`🌤️ Outdoor CSV "${file.name}" lignes:`, {
-        totalLines: lines.length,
-        dataLines: dataLines.length,
-      });
-
       const newData: any[] = [];
-      let firstTs: Date | null = null;
-      let lastTs: Date | null = null;
 
       for (const line of dataLines) {
         const values = line.replace(/"/g, '').split(',');
@@ -238,9 +231,6 @@ export const SensorPanel = () => {
         const timestamp = new Date(timestampStr.trim());
 
         if (isNaN(timestamp.getTime())) continue;
-
-        if (!firstTs) firstTs = timestamp;
-        lastTs = timestamp;
 
         const temp = parseFloat(tempStr);
         const hum = parseFloat(humStr);
@@ -261,13 +251,6 @@ export const SensorPanel = () => {
         });
       }
 
-      console.log('🌤️ Outdoor CSV parsed:', {
-        file: file.name,
-        validRows: newData.length,
-        firstTimestamp: firstTs?.toISOString(),
-        lastTimestamp: lastTs?.toISOString(),
-      });
-
       if (newData.length === 0) {
         throw new Error('Aucune donnée valide trouvée');
       }
@@ -281,32 +264,6 @@ export const SensorPanel = () => {
       if (showToast) {
         showSuccess(`${newData.length} points de données extérieures ajoutés`);
         loadOutdoorDataInfo();
-      }
-
-      // Vérifier plage réelle depuis Supabase pour ce capteur extérieur
-      const { data: minData, error: minError } = await supabase
-        .from('sensor_data')
-        .select('timestamp')
-        .eq('space_id', currentSpace.id)
-        .eq('sensor_id', 0)
-        .order('timestamp', { ascending: true })
-        .limit(1)
-        .single();
-
-      const { data: maxData, error: maxError } = await supabase
-        .from('sensor_data')
-        .select('timestamp')
-        .eq('space_id', currentSpace.id)
-        .eq('sensor_id', 0)
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (!minError && !maxError && minData && maxData) {
-        console.log('🌤️ Outdoor range EN BASE après import:', {
-          min: minData.timestamp,
-          max: maxData.timestamp,
-        });
       }
     } catch (error) {
       console.error('Error uploading outdoor CSV:', error);
@@ -328,14 +285,7 @@ export const SensorPanel = () => {
       const sensor = sensors.find(s => s.id === sensorId);
       if (!sensor) throw new Error('Capteur non trouvé');
 
-      console.log(`📥 CSV "${file.name}" pour capteur "${sensor.name}" :`, {
-        totalLines: lines.length,
-        dataLines: dataLines.length,
-      });
-
       const newData: any[] = [];
-      let firstTs: Date | null = null;
-      let lastTs: Date | null = null;
 
       for (const line of dataLines) {
         const values = line.replace(/"/g, '').split(',');
@@ -345,9 +295,6 @@ export const SensorPanel = () => {
         const timestamp = new Date(timestampStr.trim());
 
         if (isNaN(timestamp.getTime())) continue;
-
-        if (!firstTs) firstTs = timestamp;
-        lastTs = timestamp;
 
         const temp = parseFloat(tempStr);
         const hum = parseFloat(humStr);
@@ -367,14 +314,6 @@ export const SensorPanel = () => {
           dew_point: dpt,
         });
       }
-
-      console.log('📊 CSV parsed pour capteur:', {
-        sensor: sensor.name,
-        file: file.name,
-        validRows: newData.length,
-        firstTimestamp: firstTs?.toISOString(),
-        lastTimestamp: lastTs?.toISOString(),
-      });
 
       if (newData.length === 0) {
         throw new Error('Aucune donnée valide trouvée');
@@ -399,32 +338,6 @@ export const SensorPanel = () => {
         showSuccess(`${newData.length} points de données ajoutés pour ${sensor.name}`);
         loadSensorDataInfo();
       }
-
-      // Vérifier plage réelle en base pour ce capteur après import
-      const { data: minData, error: minError } = await supabase
-        .from('sensor_data')
-        .select('timestamp')
-        .eq('space_id', currentSpace.id)
-        .eq('sensor_id', sensorId)
-        .order('timestamp', { ascending: true })
-        .limit(1)
-        .single();
-
-      const { data: maxData, error: maxError } = await supabase
-        .from('sensor_data')
-        .select('timestamp')
-        .eq('space_id', currentSpace.id)
-        .eq('sensor_id', sensorId)
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (!minError && !maxError && minData && maxData) {
-        console.log(`📊 Range EN BASE pour capteur "${sensor.name}" après import:`, {
-          min: minData.timestamp,
-          max: maxData.timestamp,
-        });
-      }
     } catch (error) {
       console.error('Error uploading CSV:', error);
       if (showToast) {
@@ -433,12 +346,6 @@ export const SensorPanel = () => {
       throw error;
     }
   };
-
-  // ... le reste du composant est inchangé (affichage capteurs + carte Interpolation)
-  // (je garde tout identique pour ne pas casser l’UI)
-
-  // === REST OF COMPONENT UNCHANGED ===
-  // (je recopie intégralement pour que le fichier soit complet)
 
   const downloadAllData = async (sensorId: number) => {
     if (!currentSpace) return;
@@ -573,13 +480,507 @@ export const SensorPanel = () => {
     }
   }, [dataReady]);
 
-  // ... (UI identique à ta version actuelle, non re-modifiée pour la brièveté)
-  // Pour ne rien casser, on garde tout le JSX comme dans ta dernière version.
-
   return (
-    // même JSX que ta version actuelle (capteurs + interpolations)
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
-      {/* ... tout le JSX existant inchangé ... */}
+      {/* Outdoor Sensor Card */}
+      {currentSpace && mode === 'replay' && (
+        <LiquidGlassCard className="flex-shrink-0">
+          <div className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <CloudSun size={14} className="text-blue-500" />
+                <h2 className="text-sm font-semibold">Extérieur</h2>
+                {hasOutdoorData && (
+                  <Badge variant="outline" className="text-xs h-5">
+                    {outdoorDataCount.toLocaleString()}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {hasOutdoorData ? (
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 h-7 text-[10px] bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
+                  disabled
+                >
+                  <CloudSun size={10} className="mr-1" />
+                  Données chargées
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 w-7 p-0"
+                  onClick={deleteOutdoorData}
+                >
+                  <Trash2 size={10} />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-[10px]"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.csv';
+                  input.onchange = (e) => {
+                    const file = (e.target as HTMLInputElement).files?.[0];
+                    if (file) handleOutdoorCSVUpload(file);
+                  };
+                  input.click();
+                }}
+                disabled={loading}
+              >
+                <Upload size={10} className="mr-1" />
+                Charger données extérieures
+              </Button>
+            )}
+            <p className="text-[9px] text-gray-500 dark:text-gray-400 mt-1 text-center">
+              Optionnel • Fichier: balcon_data.csv ou exterieur_data.csv
+            </p>
+          </div>
+        </LiquidGlassCard>
+      )}
+
+      {/* Sensors List Card */}
+      <LiquidGlassCard className="flex-shrink-0">
+        <div className="p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold">Capteurs</h2>
+              <Badge variant="outline" className="text-xs h-5">
+                {sensors.length}
+              </Badge>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="h-6 w-6 p-0"
+            >
+              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </Button>
+          </div>
+
+          <AnimatePresence>
+            {isExpanded && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {currentSpace && mode === 'replay' && (
+                  <div className="mb-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border-blue-300 dark:border-blue-700 h-8"
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.csv';
+                        input.multiple = true;
+                        input.onchange = (e) => {
+                          const files = (e.target as HTMLInputElement).files;
+                          if (files && files.length > 0) handleBulkCSVUpload(files);
+                        };
+                        input.click();
+                      }}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="animate-spin mr-2" size={14} />
+                          Chargement...
+                        </>
+                      ) : (
+                        <>
+                          <FolderUp size={14} className="mr-2" />
+                          Charger plusieurs CSV
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center">
+                      Matching intelligent (capteurs + extérieur)
+                    </p>
+                  </div>
+                )}
+
+                {sensors.length === 0 ? (
+                  <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+                    <AlertCircle size={32} className="mx-auto mb-2 opacity-50" />
+                    <p className="text-xs">Aucun capteur</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                    {sensors.map((sensor) => {
+                      const dataCount = sensorDataCounts.get(sensor.id) || 0;
+                      const hasData = dataCount > 0;
+                      const lastDate = lastDataDates.get(sensor.id);
+                      const isOld = lastDate && isDataOld(lastDate);
+
+                      return (
+                        <motion.div
+                          key={sensor.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className={`p-2 rounded-lg border transition-all cursor-pointer ${
+                            hoveredSensorId === sensor.id 
+                              ? 'border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20' 
+                              : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-black/50'
+                          }`}
+                          onMouseEnter={() => handleSensorHover(sensor.id)}
+                          onMouseLeave={handleSensorLeave}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium truncate">{sensor.name}</span>
+                            <div className="flex items-center gap-1">
+                              {hasData && (
+                                <Badge variant="outline" className="text-[9px] h-4 px-1">
+                                  {dataCount.toLocaleString()}
+                                </Badge>
+                              )}
+                              <Badge 
+                                variant={sensor.currentData ? "default" : "secondary"}
+                                className="text-[10px] h-4 px-1.5"
+                              >
+                                {sensor.currentData ? "●" : "○"}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          {sensor.currentData && (
+                            <div className="grid grid-cols-2 gap-1 mb-1">
+                              <div className="flex items-center gap-1 text-[10px]">
+                                <Thermometer size={10} className="text-red-500" />
+                                <span>{sensor.currentData.temperature.toFixed(1)}°C</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-[10px]">
+                                <Droplets size={10} className="text-blue-500" />
+                                <span>{sensor.currentData.humidity.toFixed(1)}%</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {lastDate && (
+                            <Alert className={`mb-1 py-1 px-2 ${isOld ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'}`}>
+                              <div className="flex items-center gap-1.5">
+                                <Clock className={`h-3 w-3 flex-shrink-0 ${isOld ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`} />
+                                <AlertDescription className={`text-[10px] leading-tight ${isOld ? 'text-orange-800 dark:text-orange-200' : 'text-green-800 dark:text-green-200'}`}>
+                                  Dernières données : {formatRelativeTime(lastDate)}
+                                </AlertDescription>
+                              </div>
+                            </Alert>
+                          )}
+
+                          {currentSpace && mode === 'replay' && (
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 h-6 text-[10px]"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const input = document.createElement('input');
+                                  input.type = 'file';
+                                  input.accept = '.csv';
+                                  input.onchange = (e) => {
+                                    const file = (e.target as HTMLInputElement).files?.[0];
+                                    if (file) handleCSVUpload(sensor.id, file);
+                                  };
+                                  input.click();
+                                }}
+                                disabled={loading}
+                              >
+                                <Upload size={10} className="mr-1" />
+                                CSV
+                              </Button>
+
+                              {hasData && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 w-6 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      downloadAllData(sensor.id);
+                                    }}
+                                  >
+                                    <Download size={10} />
+                                  </Button>
+
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 w-6 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteAllData(sensor.id);
+                                    }}
+                                  >
+                                    <Trash2 size={10} />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </LiquidGlassCard>
+
+      {/* Interpolation Card - Modern Design */}
+      {dataReady && (
+        <LiquidGlassCard className="flex-shrink-0">
+          <div className="p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-purple-600" />
+                <h3 className="font-medium text-sm">Interpolation</h3>
+              </div>
+              <Switch
+                checked={meshingEnabled}
+                onCheckedChange={setMeshingEnabled}
+                className="scale-75"
+              />
+            </div>
+
+            <AnimatePresence>
+              {meshingEnabled && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-3"
+                >
+                  {/* Visualization Type - Icon Grid */}
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600 dark:text-gray-400">Visualisation</Label>
+                    <div className="grid grid-cols-4 gap-2">
+                      <TooltipPrimitive.Provider delayDuration={300}>
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setVisualizationType('points')}
+                              className={`relative p-3 rounded-xl transition-all ${
+                                visualizationType === 'points'
+                                  ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-2 border-blue-400 dark:border-blue-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Sparkles size={18} className={visualizationType === 'points' ? 'text-blue-600' : 'text-gray-500'} />
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium">Points</p>
+                              <p className="text-gray-300">Nuage de points colorés</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setVisualizationType('vectors')}
+                              className={`relative p-3 rounded-xl transition-all ${
+                                visualizationType === 'vectors'
+                                  ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-2 border-green-400 dark:border-green-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <GitBranch size={18} className={visualizationType === 'vectors' ? 'text-green-600' : 'text-gray-500'} />
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium">Vecteurs</p>
+                              <p className="text-gray-300">Champ de gradients</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setVisualizationType('isosurface')}
+                              className={`relative p-3 rounded-xl transition-all ${
+                                visualizationType === 'isosurface'
+                                  ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-2 border-purple-400 dark:border-purple-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Layers size={18} className={visualizationType === 'isosurface' ? 'text-purple-600' : 'text-gray-500'} />
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium">Isosurface</p>
+                              <p className="text-gray-300">Niveaux de valeurs</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setVisualizationType('mesh')}
+                              className={`relative p-3 rounded-xl transition-all ${
+                                visualizationType === 'mesh'
+                                  ? 'bg-gradient-to-br from-orange-500/20 to-red-500/20 border-2 border-orange-400 dark:border-orange-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Box size={18} className={visualizationType === 'mesh' ? 'text-orange-600' : 'text-gray-500'} />
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium">Mesh</p>
+                              <p className="text-gray-300">Maillage volumique</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+                      </TooltipPrimitive.Provider>
+                    </div>
+                  </div>
+
+                  {/* Resolution Slider */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-gray-600 dark:text-gray-400">Résolution</Label>
+                      <span className="text-xs font-medium text-purple-600">{meshResolution}³</span>
+                    </div>
+                    <Slider
+                      value={[meshResolution]}
+                      onValueChange={(v) => setMeshResolution(v[0])}
+                      min={10}
+                      max={50}
+                      step={5}
+                      className="h-1"
+                    />
+                  </div>
+
+                  {/* Interpolation Method - Icon Buttons */}
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600 dark:text-gray-400">Méthode</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <TooltipPrimitive.Provider delayDuration={300}>
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setInterpolationMethod('idw')}
+                              className={`relative p-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                                interpolationMethod === 'idw'
+                                  ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-2 border-blue-400 dark:border-blue-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Zap size={16} className={interpolationMethod === 'idw' ? 'text-blue-600' : 'text-gray-500'} />
+                              <span className={`text-xs font-medium ${interpolationMethod === 'idw' ? 'text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}>IDW</span>
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium mb-1">Inverse Distance Weighting</p>
+                              <p className="text-gray-300">✓ Rapide et simple</p>
+                              <p className="text-gray-300">✓ Bon pour données uniformes</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+
+                        <TooltipPrimitive.Root>
+                          <TooltipPrimitive.Trigger asChild>
+                            <button
+                              onClick={() => setInterpolationMethod('rbf')}
+                              className={`relative p-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                                interpolationMethod === 'rbf'
+                                  ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-2 border-purple-400 dark:border-purple-600'
+                                  : 'bg-white/30 dark:bg-black/30 border border-gray-300 dark:border-gray-700 hover:bg-white/50 dark:hover:bg-black/50'
+                              }`}
+                            >
+                              <Waves size={16} className={interpolationMethod === 'rbf' ? 'text-purple-600' : 'text-gray-500'} />
+                              <span className={`text-xs font-medium ${interpolationMethod === 'rbf' ? 'text-purple-700 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400'}`}>RBF</span>
+                            </button>
+                          </TooltipPrimitive.Trigger>
+                          <TooltipPrimitive.Portal>
+                            <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-2 rounded-md text-xs max-w-xs">
+                              <p className="font-medium mb-1">Radial Basis Functions</p>
+                              <p className="text-gray-300">✓ Surfaces très lisses</p>
+                              <p className="text-gray-300">✗ Plus coûteux en calcul</p>
+                            </TooltipPrimitive.Content>
+                          </TooltipPrimitive.Portal>
+                        </TooltipPrimitive.Root>
+                      </TooltipPrimitive.Provider>
+                    </div>
+                  </div>
+
+                  {/* IDW Power */}
+                  {interpolationMethod === 'idw' && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-1"
+                    >
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-gray-600 dark:text-gray-400">Exposant</Label>
+                        <span className="text-xs font-medium text-blue-600">{idwPower}</span>
+                      </div>
+                      <Slider
+                        value={[idwPower]}
+                        onValueChange={(v) => setIdwPower(v[0])}
+                        min={1}
+                        max={5}
+                        step={0.5}
+                        className="h-1"
+                      />
+                    </motion.div>
+                  )}
+
+                  {/* RBF Kernel */}
+                  {interpolationMethod === 'rbf' && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-1"
+                    >
+                      <Label className="text-xs text-gray-600 dark:text-gray-400">Fonction</Label>
+                      <select
+                        value={rbfKernel}
+                        onChange={(e) => setRbfKernel(e.target.value as any)}
+                        className="w-full text-xs bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-lg px-2 py-2 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="multiquadric">Multiquadric</option>
+                        <option value="gaussian">Gaussienne</option>
+                        <option value="inverse_multiquadric">Inverse Multiquadric</option>
+                        <option value="thin_plate_spline">Thin Plate Spline</option>
+                      </select>
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </LiquidGlassCard>
+      )}
     </div>
   );
 };
