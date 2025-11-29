@@ -1,87 +1,103 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { showSuccess, showError } from '@/utils/toast';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2 } from 'lucide-react';
 
 export const DataControlPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
   const mode = useAppStore((state) => state.mode);
+  const currentSpace = useAppStore((state) => state.currentSpace);
   const setTimeRange = useAppStore((state) => state.setTimeRange);
   const setCurrentTimestamp = useAppStore((state) => state.setCurrentTimestamp);
   const dataReady = useAppStore((state) => state.dataReady);
   const setDataReady = useAppStore((state) => state.setDataReady);
+  
+  const [checking, setChecking] = useState(false);
+  const [sensorDataCounts, setSensorDataCounts] = useState<Map<number, number>>(new Map());
 
-  const allSensorsHaveCSV = sensors.length > 0 && sensors.every(s => s.csvFile);
-
-  // Auto-analyze when all CSVs are loaded
+  // Check if all sensors have data
   useEffect(() => {
-    if (allSensorsHaveCSV && !dataReady) {
-      handleAnalyze();
-    }
-  }, [allSensorsHaveCSV, dataReady]);
+    if (!currentSpace || mode !== 'replay') return;
+
+    const checkSensorData = async () => {
+      setChecking(true);
+      try {
+        const counts = new Map<number, number>();
+        
+        for (const sensor of sensors) {
+          const { count, error } = await supabase
+            .from('sensor_data')
+            .select('*', { count: 'exact', head: true })
+            .eq('space_id', currentSpace.id)
+            .eq('sensor_id', sensor.id);
+
+          if (error) throw error;
+          counts.set(sensor.id, count || 0);
+        }
+        
+        setSensorDataCounts(counts);
+        
+        // Check if all sensors have data
+        const allHaveData = sensors.length > 0 && sensors.every(s => (counts.get(s.id) || 0) > 0);
+        
+        if (allHaveData && !dataReady) {
+          await handleAnalyze();
+        }
+      } catch (error) {
+        console.error('Error checking sensor data:', error);
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkSensorData();
+    
+    // Re-check every 2 seconds
+    const interval = setInterval(checkSensorData, 2000);
+    return () => clearInterval(interval);
+  }, [currentSpace, mode, sensors, dataReady]);
 
   const handleAnalyze = async () => {
+    if (!currentSpace) return;
+
     try {
-      const parsedData = await Promise.all(
-        sensors.map(async (sensor) => {
-          if (!sensor.csvFile) return null;
-          
-          const text = await sensor.csvFile.text();
-          const lines = text.split('\n').filter(line => line.trim());
-          const dataLines = lines.slice(1);
-          
-          const data = dataLines.map(line => {
-            const values = line.replace(/"/g, '').split(',');
-            if (values.length < 5) return null;
-            
-            const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
-            const date = new Date(timestampStr.trim());
-            
-            if (isNaN(date.getTime())) return null;
-            
-            const temp = parseFloat(tempStr);
-            const hum = parseFloat(humStr);
-            const absHum = parseFloat(absHumStr);
-            const dpt = parseFloat(dptStr);
-            
-            if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) return null;
-            
-            return {
-              timestamp: date.getTime(),
-              temperature: temp,
-              humidity: hum,
-              absoluteHumidity: absHum,
-              dewPoint: dpt
-            };
-          }).filter(d => d !== null);
-          
-          return {
-            sensorId: sensor.id,
-            data
-          };
-        })
-      );
+      console.log('🔍 Starting data analysis from Supabase...');
       
-      const validData = parsedData.filter(d => d !== null && d.data.length > 0);
+      // Get time range from all sensor data
+      const { data: timeRangeData, error: timeRangeError } = await supabase
+        .from('sensor_data')
+        .select('timestamp')
+        .eq('space_id', currentSpace.id)
+        .order('timestamp', { ascending: true });
+
+      if (timeRangeError) throw timeRangeError;
       
-      if (validData.length === 0) {
-        throw new Error('Aucune donnée valide trouvée');
+      if (!timeRangeData || timeRangeData.length === 0) {
+        throw new Error('Aucune donnée trouvée');
       }
-      
-      const allTimestamps = validData.flatMap(d => d!.data.map(point => point.timestamp));
-      const minTime = Math.min(...allTimestamps);
-      const maxTime = Math.max(...allTimestamps);
+
+      const timestamps = timeRangeData.map(d => new Date(d.timestamp).getTime());
+      const minTime = Math.min(...timestamps);
+      const maxTime = Math.max(...timestamps);
       
       setTimeRange([minTime, maxTime]);
       setCurrentTimestamp(minTime);
       setDataReady(true);
       
-      const totalPoints = allTimestamps.length;
       const duration = (maxTime - minTime) / (1000 * 60 * 60);
       
-      showSuccess(`Analyse terminée ! ${validData.length} capteurs, ${totalPoints} points sur ${duration.toFixed(1)}h`);
+      showSuccess(`Analyse terminée ! ${sensors.length} capteurs, ${timestamps.length.toLocaleString()} points sur ${duration.toFixed(1)}h`);
+      
+      console.log('✅ Data analysis complete:', {
+        sensors: sensors.length,
+        points: timestamps.length,
+        duration: `${duration.toFixed(1)}h`,
+        timeRange: [new Date(minTime).toISOString(), new Date(maxTime).toISOString()]
+      });
     } catch (error) {
       console.error('Error analyzing data:', error);
       showError(error instanceof Error ? error.message : 'Erreur lors de l\'analyse des données');
@@ -90,21 +106,31 @@ export const DataControlPanel = () => {
 
   if (mode !== 'replay') return null;
 
-  if (!allSensorsHaveCSV) {
+  const allSensorsHaveData = sensors.length > 0 && sensors.every(s => (sensorDataCounts.get(s.id) || 0) > 0);
+
+  if (!allSensorsHaveData) {
+    const sensorsWithData = sensors.filter(s => (sensorDataCounts.get(s.id) || 0) > 0).length;
+    
     return (
       <LiquidGlassCard className="p-4">
         <div className="text-sm text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg flex items-center gap-2">
+          {checking && <Loader2 className="animate-spin h-4 w-4" />}
           📊 Chargez les fichiers CSV pour tous les capteurs pour commencer l'analyse
+          {sensorsWithData > 0 && (
+            <span className="ml-2 text-xs">
+              ({sensorsWithData}/{sensors.length} capteurs prêts)
+            </span>
+          )}
         </div>
       </LiquidGlassCard>
     );
   }
 
-  if (!dataReady) {
+  if (!dataReady && checking) {
     return (
       <LiquidGlassCard className="p-4">
         <div className="text-sm text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg flex items-center justify-center gap-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <Loader2 className="animate-spin h-4 w-4" />
           Analyse en cours...
         </div>
       </LiquidGlassCard>

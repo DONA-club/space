@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, useState, useEffect } from "react";
 import { useAppStore } from "@/store/appStore";
+import { supabase } from "@/integrations/supabase/client";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -36,6 +37,7 @@ export const Scene3DViewer = () => {
   const [modelBounds, setModelBounds] = useState<{ min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null>(null);
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
+  const currentSpace = useAppStore((state) => state.currentSpace);
   const dataReady = useAppStore((state) => state.dataReady);
   const selectedMetric = useAppStore((state) => state.selectedMetric);
   const currentTimestamp = useAppStore((state) => state.currentTimestamp);
@@ -68,48 +70,38 @@ export const Scene3DViewer = () => {
     };
   }, []);
 
+  // Load sensor data from Supabase
   useEffect(() => {
-    if (!sceneRef.current) return;
+    if (!sceneRef.current || !currentSpace) return;
 
     const loadSensorData = async () => {
       const sensorData = new Map();
 
       for (const sensor of sensors) {
-        if (!sensor.csvFile) continue;
-
         try {
-          const text = await sensor.csvFile.text();
-          const lines = text.split('\n').filter(line => line.trim());
-          const dataLines = lines.slice(1);
+          const { data, error } = await supabase
+            .from('sensor_data')
+            .select('*')
+            .eq('space_id', currentSpace.id)
+            .eq('sensor_id', sensor.id)
+            .order('timestamp', { ascending: true });
 
-          const data = dataLines.map(line => {
-            const values = line.replace(/"/g, '').split(',');
-            if (values.length < 5) return null;
+          if (error) throw error;
 
-            const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
-            const date = new Date(timestampStr.trim());
+          if (data && data.length > 0) {
+            const formattedData = data.map(d => ({
+              timestamp: new Date(d.timestamp).getTime(),
+              temperature: d.temperature,
+              humidity: d.humidity,
+              absoluteHumidity: d.absolute_humidity,
+              dewPoint: d.dew_point
+            }));
 
-            if (isNaN(date.getTime())) return null;
-
-            const temp = parseFloat(tempStr);
-            const hum = parseFloat(humStr);
-            const absHum = parseFloat(absHumStr);
-            const dpt = parseFloat(dptStr);
-
-            if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) return null;
-
-            return {
-              timestamp: date.getTime(),
-              temperature: temp,
-              humidity: hum,
-              absoluteHumidity: absHum,
-              dewPoint: dpt
-            };
-          }).filter(d => d !== null);
-
-          sensorData.set(sensor.id, data);
+            sensorData.set(sensor.id, formattedData);
+            console.log(`✅ Loaded ${formattedData.length} data points for sensor ${sensor.name}`);
+          }
         } catch (error) {
-          console.error(`Error loading CSV for sensor ${sensor.id}:`, error);
+          console.error(`Error loading data for sensor ${sensor.id}:`, error);
         }
       }
 
@@ -119,7 +111,7 @@ export const Scene3DViewer = () => {
     };
 
     loadSensorData();
-  }, [sensors]);
+  }, [sensors, currentSpace]);
 
   useEffect(() => {
     if (!sceneRef.current) return;
@@ -131,7 +123,7 @@ export const Scene3DViewer = () => {
       if (!meshes) return;
 
       const isHovered = hoveredSensorId === sensor.id;
-      const hasCSV = !!sensor.csvFile;
+      const hasData = sceneRef.current?.sensorData.has(sensor.id);
 
       let color: number;
       let emissiveColor: number;
@@ -141,7 +133,7 @@ export const Scene3DViewer = () => {
         color = 0x9333ea;
         emissiveColor = 0x7c3aed;
         glowColor = 0x9333ea;
-      } else if (hasCSV) {
+      } else if (hasData) {
         color = 0x22c55e;
         emissiveColor = 0x16a34a;
         glowColor = 0x22c55e;
@@ -333,13 +325,11 @@ export const Scene3DViewer = () => {
     const positions: number[] = [];
     const colors: number[] = [];
     
-    // Use filtered point cloud if available, otherwise generate grid
     let validGridPoints: { x: number; y: number; z: number }[] = [];
     
     if (filteredPointCloud && filteredPointCloud.length > 0) {
       console.log(`🎯 Using filtered point cloud: ${(filteredPointCloud.length / 3).toLocaleString()} points`);
       
-      // Convert filtered point cloud to grid points
       for (let i = 0; i < filteredPointCloud.length; i += 3) {
         validGridPoints.push({
           x: filteredPointCloud[i] + INTERPOLATION_OFFSET_X,
@@ -366,7 +356,6 @@ export const Scene3DViewer = () => {
         }
       }
       
-      // Save unfiltered grid to store
       const unfilteredArray = new Float32Array(validGridPoints.length * 3);
       validGridPoints.forEach((p, i) => {
         unfilteredArray[i * 3] = p.x;
@@ -400,7 +389,6 @@ export const Scene3DViewer = () => {
       maxValue = Math.max(maxValue, value);
     });
 
-    // Store min/max for legend
     setInterpolationRange({ min: minValue, max: maxValue });
 
     const getColorFromValue = (value: number): THREE.Color => {
@@ -788,9 +776,8 @@ export const Scene3DViewer = () => {
             sensor.position[2]
           );
           
-          const hasCSV = !!sensor.csvFile;
-          const initialColor = hasCSV ? 0x22c55e : 0x4dabf7;
-          const initialEmissive = hasCSV ? 0x16a34a : 0x2563eb;
+          const initialColor = 0x4dabf7;
+          const initialEmissive = 0x2563eb;
           
           const geometry = new THREE.SphereGeometry(0.15, 32, 32);
           const material = new THREE.MeshStandardMaterial({
