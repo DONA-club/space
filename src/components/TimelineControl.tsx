@@ -84,7 +84,7 @@ export const TimelineControl = () => {
         const { data: outdoorAfter, error: outdoorAfterError } = await supabase
           .from('sensor_data')
           .select('timestamp, dew_point')
-          .eq('space_id', 0)
+          .eq('space_id', currentSpace.id)
           .eq('sensor_id', 0)
           .gte('timestamp', targetDate)
           .order('timestamp', { ascending: true })
@@ -363,30 +363,6 @@ export const TimelineControl = () => {
     const b = Math.round(94 + (246 - 94) * (1 - normalized));
 
     return `rgb(${r}, ${g}, ${b})`;
-  };
-
-  // Calculate opacity for fade-out effect at edges
-  const getOpacityForPoint = (timestamp: number, index: number, totalPoints: number): number => {
-    const currentRange = loadedRanges.find(r => 
-      r.start <= currentTimestamp && 
-      r.end >= currentTimestamp
-    );
-
-    if (!currentRange) return 0;
-
-    const fadeZone = 50; // Number of points for fade effect
-    
-    // Fade at start
-    if (index < fadeZone) {
-      return index / fadeZone;
-    }
-    
-    // Fade at end
-    if (index > totalPoints - fadeZone) {
-      return (totalPoints - index) / fadeZone;
-    }
-    
-    return 1;
   };
 
   // Generate ultra-smooth Bezier curve path with tension control
