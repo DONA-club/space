@@ -53,7 +53,7 @@ export const Scene3DViewer = () => {
   const setOutdoorData = useAppStore((state) => state.setOutdoorData);
   const sensorOffset = useAppStore((state) => state.sensorOffset);
 
-  const { sensorData, outdoorData, loading: dataLoading } = useSensorData(currentSpace, sensors, hasOutdoorData);
+  const { sensorData, outdoorData, loading: dataLoading } = useSensorData(currentSpace, sensors, hasOutdoorData, currentTimestamp);
 
   useSceneBackground({
     scene: sceneRef.current?.scene || null,
