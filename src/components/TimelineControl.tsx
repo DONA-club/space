@@ -31,6 +31,7 @@ export const TimelineControl = () => {
     }
   }, [timeRange, rangeStart, rangeEnd]);
 
+  // Playback loop - updates currentTimestamp which triggers interpolation recalculation
   useEffect(() => {
     if (!isPlaying || !rangeStart || !rangeEnd) return;
 
@@ -71,6 +72,19 @@ export const TimelineControl = () => {
     setIsDragging(type);
   };
 
+  const handleTimelineClick = (e: React.MouseEvent) => {
+    if (!timelineRef.current || !timeRange || isDragging) return;
+
+    const rect = timelineRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const percentage = x / rect.width;
+    const newTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) * percentage;
+
+    // Clamp to range bounds
+    const clampedTimestamp = Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1]));
+    setCurrentTimestamp(clampedTimestamp);
+  };
+
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging || !timelineRef.current || !timeRange) return;
 
@@ -90,6 +104,26 @@ export const TimelineControl = () => {
 
   const handleMouseUp = () => {
     setIsDragging(null);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!timeRange || !rangeStart || !rangeEnd) return;
+
+    e.preventDefault();
+
+    // Horizontal scroll: deltaX or shift+deltaY
+    const delta = e.deltaX !== 0 ? e.deltaX : (e.shiftKey ? e.deltaY : 0);
+    
+    if (delta === 0) return;
+
+    // Calculate time shift (1% of range per 100px scroll)
+    const rangeSize = rangeEnd - rangeStart;
+    const timeShift = (delta / 100) * rangeSize * 0.01;
+
+    const newTimestamp = currentTimestamp + timeShift;
+    const clampedTimestamp = Math.max(rangeStart, Math.min(newTimestamp, rangeEnd));
+    
+    setCurrentTimestamp(clampedTimestamp);
   };
 
   useEffect(() => {
@@ -322,6 +356,8 @@ export const TimelineControl = () => {
           <div 
             ref={timelineRef}
             className="relative h-12 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
+            onClick={handleTimelineClick}
+            onWheel={handleWheel}
           >
             {/* Day markers */}
             {dayMarkers.map((marker, idx) => {
@@ -329,7 +365,7 @@ export const TimelineControl = () => {
               return (
                 <div
                   key={idx}
-                  className="absolute top-0 bottom-0 flex flex-col items-center"
+                  className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none"
                   style={{ left: `${pos}%` }}
                 >
                   <div className="w-px h-full bg-gray-400/50"></div>
@@ -342,7 +378,7 @@ export const TimelineControl = () => {
 
             {/* Selected range highlight */}
             <div
-              className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm"
+              className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm pointer-events-none"
               style={{
                 left: `${getPosition(rangeStart)}%`,
                 width: `${getPosition(rangeEnd) - getPosition(rangeStart)}%`
@@ -351,27 +387,30 @@ export const TimelineControl = () => {
 
             {/* Range start handle */}
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
               style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-6px' }}
               onMouseDown={handleMouseDown('start')}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="absolute inset-0 bg-white/20 rounded-full"></div>
             </div>
 
             {/* Range end handle */}
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50"
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
               style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-6px' }}
               onMouseDown={handleMouseDown('end')}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="absolute inset-0 bg-white/20 rounded-full"></div>
             </div>
 
             {/* Current position cursor */}
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-yellow-400 to-orange-500 cursor-ew-resize shadow-lg"
+              className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-yellow-400 to-orange-500 cursor-ew-resize shadow-lg z-20"
               style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px' }}
               onMouseDown={handleMouseDown('current')}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
               <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
