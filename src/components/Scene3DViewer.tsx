@@ -108,7 +108,7 @@ export const Scene3DViewer = () => {
       disposeInterpolationMesh(interpolationMesh);
     }
 
-    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter);
+    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter, sceneRef.current.modelGroup?.position || null);
     if (points.length === 0) return;
 
     const { min: minValue, max: maxValue } = getValueRange(points);
@@ -189,7 +189,7 @@ export const Scene3DViewer = () => {
         setError(null);
         setLoading(false);
         
-        const { bounds, scale, center } = processLoadedModel(gltf, scene);
+        const { bounds, scale, center, modelPosition } = processLoadedModel(gltf, scene);
         modelScale = scale;
         originalCenter = center;
         setModelBounds(bounds);
@@ -197,13 +197,13 @@ export const Scene3DViewer = () => {
         console.log('🏠 MODEL TRANSFORMATION:');
         console.log('   Original center:', originalCenter.toArray());
         console.log('   Model scale:', modelScale);
+        console.log('   Model position after centering:', modelPosition.toArray());
         console.log('   Final model bounds (after transformation):', {
           min: bounds.min.toArray(),
           max: bounds.max.toArray(),
           center: bounds.center.toArray(),
           size: bounds.size.toArray()
         });
-        console.log('   Model position in scene:', gltf.scene.position.toArray());
         
         console.log('\n📍 SENSOR POSITIONS ANALYSIS:');
         console.log('   Original JSON positions → Transformed scene positions');
@@ -214,10 +214,15 @@ export const Scene3DViewer = () => {
         
         sensors.forEach((sensor, idx) => {
           const original = sensor.position;
-          const transformed = [
+          const afterCentering = [
             (original[0] - originalCenter.x) * modelScale,
             (original[1] - originalCenter.y) * modelScale,
             (original[2] - originalCenter.z) * modelScale
+          ];
+          const transformed = [
+            afterCentering[0] + modelPosition.x,
+            afterCentering[1] + modelPosition.y,
+            afterCentering[2] + modelPosition.z
           ];
           
           sensorMinX = Math.min(sensorMinX, transformed[0]);
@@ -229,7 +234,8 @@ export const Scene3DViewer = () => {
           
           console.log(`   Sensor ${idx + 1} (${sensor.name}):`);
           console.log(`      JSON: [${original.map(v => v.toFixed(3)).join(', ')}]`);
-          console.log(`      Scene: [${transformed.map(v => v.toFixed(3)).join(', ')}]`);
+          console.log(`      After centering & scale: [${afterCentering.map(v => v.toFixed(3)).join(', ')}]`);
+          console.log(`      Final (with model offset): [${transformed.map(v => v.toFixed(3)).join(', ')}]`);
         });
         
         const sensorCenter = [
@@ -258,7 +264,7 @@ export const Scene3DViewer = () => {
         console.log('      Z:', offsetZ.toFixed(3));
         console.log('   Total offset magnitude:', Math.sqrt(offsetX*offsetX + offsetY*offsetY + offsetZ*offsetZ).toFixed(3));
         
-        const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter);
+        const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition);
         
         sensorMeshes.forEach((meshes) => {
           scene.add(meshes.sphere);
@@ -386,7 +392,8 @@ const buildInterpolationPoints = (
   currentTimestamp: number,
   selectedMetric: string,
   modelScale: number,
-  originalCenter: THREE.Vector3 | null
+  originalCenter: THREE.Vector3 | null,
+  modelPosition: THREE.Vector3 | null
 ): Point3D[] => {
   const points: Point3D[] = [];
   
@@ -397,9 +404,14 @@ const buildInterpolationPoints = (
     const closestData = findClosestDataPoint(data, currentTimestamp);
     const value = getMetricValue(closestData, selectedMetric as any);
     
-    const xScene = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
-    const yScene = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
-    const zScene = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
+    // Apply same transformation as sensor spheres
+    const xCentered = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
+    const yCentered = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
+    const zCentered = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
+    
+    const xScene = xCentered + (modelPosition?.x || 0);
+    const yScene = yCentered + (modelPosition?.y || 0);
+    const zScene = zCentered + (modelPosition?.z || 0);
     
     points.push({ x: xScene, y: yScene, z: zScene, value });
   });
@@ -719,6 +731,7 @@ const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
   const originalSize = originalBox.getSize(new THREE.Vector3());
   
   gltf.scene.position.sub(originalCenter);
+  const modelPosition = gltf.scene.position.clone();
   
   const maxDim = Math.max(originalSize.x, originalSize.y, originalSize.z);
   const modelScale = maxDim > 0 ? 10 / maxDim : 1;
@@ -735,7 +748,7 @@ const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
     size: transformedBox.getSize(new THREE.Vector3())
   };
   
-  return { bounds, scale: modelScale, center: originalCenter };
+  return { bounds, scale: modelScale, center: originalCenter, modelPosition };
 };
 
 const positionCamera = (
