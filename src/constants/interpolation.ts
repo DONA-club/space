@@ -1,7 +1,7 @@
 export const INTERPOLATION_OFFSET = {
   X: 0,
-  Y: 0.6,
-  Z: 0.9
+  Y: 0,
+  Z: 0
 } as const;
 
 export const INTERPOLATION_DEFAULTS = {

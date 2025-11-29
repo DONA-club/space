@@ -84,6 +84,7 @@ export const Scene3DViewer = () => {
     dataReady
   });
 
+  // Real-time interpolation update - triggers on timestamp change
   useEffect(() => {
     if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || sensorData.size === 0) {
       if (sceneRef.current?.interpolationMesh) {
@@ -125,10 +126,10 @@ export const Scene3DViewer = () => {
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
   }, [
+    currentTimestamp, // Key dependency for real-time updates
     dataReady,
     meshingEnabled,
     modelBounds,
-    currentTimestamp,
     selectedMetric,
     interpolationMethod,
     rbfKernel,
@@ -182,10 +183,8 @@ export const Scene3DViewer = () => {
         originalCenter = center;
         setModelBounds(bounds);
         
-        // Create sensor spheres with correct transformation
         const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter);
         
-        // Add sensor meshes to scene
         sensorMeshes.forEach((meshes) => {
           scene.add(meshes.sphere);
           scene.add(meshes.glow);
@@ -342,9 +341,9 @@ const getValidGridPoints = (
   if (filteredPointCloud && filteredPointCloud.length > 0) {
     for (let i = 0; i < filteredPointCloud.length; i += 3) {
       validGridPoints.push({
-        x: filteredPointCloud[i] + INTERPOLATION_OFFSET.X,
-        y: filteredPointCloud[i + 1] + INTERPOLATION_OFFSET.Y,
-        z: filteredPointCloud[i + 2] + INTERPOLATION_OFFSET.Z,
+        x: filteredPointCloud[i],
+        y: filteredPointCloud[i + 1],
+        z: filteredPointCloud[i + 2],
       });
     }
   } else {
@@ -355,9 +354,9 @@ const getValidGridPoints = (
     for (let i = 0; i < meshResolution; i++) {
       for (let j = 0; j < meshResolution; j++) {
         for (let k = 0; k < meshResolution; k++) {
-          const x = modelBounds.min.x + i * stepX + INTERPOLATION_OFFSET.X;
-          const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET.Y;
-          const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET.Z;
+          const x = modelBounds.min.x + i * stepX;
+          const y = modelBounds.min.y + j * stepY;
+          const z = modelBounds.min.z + k * stepZ;
           validGridPoints.push({ x, y, z });
         }
       }
@@ -425,6 +424,17 @@ const createVisualizationMesh = (
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
   const avgDim = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3;
+  
+  // Different visualization types
+  if (visualizationType === 'vectors') {
+    return createVectorField(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution);
+  } else if (visualizationType === 'isosurface') {
+    return createIsosurfaces(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution);
+  } else if (visualizationType === 'mesh') {
+    return createVolumeMesh(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution);
+  }
+  
+  // Default: points
   const pointSize = filteredPointCloud 
     ? avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR 
     : avgDim / meshResolution * 0.5;
@@ -441,6 +451,180 @@ const createVisualizationMesh = (
   });
 
   return new THREE.Points(geometry, material);
+};
+
+const createVectorField = (
+  gridValues: { x: number; y: number; z: number; value: number }[],
+  minValue: number,
+  maxValue: number,
+  selectedMetric: string,
+  modelBounds: ModelBounds,
+  meshResolution: number
+): THREE.Group => {
+  const group = new THREE.Group();
+  const step = Math.floor(meshResolution / VISUALIZATION_DEFAULTS.VECTOR_STEP_DIVISOR);
+  
+  for (let i = 0; i < gridValues.length; i += step) {
+    const point = gridValues[i];
+    
+    // Calculate gradient direction (simplified)
+    let gradX = 0, gradY = 0, gradZ = 0;
+    const neighbors = gridValues.filter(p => {
+      const dist = Math.sqrt(
+        Math.pow(p.x - point.x, 2) +
+        Math.pow(p.y - point.y, 2) +
+        Math.pow(p.z - point.z, 2)
+      );
+      return dist > 0 && dist < 1;
+    });
+    
+    neighbors.forEach(n => {
+      const diff = n.value - point.value;
+      const dist = Math.sqrt(
+        Math.pow(n.x - point.x, 2) +
+        Math.pow(n.y - point.y, 2) +
+        Math.pow(n.z - point.z, 2)
+      );
+      if (dist > 0) {
+        gradX += diff * (n.x - point.x) / dist;
+        gradY += diff * (n.y - point.y) / dist;
+        gradZ += diff * (n.z - point.z) / dist;
+      }
+    });
+    
+    const length = Math.sqrt(gradX * gradX + gradY * gradY + gradZ * gradZ);
+    if (length > 0.01) {
+      const arrowLength = 0.3;
+      const dir = new THREE.Vector3(gradX, gradY, gradZ).normalize();
+      const origin = new THREE.Vector3(point.x, point.y, point.z);
+      
+      const color = getColorFromValueSaturated(point.value, minValue, maxValue, selectedMetric as any);
+      const arrow = new THREE.ArrowHelper(dir, origin, arrowLength, color.getHex(), 0.1, 0.05);
+      group.add(arrow);
+    }
+  }
+  
+  return group;
+};
+
+const createIsosurfaces = (
+  gridValues: { x: number; y: number; z: number; value: number }[],
+  minValue: number,
+  maxValue: number,
+  selectedMetric: string,
+  modelBounds: ModelBounds,
+  meshResolution: number
+): THREE.Group => {
+  const group = new THREE.Group();
+  const levels = VISUALIZATION_DEFAULTS.ISOSURFACE_LEVELS;
+  
+  for (let i = 0; i < levels; i++) {
+    const isoValue = minValue + (maxValue - minValue) * (i + 1) / (levels + 1);
+    const color = getColorFromValueSaturated(isoValue, minValue, maxValue, selectedMetric as any);
+    
+    const points = gridValues.filter(p => Math.abs(p.value - isoValue) < (maxValue - minValue) / (levels * 2));
+    
+    if (points.length > 0) {
+      const positions: number[] = [];
+      points.forEach(p => {
+        positions.push(p.x, p.y, p.z);
+      });
+      
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      
+      const material = new THREE.PointsMaterial({
+        size: 0.15,
+        color: color.getHex(),
+        transparent: true,
+        opacity: 0.6,
+        sizeAttenuation: true,
+      });
+      
+      const mesh = new THREE.Points(geometry, material);
+      group.add(mesh);
+    }
+  }
+  
+  return group;
+};
+
+const createVolumeMesh = (
+  gridValues: { x: number; y: number; z: number; value: number }[],
+  minValue: number,
+  maxValue: number,
+  selectedMetric: string,
+  modelBounds: ModelBounds,
+  meshResolution: number
+): THREE.Mesh => {
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  
+  // Create a simple voxel-based mesh
+  const step = Math.max(1, Math.floor(meshResolution / 10));
+  let vertexIndex = 0;
+  
+  for (let i = 0; i < gridValues.length - step; i += step) {
+    const point = gridValues[i];
+    const size = 0.2;
+    
+    // Create a small cube at each point
+    const x = point.x, y = point.y, z = point.z;
+    const color = getColorFromValueSaturated(point.value, minValue, maxValue, selectedMetric as any);
+    
+    // 8 vertices of cube
+    const vertices = [
+      [x - size, y - size, z - size],
+      [x + size, y - size, z - size],
+      [x + size, y + size, z - size],
+      [x - size, y + size, z - size],
+      [x - size, y - size, z + size],
+      [x + size, y - size, z + size],
+      [x + size, y + size, z + size],
+      [x - size, y + size, z + size],
+    ];
+    
+    vertices.forEach(v => {
+      positions.push(v[0], v[1], v[2]);
+      colors.push(color.r, color.g, color.b);
+    });
+    
+    // 12 triangles (6 faces * 2 triangles)
+    const faceIndices = [
+      [0, 1, 2], [0, 2, 3], // front
+      [4, 6, 5], [4, 7, 6], // back
+      [0, 4, 5], [0, 5, 1], // bottom
+      [2, 6, 7], [2, 7, 3], // top
+      [0, 3, 7], [0, 7, 4], // left
+      [1, 5, 6], [1, 6, 2], // right
+    ];
+    
+    faceIndices.forEach(face => {
+      indices.push(
+        vertexIndex + face[0],
+        vertexIndex + face[1],
+        vertexIndex + face[2]
+      );
+    });
+    
+    vertexIndex += 8;
+  }
+  
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.7,
+    side: THREE.DoubleSide,
+  });
+  
+  return new THREE.Mesh(geometry, material);
 };
 
 const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
