@@ -4,9 +4,16 @@ import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
 import { Play, Pause, SkipBack, SkipForward, Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import { supabase } from '@/integrations/supabase/client';
+import { findClosestDataPoint } from '@/utils/sensorUtils';
+
+interface DewPointDifference {
+  timestamp: number;
+  difference: number; // interior - exterior
+}
 
 export const TimelineControl = () => {
   const isPlaying = useAppStore((state) => state.isPlaying);
@@ -16,11 +23,16 @@ export const TimelineControl = () => {
   const timeRange = useAppStore((state) => state.timeRange);
   const selectedMetric = useAppStore((state) => state.selectedMetric);
   const setSelectedMetric = useAppStore((state) => state.setSelectedMetric);
+  const currentSpace = useAppStore((state) => state.currentSpace);
+  const sensors = useAppStore((state) => state.sensors);
+  const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
 
   const [playbackSpeed, setPlaybackSpeed] = useState(60);
   const [rangeStart, setRangeStart] = useState<number | null>(null);
   const [rangeEnd, setRangeEnd] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState<'start' | 'end' | 'current' | null>(null);
+  const [dewPointDifferences, setDewPointDifferences] = useState<DewPointDifference[]>([]);
+  const [loadingCurve, setLoadingCurve] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
 
   // Initialize range when timeRange changes
@@ -31,7 +43,113 @@ export const TimelineControl = () => {
     }
   }, [timeRange, rangeStart, rangeEnd]);
 
-  // Playback loop - updates currentTimestamp which triggers interpolation recalculation
+  // Load dew point differences for the curve
+  useEffect(() => {
+    if (!currentSpace || !hasOutdoorData || !timeRange) {
+      setDewPointDifferences([]);
+      return;
+    }
+
+    const loadDewPointDifferences = async () => {
+      setLoadingCurve(true);
+      try {
+        // Load outdoor dew point data
+        const { data: outdoorData, error: outdoorError } = await supabase
+          .from('sensor_data')
+          .select('timestamp, dew_point')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', 0)
+          .gte('timestamp', new Date(timeRange[0]).toISOString())
+          .lte('timestamp', new Date(timeRange[1]).toISOString())
+          .order('timestamp', { ascending: true });
+
+        if (outdoorError) throw outdoorError;
+        if (!outdoorData || outdoorData.length === 0) {
+          setDewPointDifferences([]);
+          return;
+        }
+
+        // Load all indoor sensor data
+        const indoorDataPromises = sensors.map(async (sensor) => {
+          const { data, error } = await supabase
+            .from('sensor_data')
+            .select('timestamp, dew_point')
+            .eq('space_id', currentSpace.id)
+            .eq('sensor_id', sensor.id)
+            .gte('timestamp', new Date(timeRange[0]).toISOString())
+            .lte('timestamp', new Date(timeRange[1]).toISOString())
+            .order('timestamp', { ascending: true });
+
+          if (error) throw error;
+          return { sensorId: sensor.id, data: data || [] };
+        });
+
+        const indoorDataResults = await Promise.all(indoorDataPromises);
+
+        // Calculate differences for each outdoor timestamp
+        const differences: DewPointDifference[] = [];
+
+        outdoorData.forEach((outdoorPoint) => {
+          const timestamp = new Date(outdoorPoint.timestamp).getTime();
+          const outdoorDewPoint = outdoorPoint.dew_point;
+
+          // Calculate average indoor dew point at this timestamp
+          let totalIndoorDewPoint = 0;
+          let count = 0;
+
+          indoorDataResults.forEach(({ data }) => {
+            if (data.length === 0) return;
+
+            // Find closest indoor data point
+            const closestIndoor = findClosestDataPoint(
+              data.map(d => ({
+                timestamp: new Date(d.timestamp).getTime(),
+                temperature: 0,
+                humidity: 0,
+                absoluteHumidity: 0,
+                dewPoint: d.dew_point
+              })),
+              timestamp
+            );
+
+            totalIndoorDewPoint += closestIndoor.dewPoint;
+            count++;
+          });
+
+          if (count > 0) {
+            const avgIndoorDewPoint = totalIndoorDewPoint / count;
+            const difference = avgIndoorDewPoint - outdoorDewPoint;
+            differences.push({ timestamp, difference });
+          }
+        });
+
+        setDewPointDifferences(differences);
+      } catch (error) {
+        console.error('Error loading dew point differences:', error);
+        setDewPointDifferences([]);
+      } finally {
+        setLoadingCurve(false);
+      }
+    };
+
+    loadDewPointDifferences();
+  }, [currentSpace, hasOutdoorData, timeRange, sensors]);
+
+  // Calculate min/max difference for scaling
+  const { minDiff, maxDiff, diffRange } = useMemo(() => {
+    if (dewPointDifferences.length === 0) {
+      return { minDiff: 0, maxDiff: 0, diffRange: 0 };
+    }
+
+    const diffs = dewPointDifferences.map(d => d.difference);
+    const min = Math.min(...diffs);
+    const max = Math.max(...diffs);
+    const range = max - min;
+
+    return { minDiff: min, maxDiff: max, diffRange: range };
+  }, [dewPointDifferences]);
+
+  // Playback loop
   useEffect(() => {
     if (!isPlaying || !rangeStart || !rangeEnd) return;
 
@@ -80,7 +198,6 @@ export const TimelineControl = () => {
     const percentage = x / rect.width;
     const newTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) * percentage;
 
-    // Clamp to range bounds
     const clampedTimestamp = Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1]));
     setCurrentTimestamp(clampedTimestamp);
   };
@@ -111,12 +228,10 @@ export const TimelineControl = () => {
 
     e.preventDefault();
 
-    // Horizontal scroll: deltaX or shift+deltaY
     const delta = e.deltaX !== 0 ? e.deltaX : (e.shiftKey ? e.deltaY : 0);
     
     if (delta === 0) return;
 
-    // Calculate time shift (1% of range per 100px scroll)
     const rangeSize = rangeEnd - rangeStart;
     const timeShift = (delta / 100) * rangeSize * 0.01;
 
@@ -137,7 +252,6 @@ export const TimelineControl = () => {
     }
   }, [isDragging, rangeStart, rangeEnd, timeRange]);
 
-  // Generate day markers
   const getDayMarkers = () => {
     if (!timeRange) return [];
     
@@ -161,6 +275,22 @@ export const TimelineControl = () => {
     return ((timestamp - timeRange[0]) / (timeRange[1] - timeRange[0])) * 100;
   };
 
+  const getColorForDifference = (difference: number): string => {
+    if (diffRange === 0) return 'rgb(128, 128, 128)';
+
+    // Normalize difference to 0-1 range
+    const normalized = (difference - minDiff) / diffRange;
+
+    // Blue (cold) to Red (hot) gradient
+    // Blue: rgb(59, 130, 246) - low difference
+    // Red: rgb(239, 68, 68) - high difference
+    const r = Math.round(59 + (239 - 59) * normalized);
+    const g = Math.round(130 - (130 - 68) * normalized);
+    const b = Math.round(246 - (246 - 68) * normalized);
+
+    return `rgb(${r}, ${g}, ${b})`;
+  };
+
   if (!timeRange || rangeStart === null || rangeEnd === null) return null;
 
   const dayMarkers = getDayMarkers();
@@ -168,7 +298,7 @@ export const TimelineControl = () => {
   return (
     <LiquidGlassCard className="p-4">
       <div className="space-y-4">
-        {/* Top Controls Row - Métriques à gauche, Boutons centrés absolument, Vitesse à droite */}
+        {/* Top Controls Row */}
         <div className="relative flex items-center justify-between gap-4">
           {/* Left: Metric selector */}
           <TooltipPrimitive.Provider delayDuration={300}>
@@ -261,7 +391,7 @@ export const TimelineControl = () => {
             </Tabs>
           </TooltipPrimitive.Provider>
 
-          {/* Center: Playback controls - Positioned absolutely */}
+          {/* Center: Playback controls */}
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
             <TooltipPrimitive.Provider delayDuration={300}>
               <TooltipPrimitive.Root>
@@ -355,10 +485,51 @@ export const TimelineControl = () => {
 
           <div 
             ref={timelineRef}
-            className="relative h-12 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
+            className="relative h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
             onClick={handleTimelineClick}
             onWheel={handleWheel}
           >
+            {/* Dew Point Difference Curve */}
+            {hasOutdoorData && dewPointDifferences.length > 0 && (
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                preserveAspectRatio="none"
+                viewBox="0 0 100 100"
+              >
+                <defs>
+                  <linearGradient id="curveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    {dewPointDifferences.map((point, idx) => {
+                      const position = getPosition(point.timestamp);
+                      const color = getColorForDifference(point.difference);
+                      return (
+                        <stop
+                          key={idx}
+                          offset={`${position}%`}
+                          stopColor={color}
+                        />
+                      );
+                    })}
+                  </linearGradient>
+                </defs>
+                <polyline
+                  points={dewPointDifferences
+                    .map((point) => {
+                      const x = getPosition(point.timestamp);
+                      // Invert Y so higher differences are at top
+                      const y = diffRange > 0 
+                        ? 100 - ((point.difference - minDiff) / diffRange) * 80 - 10
+                        : 50;
+                      return `${x},${y}`;
+                    })
+                    .join(' ')}
+                  fill="none"
+                  stroke="url(#curveGradient)"
+                  strokeWidth="2"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            )}
+
             {/* Day markers */}
             {dayMarkers.map((marker, idx) => {
               const pos = getPosition(marker);
@@ -433,6 +604,12 @@ export const TimelineControl = () => {
               <div className="w-2 h-2 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full"></div>
               <span>Actuel</span>
             </div>
+            {hasOutdoorData && dewPointDifferences.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-8 h-2 bg-gradient-to-r from-blue-500 to-red-500 rounded-full"></div>
+                <span>ΔPR: {minDiff.toFixed(1)}°C → {maxDiff.toFixed(1)}°C</span>
+              </div>
+            )}
           </div>
           <span>
             Durée: {((rangeEnd - rangeStart) / (1000 * 60 * 60)).toFixed(1)}h
