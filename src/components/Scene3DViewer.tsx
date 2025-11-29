@@ -54,8 +54,6 @@ export const Scene3DViewer = () => {
   const idwPower = useAppStore((state) => state.idwPower);
   const meshResolution = useAppStore((state) => state.meshResolution);
   const visualizationType = useAppStore((state) => state.visualizationType);
-  const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
-  const setUnfilteredPointCloud = useAppStore((state) => state.setUnfilteredPointCloud);
   const interpolationRange = useAppStore((state) => state.interpolationRange);
   const setInterpolationRange = useAppStore((state) => state.setInterpolationRange);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
@@ -151,7 +149,7 @@ export const Scene3DViewer = () => {
 
     const { min: minValue, max: maxValue } = getValueRange(points);
 
-    const validGridPoints = getValidGridPoints(modelBounds, meshResolution, filteredPointCloud, setUnfilteredPointCloud);
+    const validGridPoints = getValidGridPoints(modelBounds, meshResolution);
     
     const gridValues = interpolateGridValues(points, validGridPoints, interpolationMethod, rbfKernel, idwPower, minValue, maxValue);
 
@@ -190,8 +188,7 @@ export const Scene3DViewer = () => {
       selectedMetric,
       visualizationType,
       modelBounds,
-      meshResolution,
-      filteredPointCloud
+      meshResolution
     );
     
     scene.add(newMesh);
@@ -211,8 +208,6 @@ export const Scene3DViewer = () => {
     visualizationType,
     sensors,
     modelLoaded,
-    filteredPointCloud,
-    setUnfilteredPointCloud,
     setInterpolationRange,
     sensorData,
     sensorOffset
@@ -446,43 +441,23 @@ const getValueRange = (points: Point3D[]): { min: number; max: number } => {
 
 const getValidGridPoints = (
   modelBounds: ModelBounds,
-  meshResolution: number,
-  filteredPointCloud: Float32Array | null,
-  setUnfilteredPointCloud: (points: Float32Array) => void
+  meshResolution: number
 ): { x: number; y: number; z: number }[] => {
   const validGridPoints: { x: number; y: number; z: number }[] = [];
   
-  if (filteredPointCloud && filteredPointCloud.length > 0) {
-    for (let i = 0; i < filteredPointCloud.length; i += 3) {
-      validGridPoints.push({
-        x: filteredPointCloud[i],
-        y: filteredPointCloud[i + 1],
-        z: filteredPointCloud[i + 2],
-      });
-    }
-  } else {
-    const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
-    const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
-    const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
+  const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
+  const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
+  const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
 
-    for (let i = 0; i < meshResolution; i++) {
-      for (let j = 0; j < meshResolution; j++) {
-        for (let k = 0; k < meshResolution; k++) {
-          const x = modelBounds.min.x + i * stepX;
-          const y = modelBounds.min.y + j * stepY;
-          const z = modelBounds.min.z + k * stepZ;
-          validGridPoints.push({ x, y, z });
-        }
+  for (let i = 0; i < meshResolution; i++) {
+    for (let j = 0; j < meshResolution; j++) {
+      for (let k = 0; k < meshResolution; k++) {
+        const x = modelBounds.min.x + i * stepX;
+        const y = modelBounds.min.y + j * stepY;
+        const z = modelBounds.min.z + k * stepZ;
+        validGridPoints.push({ x, y, z });
       }
     }
-    
-    const unfilteredArray = new Float32Array(validGridPoints.length * 3);
-    validGridPoints.forEach((p, i) => {
-      unfilteredArray[i * 3] = p.x;
-      unfilteredArray[i * 3 + 1] = p.y;
-      unfilteredArray[i * 3 + 2] = p.z;
-    });
-    setUnfilteredPointCloud(unfilteredArray);
   }
 
   return validGridPoints;
@@ -632,8 +607,7 @@ const createVisualizationMesh = (
   selectedMetric: string,
   visualizationType: string,
   modelBounds: ModelBounds,
-  meshResolution: number,
-  filteredPointCloud: Float32Array | null
+  meshResolution: number
 ): THREE.Points | THREE.Group | THREE.Mesh => {
   const positions: number[] = [];
   const colors: number[] = [];
@@ -658,9 +632,7 @@ const createVisualizationMesh = (
     return createVolumeMesh(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution);
   }
   
-  const pointSize = filteredPointCloud 
-    ? avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR 
-    : avgDim / meshResolution * 0.5;
+  const pointSize = avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR;
 
   const material = new THREE.PointsMaterial({
     size: pointSize,
