@@ -226,10 +226,10 @@ export const Scene3DViewer = () => {
           size: bounds.size.toArray()
         });
         
-        console.log('\n📍 SENSOR TRANSFORMATION:');
+        console.log('\n📍 SENSOR TRANSFORMATION (same as model):');
         console.log('   Step 1: Subtract original center');
         console.log('   Step 2: Multiply by scale');
-        console.log('   Step 3: Subtract 3x model position offset (correction)');
+        console.log('   Step 3: Add model position offset');
         
         const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition);
         
@@ -381,7 +381,7 @@ const buildInterpolationPoints = (
     const value = getMetricValue(closestData, selectedMetric as any);
     console.log(`         Value: ${value.toFixed(2)}`);
     
-    // Apply same transformation as sensor spheres with 3x inverse offset
+    // Apply EXACT same transformation as sensor spheres:
     // Step 1: Center
     const xCentered = sensor.position[0] - (originalCenter?.x || 0);
     const yCentered = sensor.position[1] - (originalCenter?.y || 0);
@@ -392,10 +392,10 @@ const buildInterpolationPoints = (
     const yScaled = yCentered * modelScale;
     const zScaled = zCentered * modelScale;
     
-    // Step 3: Apply 3x inverse offset
-    const xFinal = xScaled - 3 * (modelPosition?.x || 0);
-    const yFinal = yScaled - 3 * (modelPosition?.y || 0);
-    const zFinal = zScaled - 3 * (modelPosition?.z || 0);
+    // Step 3: Add model position offset
+    const xFinal = xScaled + (modelPosition?.x || 0);
+    const yFinal = yScaled + (modelPosition?.y || 0);
+    const zFinal = zScaled + (modelPosition?.z || 0);
     
     points.push({ x: xFinal, y: yFinal, z: zFinal, value });
   });

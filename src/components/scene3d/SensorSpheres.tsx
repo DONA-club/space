@@ -26,7 +26,7 @@ export const createSensorSpheres = (
   console.log('   Model position:', modelPosition?.toArray());
   
   sensors.forEach((sensor) => {
-    // Apply transformation with 3x inverse offset correction
+    // Apply EXACT same transformation as model:
     // Step 1: Center (subtract original center)
     const xCentered = sensor.position[0] - (originalCenter?.x || 0);
     const yCentered = sensor.position[1] - (originalCenter?.y || 0);
@@ -37,10 +37,10 @@ export const createSensorSpheres = (
     const yScaled = yCentered * modelScale;
     const zScaled = zCentered * modelScale;
     
-    // Step 3: Apply 3x inverse offset to correct position
-    const xFinal = xScaled - 3 * (modelPosition?.x || 0);
-    const yFinal = yScaled - 3 * (modelPosition?.y || 0);
-    const zFinal = zScaled - 3 * (modelPosition?.z || 0);
+    // Step 3: Add model position offset (this was missing!)
+    const xFinal = xScaled + (modelPosition?.x || 0);
+    const yFinal = yScaled + (modelPosition?.y || 0);
+    const zFinal = zScaled + (modelPosition?.z || 0);
     
     const transformedPosition = new THREE.Vector3(xFinal, yFinal, zFinal);
     
@@ -48,7 +48,7 @@ export const createSensorSpheres = (
     console.log(`      Original: [${sensor.position.map(v => v.toFixed(3)).join(', ')}]`);
     console.log(`      After centering: [${xCentered.toFixed(3)}, ${yCentered.toFixed(3)}, ${zCentered.toFixed(3)}]`);
     console.log(`      After scale: [${xScaled.toFixed(3)}, ${yScaled.toFixed(3)}, ${zScaled.toFixed(3)}]`);
-    console.log(`      Final (with 3x inverse offset): [${xFinal.toFixed(3)}, ${yFinal.toFixed(3)}, ${zFinal.toFixed(3)}]`);
+    console.log(`      Final (with offset): [${xFinal.toFixed(3)}, ${yFinal.toFixed(3)}, ${zFinal.toFixed(3)}]`);
     
     const initialColor = 0x4dabf7;
     const initialEmissive = 0x2563eb;
