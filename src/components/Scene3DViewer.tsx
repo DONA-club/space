@@ -182,7 +182,8 @@ export const Scene3DViewer = () => {
         originalCenter = center;
         setModelBounds(bounds);
         
-        const sensorMeshes = createSensorSpheres(sensors, modelScale);
+        // Create sensor spheres with correct transformation
+        const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter);
         
         // Add sensor meshes to scene
         sensorMeshes.forEach((meshes) => {

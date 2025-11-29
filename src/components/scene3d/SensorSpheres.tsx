@@ -14,20 +14,23 @@ export interface SensorMeshes {
 
 export const createSensorSpheres = (
   sensors: Sensor[],
-  modelScale: number
+  modelScale: number,
+  originalCenter: THREE.Vector3 | null = null
 ): Map<number, SensorMeshes> => {
   const sensorMeshes = new Map<number, SensorMeshes>();
   
   sensors.forEach((sensor) => {
-    const originalPosition = new THREE.Vector3(
-      sensor.position[0],
-      sensor.position[1],
-      sensor.position[2]
-    );
+    // Apply the same transformation as the model
+    const x = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
+    const y = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
+    const z = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
+    
+    const transformedPosition = new THREE.Vector3(x, y, z);
     
     const initialColor = 0x4dabf7;
     const initialEmissive = 0x2563eb;
     
+    // Sphere
     const geometry = new THREE.SphereGeometry(0.075, 32, 32);
     const material = new THREE.MeshStandardMaterial({
       color: initialColor,
@@ -37,10 +40,11 @@ export const createSensorSpheres = (
       roughness: 0.2,
     });
     const sphere = new THREE.Mesh(geometry, material);
-    sphere.position.copy(originalPosition);
+    sphere.position.copy(transformedPosition);
     sphere.castShadow = true;
     sphere.receiveShadow = true;
 
+    // Glow
     const glowGeometry = new THREE.SphereGeometry(0.1, 16, 16);
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: initialColor,
@@ -48,8 +52,9 @@ export const createSensorSpheres = (
       opacity: 0.3,
     });
     const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.position.copy(originalPosition);
+    glow.position.copy(transformedPosition);
 
+    // Label sprite
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     
@@ -74,9 +79,9 @@ export const createSensorSpheres = (
         transparent: true,
       });
       const sprite = new THREE.Sprite(spriteMaterial);
-      sprite.position.copy(originalPosition);
-      sprite.position.y += 0.4 / modelScale;
-      sprite.scale.set(0.8 / modelScale, 0.2 / modelScale, 1);
+      sprite.position.copy(transformedPosition);
+      sprite.position.y += 0.4;
+      sprite.scale.set(0.8, 0.2, 1);
 
       sensorMeshes.set(sensor.id, { sphere, glow, sprite });
     }

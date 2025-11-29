@@ -36,8 +36,15 @@ export const useSceneBackground = ({
     }
 
     const closestData = findClosestDataPoint(outdoorData, currentTimestamp);
-    const value = getMetricValue(closestData, selectedMetric);
-    const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
+    const outdoorValue = getMetricValue(closestData, selectedMetric);
+    
+    // Clamp outdoor value to indoor range for color calculation
+    const clampedValue = Math.max(
+      interpolationRange.min,
+      Math.min(interpolationRange.max, outdoorValue)
+    );
+    
+    const color = getColorFromValue(clampedValue, interpolationRange.min, interpolationRange.max, selectedMetric);
     const lightColor = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.7);
     
     scene.background = lightColor;
