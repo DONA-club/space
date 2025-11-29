@@ -1,44 +1,43 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { Sensor, SensorDataPoint } from '@/types/sensor.types';
 
-interface SensorDataPoint {
-  timestamp: number;
-  temperature: number;
-  humidity: number;
-  absoluteHumidity: number;
-  dewPoint: number;
-}
-
-interface Sensor {
-  id: number;
-  position: [number, number, number];
-  name: string;
+interface UseSensorDataReturn {
+  sensorData: Map<number, SensorDataPoint[]>;
+  outdoorData: SensorDataPoint[];
+  loading: boolean;
+  error: string | null;
 }
 
 export const useSensorData = (
   currentSpace: any,
   sensors: Sensor[],
   hasOutdoorData: boolean
-) => {
+): UseSensorDataReturn => {
   const [sensorData, setSensorData] = useState<Map<number, SensorDataPoint[]>>(new Map());
   const [outdoorData, setOutdoorData] = useState<SensorDataPoint[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentSpace) return;
 
     const loadSensorData = async () => {
-      const data = new Map<number, SensorDataPoint[]>();
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const data = new Map<number, SensorDataPoint[]>();
 
-      for (const sensor of sensors) {
-        try {
-          const { data: rawData, error } = await supabase
+        for (const sensor of sensors) {
+          const { data: rawData, error: fetchError } = await supabase
             .from('sensor_data')
             .select('*')
             .eq('space_id', currentSpace.id)
             .eq('sensor_id', sensor.id)
             .order('timestamp', { ascending: true });
 
-          if (error) throw error;
+          if (fetchError) throw fetchError;
 
           if (rawData && rawData.length > 0) {
             const formattedData = rawData.map(d => ({
@@ -52,12 +51,16 @@ export const useSensorData = (
             data.set(sensor.id, formattedData);
             console.log(`✅ Loaded ${formattedData.length} data points for sensor ${sensor.name}`);
           }
-        } catch (error) {
-          console.error(`Error loading data for sensor ${sensor.id}:`, error);
         }
-      }
 
-      setSensorData(data);
+        setSensorData(data);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Error loading sensor data';
+        setError(errorMessage);
+        console.error('Error loading sensor data:', err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadSensorData();
@@ -68,14 +71,14 @@ export const useSensorData = (
 
     const loadOutdoorData = async () => {
       try {
-        const { data: rawData, error } = await supabase
+        const { data: rawData, error: fetchError } = await supabase
           .from('sensor_data')
           .select('*')
           .eq('space_id', currentSpace.id)
           .eq('sensor_id', 0)
           .order('timestamp', { ascending: true });
 
-        if (error) throw error;
+        if (fetchError) throw fetchError;
 
         if (rawData && rawData.length > 0) {
           const formattedData = rawData.map(d => ({
@@ -89,13 +92,13 @@ export const useSensorData = (
           setOutdoorData(formattedData);
           console.log(`✅ Loaded ${formattedData.length} outdoor data points`);
         }
-      } catch (error) {
-        console.error('Error loading outdoor data:', error);
+      } catch (err) {
+        console.error('Error loading outdoor data:', err);
       }
     };
 
     loadOutdoorData();
   }, [currentSpace, hasOutdoorData]);
 
-  return { sensorData, outdoorData };
+  return { sensorData, outdoorData, loading, error };
 };

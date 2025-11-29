@@ -1,0 +1,19 @@
+export const INTERPOLATION_OFFSET = {
+  X: 0,
+  Y: 0.6,
+  Z: 0.9
+} as const;
+
+export const INTERPOLATION_DEFAULTS = {
+  IDW_POWER: 2,
+  MESH_RESOLUTION: 40,
+  RBF_EPSILON: 1.0,
+  POINT_OPACITY: 0.7,
+  SATURATION_LIGHTNESS: 0.45
+} as const;
+
+export const VISUALIZATION_DEFAULTS = {
+  POINT_SIZE_DIVISOR: 50,
+  VECTOR_STEP_DIVISOR: 8,
+  ISOSURFACE_LEVELS: 5
+} as const;

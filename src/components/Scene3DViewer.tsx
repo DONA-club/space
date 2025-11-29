@@ -9,29 +9,15 @@ import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpola
 import { ColorLegend } from "./ColorLegend";
 import { OutdoorBadge } from "./scene3d/OutdoorBadge";
 import { useSensorData } from "@/hooks/useSensorData";
-import { getColorFromValue, getColorFromValueSaturated, createCircleTexture } from "@/utils/colorUtils";
-import { findClosestDataPoint, getMetricValue, calculateIndoorAverage } from "@/utils/sensorUtils";
-import { createSensorSpheres, updateSensorLabel, type SensorMeshes } from "./scene3d/SensorSpheres";
+import { useSceneBackground } from "@/hooks/useSceneBackground";
+import { useSensorMeshUpdates } from "@/hooks/useSensorMeshUpdates";
+import { getColorFromValueSaturated, createCircleTexture } from "@/utils/colorUtils";
+import { findClosestDataPoint, calculateIndoorAverage } from "@/utils/sensorUtils";
+import { getMetricValue } from "@/utils/metricUtils";
+import { createSensorSpheres } from "./scene3d/SensorSpheres";
 import { createScene, createCamera, createRenderer, setupLights, createControls } from "./scene3d/SceneSetup";
-
-// Fixed offsets from calibration
-const INTERPOLATION_OFFSET_X = 0;
-const INTERPOLATION_OFFSET_Y = 0.6;
-const INTERPOLATION_OFFSET_Z = 0.9;
-
-interface SceneRef {
-  renderer: THREE.WebGLRenderer;
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  controls: any;
-  animationId: number;
-  sensorMeshes: Map<number, SensorMeshes>;
-  boundingSphere: THREE.Sphere;
-  interpolationMesh: THREE.Points | THREE.Group | THREE.Mesh | null;
-  modelScale: number;
-  modelGroup: THREE.Group | null;
-  originalCenter: THREE.Vector3 | null;
-}
+import { SceneRef, ModelBounds } from "@/types/scene.types";
+import { INTERPOLATION_OFFSET, INTERPOLATION_DEFAULTS, VISUALIZATION_DEFAULTS } from "@/constants/interpolation";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,7 +26,7 @@ export const Scene3DViewer = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [modelLoaded, setModelLoaded] = useState(false);
-  const [modelBounds, setModelBounds] = useState<{ min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null>(null);
+  const [modelBounds, setModelBounds] = useState<ModelBounds | null>(null);
   const [currentOutdoorData, setCurrentOutdoorData] = useState<any>(null);
   const [indoorAverage, setIndoorAverage] = useState<any>(null);
   
@@ -65,15 +51,20 @@ export const Scene3DViewer = () => {
 
   const { sensorData, outdoorData } = useSensorData(currentSpace, sensors, hasOutdoorData);
 
+  // Update scene background
+  useSceneBackground({
+    scene: sceneRef.current?.scene || null,
+    outdoorData,
+    currentTimestamp,
+    selectedMetric,
+    interpolationRange,
+    hasOutdoorData,
+    dataReady
+  });
+
   // Calculate indoor average and update outdoor data
   useEffect(() => {
-    if (!dataReady || sensorData.size === 0) {
-      if (sceneRef.current?.scene) {
-        sceneRef.current.scene.background = new THREE.Color(0xf0f4f8);
-        sceneRef.current.scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
-      }
-      return;
-    }
+    if (!dataReady || sensorData.size === 0) return;
 
     const average = calculateIndoorAverage(sensorData, sensors, currentTimestamp);
     setIndoorAverage(average);
@@ -82,107 +73,26 @@ export const Scene3DViewer = () => {
       const closestData = findClosestDataPoint(outdoorData, currentTimestamp);
       setCurrentOutdoorData(closestData);
       setOutdoorData(closestData);
-
-      if (sceneRef.current?.scene && interpolationRange) {
-        const value = getMetricValue(closestData, selectedMetric);
-        const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
-        const lightColor = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.7);
-        sceneRef.current.scene.background = lightColor;
-        sceneRef.current.scene.fog = new THREE.Fog(lightColor.getHex(), 20, 100);
-      }
-    } else if (sceneRef.current?.scene) {
-      sceneRef.current.scene.background = new THREE.Color(0xf0f4f8);
-      sceneRef.current.scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
     }
-  }, [currentTimestamp, dataReady, selectedMetric, hasOutdoorData, setOutdoorData, sensors, interpolationRange, sensorData, outdoorData]);
+  }, [currentTimestamp, dataReady, hasOutdoorData, setOutdoorData, sensors, sensorData, outdoorData]);
 
-  // Update sensor sphere colors
-  useEffect(() => {
-    if (!sceneRef.current || !dataReady || !interpolationRange || sensorData.size === 0) return;
-
-    const { sensorMeshes } = sceneRef.current;
-
-    sensors.forEach((sensor) => {
-      const meshes = sensorMeshes.get(sensor.id);
-      if (!meshes || !sensorData.has(sensor.id)) return;
-
-      const data = sensorData.get(sensor.id)!;
-      const closestData = findClosestDataPoint(data, currentTimestamp);
-      const value = getMetricValue(closestData, selectedMetric);
-
-      const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
-      const emissiveColor = new THREE.Color(color).multiplyScalar(0.5);
-
-      (meshes.sphere.material as THREE.MeshStandardMaterial).color.setHex(color);
-      (meshes.sphere.material as THREE.MeshStandardMaterial).emissive.setHex(emissiveColor.getHex());
-      (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(color);
-    });
-  }, [dataReady, selectedMetric, currentTimestamp, sensors, interpolationRange, sensorData]);
-
-  // Update sensor labels
-  useEffect(() => {
-    if (!sceneRef.current || sensorData.size === 0) return;
-
-    const { sensorMeshes } = sceneRef.current;
-
-    sensors.forEach((sensor) => {
-      const meshes = sensorMeshes.get(sensor.id);
-      if (!meshes) return;
-
-      if (dataReady && sensorData.has(sensor.id)) {
-        const data = sensorData.get(sensor.id)!;
-        const closestData = findClosestDataPoint(data, currentTimestamp);
-        
-        let value = '';
-        let unit = '';
-        
-        switch (selectedMetric) {
-          case 'temperature':
-            value = closestData.temperature.toFixed(1);
-            unit = '°C';
-            break;
-          case 'humidity':
-            value = closestData.humidity.toFixed(1);
-            unit = '%';
-            break;
-          case 'absoluteHumidity':
-            value = closestData.absoluteHumidity.toFixed(2);
-            unit = 'g/m³';
-            break;
-          case 'dewPoint':
-            value = closestData.dewPoint.toFixed(1);
-            unit = '°C';
-            break;
-        }
-        
-        updateSensorLabel(meshes.sprite, value, unit);
-      }
-    });
-  }, [dataReady, selectedMetric, currentTimestamp, sensors, sensorData]);
+  // Update sensor meshes
+  useSensorMeshUpdates({
+    sensorMeshes: sceneRef.current?.sensorMeshes || null,
+    sensors,
+    sensorData,
+    currentTimestamp,
+    selectedMetric,
+    interpolationRange,
+    dataReady
+  });
 
   // Interpolation mesh generation
   useEffect(() => {
     if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || sensorData.size === 0) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
-        if (sceneRef.current.interpolationMesh instanceof THREE.Points) {
-          sceneRef.current.interpolationMesh.geometry.dispose();
-          (sceneRef.current.interpolationMesh.material as THREE.PointsMaterial).dispose();
-        } else if (sceneRef.current.interpolationMesh instanceof THREE.Mesh) {
-          sceneRef.current.interpolationMesh.geometry.dispose();
-          (sceneRef.current.interpolationMesh.material as THREE.Material).dispose();
-        } else if (sceneRef.current.interpolationMesh instanceof THREE.Group) {
-          sceneRef.current.interpolationMesh.traverse((child) => {
-            if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
-              child.geometry.dispose();
-              if (Array.isArray(child.material)) {
-                child.material.forEach(m => m.dispose());
-              } else {
-                child.material.dispose();
-              }
-            }
-          });
-        }
+        disposeInterpolationMesh(sceneRef.current.interpolationMesh);
         sceneRef.current.interpolationMesh = null;
       }
       setInterpolationRange(null);
@@ -193,141 +103,49 @@ export const Scene3DViewer = () => {
 
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
-      if (interpolationMesh instanceof THREE.Points) {
-        interpolationMesh.geometry.dispose();
-        (interpolationMesh.material as THREE.PointsMaterial).dispose();
-      } else if (interpolationMesh instanceof THREE.Mesh) {
-        interpolationMesh.geometry.dispose();
-        (interpolationMesh.material as THREE.Material).dispose();
-      } else if (interpolationMesh instanceof THREE.Group) {
-        interpolationMesh.traverse((child) => {
-          if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
-            child.geometry.dispose();
-            if (Array.isArray(child.material)) {
-              child.material.forEach(m => m.dispose());
-            } else {
-              child.material.dispose();
-            }
-          }
-        });
-      }
+      disposeInterpolationMesh(interpolationMesh);
     }
 
-    const points: Point3D[] = [];
-    
-    sensors.forEach((sensor) => {
-      if (!sensorData.has(sensor.id)) return;
-      
-      const data = sensorData.get(sensor.id)!;
-      const closestData = findClosestDataPoint(data, currentTimestamp);
-      const value = getMetricValue(closestData, selectedMetric);
-      
-      const xScene = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
-      const yScene = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
-      const zScene = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
-      
-      points.push({ x: xScene, y: yScene, z: zScene, value });
-    });
-
+    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter);
     if (points.length === 0) return;
 
-    let minValue = Math.min(...points.map(p => p.value));
-    let maxValue = Math.max(...points.map(p => p.value));
-
-    const positions: number[] = [];
-    const colors: number[] = [];
-    
-    let validGridPoints: { x: number; y: number; z: number }[] = [];
-    
-    if (filteredPointCloud && filteredPointCloud.length > 0) {
-      for (let i = 0; i < filteredPointCloud.length; i += 3) {
-        validGridPoints.push({
-          x: filteredPointCloud[i] + INTERPOLATION_OFFSET_X,
-          y: filteredPointCloud[i + 1] + INTERPOLATION_OFFSET_Y,
-          z: filteredPointCloud[i + 2] + INTERPOLATION_OFFSET_Z,
-        });
-      }
-    } else {
-      const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
-      const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
-      const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
-
-      for (let i = 0; i < meshResolution; i++) {
-        for (let j = 0; j < meshResolution; j++) {
-          for (let k = 0; k < meshResolution; k++) {
-            const x = modelBounds.min.x + i * stepX + INTERPOLATION_OFFSET_X;
-            const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET_Y;
-            const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET_Z;
-            validGridPoints.push({ x, y, z });
-          }
-        }
-      }
-      
-      const unfilteredArray = new Float32Array(validGridPoints.length * 3);
-      validGridPoints.forEach((p, i) => {
-        unfilteredArray[i * 3] = p.x;
-        unfilteredArray[i * 3 + 1] = p.y;
-        unfilteredArray[i * 3 + 2] = p.z;
-      });
-      setUnfilteredPointCloud(unfilteredArray);
-    }
-
-    let rbfInterpolator: RBFInterpolator | null = null;
-    if (interpolationMethod === 'rbf') {
-      rbfInterpolator = new RBFInterpolator(points, rbfKernel, 1.0);
-    }
-    
-    const gridValues: { x: number; y: number; z: number; value: number }[] = [];
-    
-    validGridPoints.forEach(({ x, y, z }) => {
-      let value: number;
-      if (interpolationMethod === 'idw') {
-        value = interpolateIDW(points, { x, y, z }, idwPower);
-      } else {
-        value = rbfInterpolator!.interpolate({ x, y, z });
-      }
-      value = Math.max(minValue, Math.min(maxValue, value));
-      gridValues.push({ x, y, z, value });
-    });
+    const { min: minValue, max: maxValue } = getValueRange(points);
+    const validGridPoints = getValidGridPoints(modelBounds, meshResolution, filteredPointCloud, setUnfilteredPointCloud);
+    const gridValues = interpolateGridValues(points, validGridPoints, interpolationMethod, rbfKernel, idwPower, minValue, maxValue);
 
     setInterpolationRange({ min: minValue, max: maxValue });
 
-    let newMesh: THREE.Points | THREE.Group | THREE.Mesh;
-
-    if (visualizationType === 'points') {
-      gridValues.forEach(({ x, y, z, value }) => {
-        positions.push(x, y, z);
-        const color = getColorFromValueSaturated(value, minValue, maxValue, selectedMetric);
-        colors.push(color.r, color.g, color.b);
-      });
-
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-      const avgDim = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3;
-      const pointSize = filteredPointCloud ? avgDim / 50 : avgDim / meshResolution * 0.5;
-
-      const material = new THREE.PointsMaterial({
-        size: pointSize,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.7,
-        sizeAttenuation: true,
-        blending: THREE.NormalBlending,
-        depthWrite: false,
-        map: createCircleTexture(),
-      });
-
-      newMesh = new THREE.Points(geometry, material);
-    } else {
-      // Other visualization types...
-      newMesh = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial());
-    }
+    const newMesh = createVisualizationMesh(
+      gridValues,
+      minValue,
+      maxValue,
+      selectedMetric,
+      visualizationType,
+      modelBounds,
+      meshResolution,
+      filteredPointCloud
+    );
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded, filteredPointCloud, setUnfilteredPointCloud, setInterpolationRange, sensorData]);
+  }, [
+    dataReady,
+    meshingEnabled,
+    modelBounds,
+    currentTimestamp,
+    selectedMetric,
+    interpolationMethod,
+    rbfKernel,
+    idwPower,
+    meshResolution,
+    visualizationType,
+    sensors,
+    modelLoaded,
+    filteredPointCloud,
+    setUnfilteredPointCloud,
+    setInterpolationRange,
+    sensorData
+  ]);
 
   // Scene initialization
   useLayoutEffect(() => {
@@ -353,12 +171,9 @@ export const Scene3DViewer = () => {
     setupLights(scene);
     const controls = createControls(camera, renderer.domElement);
 
-    const sensorMeshes = new Map<number, SensorMeshes>();
     const loader = new GLTFLoader();
-
     let boundingSphere = new THREE.Sphere();
     let modelScale = 1;
-    let modelGroup: THREE.Group | null = null;
     let originalCenter: THREE.Vector3 | null = null;
 
     loader.load(
@@ -367,47 +182,35 @@ export const Scene3DViewer = () => {
         setError(null);
         setLoading(false);
         
-        const originalBox = new THREE.Box3().setFromObject(gltf.scene);
-        originalCenter = originalBox.getCenter(new THREE.Vector3());
-        const originalSize = originalBox.getSize(new THREE.Vector3());
+        const { bounds, scale, center } = processLoadedModel(gltf, scene);
+        modelScale = scale;
+        originalCenter = center;
+        setModelBounds(bounds);
         
-        gltf.scene.position.sub(originalCenter);
+        const sensorMeshes = createSensorSpheres(sensors, modelScale);
         
-        const maxDim = Math.max(originalSize.x, originalSize.y, originalSize.z);
-        modelScale = maxDim > 0 ? 10 / maxDim : 1;
-        gltf.scene.scale.multiplyScalar(modelScale);
-        
-        const scaledBounds = {
-          min: originalBox.min.clone().sub(originalCenter).multiplyScalar(modelScale),
-          max: originalBox.max.clone().sub(originalCenter).multiplyScalar(modelScale),
-          center: new THREE.Vector3(0, 0, 0),
-          size: originalSize.clone().multiplyScalar(modelScale)
-        };
-        
-        setModelBounds(scaledBounds);
-        modelGroup = gltf.scene;
-        scene.add(gltf.scene);
-        
-        const meshes = createSensorSpheres(sensors, modelScale);
-        meshes.forEach((value, key) => sensorMeshes.set(key, value));
-        
-        originalBox.getBoundingSphere(boundingSphere);
+        const box = new THREE.Box3().setFromObject(gltf.scene);
+        box.getBoundingSphere(boundingSphere);
         boundingSphere.radius *= modelScale;
         
-        const fov = camera.fov * (Math.PI / 180);
-        const aspectRatio = width / height;
-        const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
-        const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
-        const distance = Math.max(verticalFit, horizontalFit) * 1.5;
-        
-        camera.position.set(distance, distance * 0.75, distance);
-        camera.lookAt(0, 0, 0);
-        controls.target.set(0, 0, 0);
-        controls.minDistance = boundingSphere.radius * 1.2;
-        controls.maxDistance = boundingSphere.radius * 5;
-        controls.update();
-        
+        positionCamera(camera, controls, boundingSphere, width, height);
         setModelLoaded(true);
+
+        sceneRef.current = {
+          renderer,
+          scene,
+          camera,
+          controls,
+          animationId: 0,
+          sensorMeshes,
+          boundingSphere,
+          interpolationMesh: null,
+          modelScale,
+          modelGroup: gltf.scene,
+          originalCenter
+        };
+
+        startAnimationLoop(sceneRef, controls, renderer, scene, camera);
       },
       undefined,
       (err) => {
@@ -417,51 +220,9 @@ export const Scene3DViewer = () => {
       }
     );
 
-    const animate = () => {
-      const animationId = requestAnimationFrame(animate);
-      if (sceneRef.current) {
-        sceneRef.current.animationId = animationId;
-      }
-      controls.update();
-      renderer.render(scene, camera);
-    };
-    const firstAnimationId = requestAnimationFrame(animate);
-
-    sceneRef.current = {
-      renderer,
-      scene,
-      camera,
-      controls,
-      animationId: firstAnimationId,
-      sensorMeshes,
-      boundingSphere,
-      interpolationMesh: null,
-      modelScale,
-      modelGroup: null,
-      originalCenter: null,
-    };
-
     return () => {
       if (sceneRef.current) {
-        const { renderer, scene, controls, animationId } = sceneRef.current;
-        cancelAnimationFrame(animationId);
-        controls.dispose();
-        
-        scene.traverse((object: any) => {
-          if (object.geometry) object.geometry.dispose();
-          if (object.material) {
-            if (Array.isArray(object.material)) {
-              object.material.forEach((m: any) => m.dispose());
-            } else {
-              object.material.dispose();
-            }
-          }
-        });
-        
-        if (container.contains(renderer.domElement)) {
-          container.removeChild(renderer.domElement);
-        }
-        renderer.dispose();
+        cleanupScene(sceneRef.current, container);
         sceneRef.current = null;
       }
     };
@@ -510,4 +271,261 @@ export const Scene3DViewer = () => {
       )}
     </div>
   );
+};
+
+// Helper functions
+const disposeInterpolationMesh = (mesh: THREE.Points | THREE.Group | THREE.Mesh) => {
+  if (mesh instanceof THREE.Points || mesh instanceof THREE.Mesh) {
+    mesh.geometry.dispose();
+    if (Array.isArray(mesh.material)) {
+      mesh.material.forEach(m => m.dispose());
+    } else {
+      mesh.material.dispose();
+    }
+  } else if (mesh instanceof THREE.Group) {
+    mesh.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach(m => m.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+  }
+};
+
+const buildInterpolationPoints = (
+  sensors: any[],
+  sensorData: Map<number, any[]>,
+  currentTimestamp: number,
+  selectedMetric: string,
+  modelScale: number,
+  originalCenter: THREE.Vector3 | null
+): Point3D[] => {
+  const points: Point3D[] = [];
+  
+  sensors.forEach((sensor) => {
+    if (!sensorData.has(sensor.id)) return;
+    
+    const data = sensorData.get(sensor.id)!;
+    const closestData = findClosestDataPoint(data, currentTimestamp);
+    const value = getMetricValue(closestData, selectedMetric as any);
+    
+    const xScene = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
+    const yScene = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
+    const zScene = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
+    
+    points.push({ x: xScene, y: yScene, z: zScene, value });
+  });
+
+  return points;
+};
+
+const getValueRange = (points: Point3D[]): { min: number; max: number } => {
+  return {
+    min: Math.min(...points.map(p => p.value)),
+    max: Math.max(...points.map(p => p.value))
+  };
+};
+
+const getValidGridPoints = (
+  modelBounds: ModelBounds,
+  meshResolution: number,
+  filteredPointCloud: Float32Array | null,
+  setUnfilteredPointCloud: (points: Float32Array) => void
+): { x: number; y: number; z: number }[] => {
+  const validGridPoints: { x: number; y: number; z: number }[] = [];
+  
+  if (filteredPointCloud && filteredPointCloud.length > 0) {
+    for (let i = 0; i < filteredPointCloud.length; i += 3) {
+      validGridPoints.push({
+        x: filteredPointCloud[i] + INTERPOLATION_OFFSET.X,
+        y: filteredPointCloud[i + 1] + INTERPOLATION_OFFSET.Y,
+        z: filteredPointCloud[i + 2] + INTERPOLATION_OFFSET.Z,
+      });
+    }
+  } else {
+    const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
+    const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
+    const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
+
+    for (let i = 0; i < meshResolution; i++) {
+      for (let j = 0; j < meshResolution; j++) {
+        for (let k = 0; k < meshResolution; k++) {
+          const x = modelBounds.min.x + i * stepX + INTERPOLATION_OFFSET.X;
+          const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET.Y;
+          const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET.Z;
+          validGridPoints.push({ x, y, z });
+        }
+      }
+    }
+    
+    const unfilteredArray = new Float32Array(validGridPoints.length * 3);
+    validGridPoints.forEach((p, i) => {
+      unfilteredArray[i * 3] = p.x;
+      unfilteredArray[i * 3 + 1] = p.y;
+      unfilteredArray[i * 3 + 2] = p.z;
+    });
+    setUnfilteredPointCloud(unfilteredArray);
+  }
+
+  return validGridPoints;
+};
+
+const interpolateGridValues = (
+  points: Point3D[],
+  gridPoints: { x: number; y: number; z: number }[],
+  method: string,
+  rbfKernel: string,
+  idwPower: number,
+  minValue: number,
+  maxValue: number
+): { x: number; y: number; z: number; value: number }[] => {
+  let rbfInterpolator: RBFInterpolator | null = null;
+  if (method === 'rbf') {
+    rbfInterpolator = new RBFInterpolator(points, rbfKernel as any, 1.0);
+  }
+  
+  return gridPoints.map(({ x, y, z }) => {
+    let value: number;
+    if (method === 'idw') {
+      value = interpolateIDW(points, { x, y, z }, idwPower);
+    } else {
+      value = rbfInterpolator!.interpolate({ x, y, z });
+    }
+    value = Math.max(minValue, Math.min(maxValue, value));
+    return { x, y, z, value };
+  });
+};
+
+const createVisualizationMesh = (
+  gridValues: { x: number; y: number; z: number; value: number }[],
+  minValue: number,
+  maxValue: number,
+  selectedMetric: string,
+  visualizationType: string,
+  modelBounds: ModelBounds,
+  meshResolution: number,
+  filteredPointCloud: Float32Array | null
+): THREE.Points | THREE.Group | THREE.Mesh => {
+  if (visualizationType !== 'points') {
+    return new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial());
+  }
+
+  const positions: number[] = [];
+  const colors: number[] = [];
+  
+  gridValues.forEach(({ x, y, z, value }) => {
+    positions.push(x, y, z);
+    const color = getColorFromValueSaturated(value, minValue, maxValue, selectedMetric as any);
+    colors.push(color.r, color.g, color.b);
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+  const avgDim = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3;
+  const pointSize = filteredPointCloud 
+    ? avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR 
+    : avgDim / meshResolution * 0.5;
+
+  const material = new THREE.PointsMaterial({
+    size: pointSize,
+    vertexColors: true,
+    transparent: true,
+    opacity: INTERPOLATION_DEFAULTS.POINT_OPACITY,
+    sizeAttenuation: true,
+    blending: THREE.NormalBlending,
+    depthWrite: false,
+    map: createCircleTexture(),
+  });
+
+  return new THREE.Points(geometry, material);
+};
+
+const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
+  const originalBox = new THREE.Box3().setFromObject(gltf.scene);
+  const originalCenter = originalBox.getCenter(new THREE.Vector3());
+  const originalSize = originalBox.getSize(new THREE.Vector3());
+  
+  gltf.scene.position.sub(originalCenter);
+  
+  const maxDim = Math.max(originalSize.x, originalSize.y, originalSize.z);
+  const modelScale = maxDim > 0 ? 10 / maxDim : 1;
+  gltf.scene.scale.multiplyScalar(modelScale);
+  
+  const bounds: ModelBounds = {
+    min: originalBox.min.clone().sub(originalCenter).multiplyScalar(modelScale),
+    max: originalBox.max.clone().sub(originalCenter).multiplyScalar(modelScale),
+    center: new THREE.Vector3(0, 0, 0),
+    size: originalSize.clone().multiplyScalar(modelScale)
+  };
+  
+  scene.add(gltf.scene);
+  
+  return { bounds, scale: modelScale, center: originalCenter };
+};
+
+const positionCamera = (
+  camera: THREE.PerspectiveCamera,
+  controls: any,
+  boundingSphere: THREE.Sphere,
+  width: number,
+  height: number
+) => {
+  const fov = camera.fov * (Math.PI / 180);
+  const aspectRatio = width / height;
+  const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
+  const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
+  const distance = Math.max(verticalFit, horizontalFit) * 1.5;
+  
+  camera.position.set(distance, distance * 0.75, distance);
+  camera.lookAt(0, 0, 0);
+  controls.target.set(0, 0, 0);
+  controls.minDistance = boundingSphere.radius * 1.2;
+  controls.maxDistance = boundingSphere.radius * 5;
+  controls.update();
+};
+
+const startAnimationLoop = (
+  sceneRef: React.MutableRefObject<SceneRef | null>,
+  controls: any,
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera
+) => {
+  const animate = () => {
+    const animationId = requestAnimationFrame(animate);
+    if (sceneRef.current) {
+      sceneRef.current.animationId = animationId;
+    }
+    controls.update();
+    renderer.render(scene, camera);
+  };
+  animate();
+};
+
+const cleanupScene = (sceneRef: SceneRef, container: HTMLElement) => {
+  const { renderer, scene, controls, animationId } = sceneRef;
+  cancelAnimationFrame(animationId);
+  controls.dispose();
+  
+  scene.traverse((object: any) => {
+    if (object.geometry) object.geometry.dispose();
+    if (object.material) {
+      if (Array.isArray(object.material)) {
+        object.material.forEach((m: any) => m.dispose());
+      } else {
+        object.material.dispose();
+      }
+    }
+  });
+  
+  if (container.contains(renderer.domElement)) {
+    container.removeChild(renderer.domElement);
+  }
+  renderer.dispose();
 };

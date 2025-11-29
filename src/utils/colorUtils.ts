@@ -1,38 +1,34 @@
 import * as THREE from 'three';
+import { MetricType } from '@/types/sensor.types';
+import { INTERPOLATION_DEFAULTS } from '@/constants/interpolation';
+
+const calculateHue = (normalized: number, metric: MetricType): number => {
+  switch (metric) {
+    case 'temperature':
+      if (normalized < 0.5) {
+        return 0.667 - (normalized * 2) * 0.5;
+      } else {
+        return 0.167 - ((normalized - 0.5) * 2) * 0.167;
+      }
+    case 'humidity':
+      return 0.05 + normalized * 0.55;
+    case 'absoluteHumidity':
+      return 0.15 + normalized * 0.35;
+    case 'dewPoint':
+      return 0.75 - normalized * 0.25;
+  }
+};
 
 export const getColorFromValue = (
   value: number,
   minValue: number,
   maxValue: number,
-  metric: string
+  metric: MetricType
 ): number => {
   const normalized = (value - minValue) / (maxValue - minValue);
+  const hue = calculateHue(normalized, metric);
   const color = new THREE.Color();
-  
-  switch (metric) {
-    case 'temperature':
-      if (normalized < 0.5) {
-        const hue = 0.667 - (normalized * 2) * 0.5;
-        color.setHSL(hue, 1.0, 0.5);
-      } else {
-        const hue = 0.167 - ((normalized - 0.5) * 2) * 0.167;
-        color.setHSL(hue, 1.0, 0.5);
-      }
-      break;
-    case 'humidity':
-      const humHue = 0.05 + normalized * 0.55;
-      color.setHSL(humHue, 1.0, 0.5);
-      break;
-    case 'absoluteHumidity':
-      const absHumHue = 0.15 + normalized * 0.35;
-      color.setHSL(absHumHue, 1.0, 0.5);
-      break;
-    case 'dewPoint':
-      const dpHue = 0.75 - normalized * 0.25;
-      color.setHSL(dpHue, 1.0, 0.5);
-      break;
-  }
-  
+  color.setHSL(hue, 1.0, 0.5);
   return color.getHex();
 };
 
@@ -40,35 +36,12 @@ export const getColorFromValueSaturated = (
   value: number,
   minValue: number,
   maxValue: number,
-  metric: string
+  metric: MetricType
 ): THREE.Color => {
   const normalized = (value - minValue) / (maxValue - minValue);
+  const hue = calculateHue(normalized, metric);
   const color = new THREE.Color();
-  
-  switch (metric) {
-    case 'temperature':
-      if (normalized < 0.5) {
-        const hue = 0.667 - (normalized * 2) * 0.5;
-        color.setHSL(hue, 1.0, 0.45);
-      } else {
-        const hue = 0.167 - ((normalized - 0.5) * 2) * 0.167;
-        color.setHSL(hue, 1.0, 0.45);
-      }
-      break;
-    case 'humidity':
-      const humHue = 0.05 + normalized * 0.55;
-      color.setHSL(humHue, 1.0, 0.45);
-      break;
-    case 'absoluteHumidity':
-      const absHumHue = 0.15 + normalized * 0.35;
-      color.setHSL(absHumHue, 1.0, 0.45);
-      break;
-    case 'dewPoint':
-      const dpHue = 0.75 - normalized * 0.25;
-      color.setHSL(dpHue, 1.0, 0.45);
-      break;
-  }
-  
+  color.setHSL(hue, 1.0, INTERPOLATION_DEFAULTS.SATURATION_LIGHTNESS);
   return color;
 };
 
@@ -91,4 +64,12 @@ export const createCircleTexture = (): THREE.Texture => {
   const texture = new THREE.CanvasTexture(canvas);
   texture.needsUpdate = true;
   return texture;
+};
+
+export const rgbaFromColor = (color: number, alpha: number = 0.15): string => {
+  const threeColor = new THREE.Color(color);
+  const r = Math.round(threeColor.r * 255);
+  const g = Math.round(threeColor.g * 255);
+  const b = Math.round(threeColor.b * 255);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };

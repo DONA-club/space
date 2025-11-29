@@ -1,15 +1,13 @@
-interface SensorDataPoint {
-  timestamp: number;
-  temperature: number;
-  humidity: number;
-  absoluteHumidity: number;
-  dewPoint: number;
-}
+import { SensorDataPoint } from '@/types/sensor.types';
 
 export const findClosestDataPoint = (
   data: SensorDataPoint[],
   targetTimestamp: number
 ): SensorDataPoint => {
+  if (data.length === 0) {
+    throw new Error('No data points available');
+  }
+
   let closestData = data[0];
   let minDiff = Math.abs(data[0].timestamp - targetTimestamp);
   
@@ -24,34 +22,11 @@ export const findClosestDataPoint = (
   return closestData;
 };
 
-export const getMetricValue = (
-  data: SensorDataPoint,
-  metric: string
-): number => {
-  switch (metric) {
-    case 'temperature':
-      return data.temperature;
-    case 'humidity':
-      return data.humidity;
-    case 'absoluteHumidity':
-      return data.absoluteHumidity;
-    case 'dewPoint':
-      return data.dewPoint;
-    default:
-      return 0;
-  }
-};
-
 export const calculateIndoorAverage = (
   sensorData: Map<number, SensorDataPoint[]>,
   sensors: Array<{ id: number }>,
   currentTimestamp: number
-): {
-  temperature: number;
-  humidity: number;
-  absoluteHumidity: number;
-  dewPoint: number;
-} | null => {
+): SensorDataPoint | null => {
   let tempSum = 0, humSum = 0, absHumSum = 0, dpSum = 0, count = 0;
   
   sensors.forEach((sensor) => {
@@ -70,9 +45,36 @@ export const calculateIndoorAverage = (
   if (count === 0) return null;
   
   return {
+    timestamp: currentTimestamp,
     temperature: tempSum / count,
     humidity: humSum / count,
     absoluteHumidity: absHumSum / count,
     dewPoint: dpSum / count
+  };
+};
+
+export const getDataRange = (
+  sensorData: Map<number, SensorDataPoint[]>,
+  sensors: Array<{ id: number }>,
+  currentTimestamp: number,
+  metricKey: keyof Omit<SensorDataPoint, 'timestamp'>
+): { min: number; max: number } => {
+  const values: number[] = [];
+  
+  sensors.forEach((sensor) => {
+    if (!sensorData.has(sensor.id)) return;
+    
+    const data = sensorData.get(sensor.id)!;
+    const closestData = findClosestDataPoint(data, currentTimestamp);
+    values.push(closestData[metricKey]);
+  });
+  
+  if (values.length === 0) {
+    return { min: 0, max: 0 };
+  }
+  
+  return {
+    min: Math.min(...values),
+    max: Math.max(...values)
   };
 };
