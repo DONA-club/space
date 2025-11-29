@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { AlertCircle, Thermometer, Droplets, Wind, CloudRain } from "lucide-react";
+import { AlertCircle, Thermometer, Droplets, Wind, CloudRain, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 import { ColorLegend } from "./ColorLegend";
 
@@ -50,11 +50,13 @@ export const Scene3DViewer = () => {
   const visualizationType = useAppStore((state) => state.visualizationType);
   const filteredPointCloud = useAppStore((state) => state.filteredPointCloud);
   const setUnfilteredPointCloud = useAppStore((state) => state.setUnfilteredPointCloud);
+  const interpolationRange = useAppStore((state) => state.interpolationRange);
   const setInterpolationRange = useAppStore((state) => state.setInterpolationRange);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setOutdoorData = useAppStore((state) => state.setOutdoorData);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
   const [currentOutdoorData, setCurrentOutdoorData] = useState<{ temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number } | null>(null);
+  const [indoorAverage, setIndoorAverage] = useState<{ temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number } | null>(null);
 
   useEffect(() => {
     const handleSensorHover = (event: CustomEvent) => {
@@ -154,10 +156,9 @@ export const Scene3DViewer = () => {
     loadOutdoorData();
   }, [currentSpace, hasOutdoorData]);
 
-  // Update outdoor data based on current timestamp
+  // Calculate indoor average and update outdoor data
   useEffect(() => {
-    if (!sceneRef.current?.outdoorData || !dataReady || sceneRef.current.outdoorData.length === 0) {
-      // Reset to default background if no outdoor data
+    if (!sceneRef.current?.sensorData || !dataReady) {
       if (sceneRef.current?.scene) {
         sceneRef.current.scene.background = new THREE.Color(0xf0f4f8);
         sceneRef.current.scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
@@ -165,102 +166,156 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const outdoorData = sceneRef.current.outdoorData;
-    let closestData = outdoorData[0];
-    let minDiff = Math.abs(outdoorData[0].timestamp - currentTimestamp);
+    const sensorData = sceneRef.current.sensorData;
     
-    for (const point of outdoorData) {
-      const diff = Math.abs(point.timestamp - currentTimestamp);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestData = point;
+    // Calculate indoor average
+    let tempSum = 0, humSum = 0, absHumSum = 0, dpSum = 0, count = 0;
+    
+    sensors.forEach((sensor) => {
+      if (!sensorData.has(sensor.id)) return;
+      
+      const data = sensorData.get(sensor.id)!;
+      let closestData = data[0];
+      let minDiff = Math.abs(data[0].timestamp - currentTimestamp);
+      
+      for (const point of data) {
+        const diff = Math.abs(point.timestamp - currentTimestamp);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestData = point;
+        }
       }
-    }
+      
+      tempSum += closestData.temperature;
+      humSum += closestData.humidity;
+      absHumSum += closestData.absoluteHumidity;
+      dpSum += closestData.dewPoint;
+      count++;
+    });
     
-    setCurrentOutdoorData(closestData);
-    setOutdoorData(closestData);
-
-    // Update scene background color with lighter, liquid glass effect
-    if (sceneRef.current?.scene) {
-      const value = selectedMetric === 'temperature' ? closestData.temperature :
-                    selectedMetric === 'humidity' ? closestData.humidity :
-                    selectedMetric === 'absoluteHumidity' ? closestData.absoluteHumidity :
-                    closestData.dewPoint;
-
-      const color = getColorFromMetric(selectedMetric, value);
-      // Much lighter background - multiply by 0.85 instead of 0.3 for liquid glass effect
-      const lightColor = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.7);
-      sceneRef.current.scene.background = lightColor;
-      sceneRef.current.scene.fog = new THREE.Fog(lightColor.getHex(), 20, 100);
+    if (count > 0) {
+      setIndoorAverage({
+        temperature: tempSum / count,
+        humidity: humSum / count,
+        absoluteHumidity: absHumSum / count,
+        dewPoint: dpSum / count
+      });
     }
-  }, [currentTimestamp, dataReady, selectedMetric, hasOutdoorData, setOutdoorData]);
 
-  const getColorFromMetric = (metric: string, value: number): number => {
+    // Update outdoor data and background
+    if (sceneRef.current?.outdoorData && sceneRef.current.outdoorData.length > 0) {
+      const outdoorData = sceneRef.current.outdoorData;
+      let closestData = outdoorData[0];
+      let minDiff = Math.abs(outdoorData[0].timestamp - currentTimestamp);
+      
+      for (const point of outdoorData) {
+        const diff = Math.abs(point.timestamp - currentTimestamp);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestData = point;
+        }
+      }
+      
+      setCurrentOutdoorData(closestData);
+      setOutdoorData(closestData);
+
+      // Update scene background with color based on metric and range
+      if (sceneRef.current?.scene && interpolationRange) {
+        const value = selectedMetric === 'temperature' ? closestData.temperature :
+                      selectedMetric === 'humidity' ? closestData.humidity :
+                      selectedMetric === 'absoluteHumidity' ? closestData.absoluteHumidity :
+                      closestData.dewPoint;
+
+        const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
+        const lightColor = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.7);
+        sceneRef.current.scene.background = lightColor;
+        sceneRef.current.scene.fog = new THREE.Fog(lightColor.getHex(), 20, 100);
+      }
+    } else if (sceneRef.current?.scene) {
+      sceneRef.current.scene.background = new THREE.Color(0xf0f4f8);
+      sceneRef.current.scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
+    }
+  }, [currentTimestamp, dataReady, selectedMetric, hasOutdoorData, setOutdoorData, sensors, interpolationRange]);
+
+  const getColorFromValue = (value: number, minValue: number, maxValue: number, metric: string): number => {
+    const normalized = (value - minValue) / (maxValue - minValue);
     const color = new THREE.Color();
     
     switch (metric) {
       case 'temperature':
-        if (value < 15) color.setHSL(0.6, 0.8, 0.5);
-        else if (value < 20) color.setHSL(0.5, 0.8, 0.5);
-        else if (value < 25) color.setHSL(0.3, 0.8, 0.5);
-        else color.setHSL(0.05, 0.8, 0.5);
+        if (normalized < 0.5) {
+          const hue = 0.667 - (normalized * 2) * 0.5;
+          color.setHSL(hue, 1.0, 0.5);
+        } else {
+          const hue = 0.167 - ((normalized - 0.5) * 2) * 0.167;
+          color.setHSL(hue, 1.0, 0.5);
+        }
         break;
       case 'humidity':
-        if (value < 40) color.setHSL(0.1, 0.8, 0.5);
-        else if (value < 60) color.setHSL(0.3, 0.8, 0.5);
-        else color.setHSL(0.55, 0.8, 0.5);
+        const humHue = 0.05 + normalized * 0.55;
+        color.setHSL(humHue, 1.0, 0.5);
         break;
       case 'absoluteHumidity':
-        if (value < 8) color.setHSL(0.15, 0.8, 0.5);
-        else if (value < 12) color.setHSL(0.35, 0.8, 0.5);
-        else color.setHSL(0.5, 0.8, 0.5);
+        const absHumHue = 0.15 + normalized * 0.35;
+        color.setHSL(absHumHue, 1.0, 0.5);
         break;
       case 'dewPoint':
-        if (value < 10) color.setHSL(0.65, 0.8, 0.5);
-        else if (value < 15) color.setHSL(0.55, 0.8, 0.5);
-        else color.setHSL(0.45, 0.8, 0.5);
+        const dpHue = 0.75 - normalized * 0.25;
+        color.setHSL(dpHue, 1.0, 0.5);
         break;
     }
     
     return color.getHex();
   };
 
+  // Update sensor sphere colors based on current data
   useEffect(() => {
-    if (!sceneRef.current) return;
+    if (!sceneRef.current || !dataReady || !interpolationRange) return;
 
-    const { sensorMeshes } = sceneRef.current;
+    const { sensorMeshes, sensorData } = sceneRef.current;
 
     sensors.forEach((sensor) => {
       const meshes = sensorMeshes.get(sensor.id);
-      if (!meshes) return;
+      if (!meshes || !sensorData.has(sensor.id)) return;
 
-      const isHovered = hoveredSensorId === sensor.id;
-      const hasData = sceneRef.current?.sensorData.has(sensor.id);
-
-      let color: number;
-      let emissiveColor: number;
-      let glowColor: number;
-
-      if (isHovered) {
-        color = 0x9333ea;
-        emissiveColor = 0x7c3aed;
-        glowColor = 0x9333ea;
-      } else if (hasData) {
-        color = 0x22c55e;
-        emissiveColor = 0x16a34a;
-        glowColor = 0x22c55e;
-      } else {
-        color = 0x4dabf7;
-        emissiveColor = 0x2563eb;
-        glowColor = 0x4dabf7;
+      const data = sensorData.get(sensor.id)!;
+      let closestData = data[0];
+      let minDiff = Math.abs(data[0].timestamp - currentTimestamp);
+      
+      for (const point of data) {
+        const diff = Math.abs(point.timestamp - currentTimestamp);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestData = point;
+        }
       }
 
-      (meshes.sphere.material as THREE.MeshStandardMaterial).color.setHex(color);
-      (meshes.sphere.material as THREE.MeshStandardMaterial).emissive.setHex(emissiveColor);
-      (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(glowColor);
-    });
-  }, [hoveredSensorId, sensors]);
+      let value = 0;
+      switch (selectedMetric) {
+        case 'temperature':
+          value = closestData.temperature;
+          break;
+        case 'humidity':
+          value = closestData.humidity;
+          break;
+        case 'absoluteHumidity':
+          value = closestData.absoluteHumidity;
+          break;
+        case 'dewPoint':
+          value = closestData.dewPoint;
+          break;
+      }
 
+      const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
+      const emissiveColor = new THREE.Color(color).multiplyScalar(0.5);
+
+      (meshes.sphere.material as THREE.MeshStandardMaterial).color.setHex(color);
+      (meshes.sphere.material as THREE.MeshStandardMaterial).emissive.setHex(emissiveColor.getHex());
+      (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(color);
+    });
+  }, [dataReady, selectedMetric, currentTimestamp, sensors, interpolationRange]);
+
+  // Update sensor labels
   useEffect(() => {
     if (!sceneRef.current) return;
 
@@ -276,17 +331,10 @@ export const Scene3DViewer = () => {
       
       if (!context) return;
 
-      canvas.width = 256;
-      canvas.height = 64;
+      canvas.width = 128;
+      canvas.height = 48;
       
-      context.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      context.roundRect(0, 0, canvas.width, canvas.height, 8);
-      context.fill();
-      
-      context.fillStyle = '#1e40af';
-      context.font = 'bold 28px Arial';
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
+      context.clearRect(0, 0, canvas.width, canvas.height);
       
       if (dataReady && sensorData.has(sensor.id)) {
         const data = sensorData.get(sensor.id)!;
@@ -324,9 +372,28 @@ export const Scene3DViewer = () => {
             break;
         }
         
-        context.fillText(`${value}${unit}`, 128, 32);
+        // Draw text with shadow for better visibility
+        context.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        context.shadowBlur = 4;
+        context.shadowOffsetX = 1;
+        context.shadowOffsetY = 1;
+        
+        context.fillStyle = '#ffffff';
+        context.font = 'bold 32px Arial';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(`${value}${unit}`, 64, 24);
       } else {
-        context.fillText(sensor.name, 128, 32);
+        context.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        context.shadowBlur = 4;
+        context.shadowOffsetX = 1;
+        context.shadowOffsetY = 1;
+        
+        context.fillStyle = '#ffffff';
+        context.font = 'bold 20px Arial';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(sensor.name, 64, 24);
       }
       
       const texture = new THREE.CanvasTexture(canvas);
@@ -434,7 +501,6 @@ export const Scene3DViewer = () => {
 
     if (points.length === 0) return;
 
-    // Calculate min/max from actual sensor data
     let minValue = Math.min(...points.map(p => p.value));
     let maxValue = Math.max(...points.map(p => p.value));
 
@@ -497,14 +563,13 @@ export const Scene3DViewer = () => {
         value = rbfInterpolator!.interpolate({ x, y, z });
       }
 
-      // Clamp interpolated values to sensor data range
       value = Math.max(minValue, Math.min(maxValue, value));
       gridValues.push({ x, y, z, value });
     });
 
     setInterpolationRange({ min: minValue, max: maxValue });
 
-    const getColorFromValue = (value: number): THREE.Color => {
+    const getColorFromValueSaturated = (value: number): THREE.Color => {
       const normalized = (value - minValue) / (maxValue - minValue);
       const color = new THREE.Color();
       
@@ -512,23 +577,23 @@ export const Scene3DViewer = () => {
         case 'temperature':
           if (normalized < 0.5) {
             const hue = 0.667 - (normalized * 2) * 0.5;
-            color.setHSL(hue, 1.0, 0.5);
+            color.setHSL(hue, 1.0, 0.45); // More saturated (lightness 0.45 instead of 0.5)
           } else {
             const hue = 0.167 - ((normalized - 0.5) * 2) * 0.167;
-            color.setHSL(hue, 1.0, 0.5);
+            color.setHSL(hue, 1.0, 0.45);
           }
           break;
         case 'humidity':
           const humHue = 0.05 + normalized * 0.55;
-          color.setHSL(humHue, 1.0, 0.5);
+          color.setHSL(humHue, 1.0, 0.45);
           break;
         case 'absoluteHumidity':
           const absHumHue = 0.15 + normalized * 0.35;
-          color.setHSL(absHumHue, 1.0, 0.5);
+          color.setHSL(absHumHue, 1.0, 0.45);
           break;
         case 'dewPoint':
           const dpHue = 0.75 - normalized * 0.25;
-          color.setHSL(dpHue, 1.0, 0.5);
+          color.setHSL(dpHue, 1.0, 0.45);
           break;
       }
       
@@ -540,7 +605,7 @@ export const Scene3DViewer = () => {
     if (visualizationType === 'points') {
       gridValues.forEach(({ x, y, z, value }) => {
         positions.push(x, y, z);
-        const color = getColorFromValue(value);
+        const color = getColorFromValueSaturated(value);
         colors.push(color.r, color.g, color.b);
       });
 
@@ -555,7 +620,7 @@ export const Scene3DViewer = () => {
         size: pointSize,
         vertexColors: true,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.7, // Increased from 0.6
         sizeAttenuation: true,
         blending: THREE.NormalBlending,
         depthWrite: false,
@@ -592,7 +657,7 @@ export const Scene3DViewer = () => {
             gradient,
             origin,
             arrowLength,
-            getColorFromValue(value).getHex(),
+            getColorFromValueSaturated(value).getHex(),
             arrowLength * 0.3,
             arrowLength * 0.2
           );
@@ -608,7 +673,7 @@ export const Scene3DViewer = () => {
       
       for (let level = 0; level < numLevels; level++) {
         const isoValue = minValue + (maxValue - minValue) * (level + 1) / (numLevels + 1);
-        const color = getColorFromValue(isoValue);
+        const color = getColorFromValueSaturated(isoValue);
         
         const vertices: number[] = [];
         
@@ -626,7 +691,7 @@ export const Scene3DViewer = () => {
             size: (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 0.8,
             color: color,
             transparent: true,
-            opacity: 0.4,
+            opacity: 0.5,
             sizeAttenuation: true,
           });
           
@@ -640,7 +705,7 @@ export const Scene3DViewer = () => {
     } else {
       gridValues.forEach(({ x, y, z, value }) => {
         positions.push(x, y, z);
-        const color = getColorFromValue(value);
+        const color = getColorFromValueSaturated(value);
         colors.push(color.r, color.g, color.b);
       });
 
@@ -652,7 +717,7 @@ export const Scene3DViewer = () => {
         size: (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 1.2,
         vertexColors: true,
         transparent: true,
-        opacity: 0.3,
+        opacity: 0.4,
         sizeAttenuation: true,
       });
 
@@ -893,7 +958,8 @@ export const Scene3DViewer = () => {
           const initialColor = 0x4dabf7;
           const initialEmissive = 0x2563eb;
           
-          const geometry = new THREE.SphereGeometry(0.15, 32, 32);
+          // Smaller sphere: 0.075 instead of 0.15
+          const geometry = new THREE.SphereGeometry(0.075, 32, 32);
           const material = new THREE.MeshStandardMaterial({
             color: initialColor,
             emissive: initialEmissive,
@@ -907,7 +973,8 @@ export const Scene3DViewer = () => {
           sphere.receiveShadow = true;
           sensorGroup.add(sphere);
 
-          const glowGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+          // Smaller glow: 0.1 instead of 0.2
+          const glowGeometry = new THREE.SphereGeometry(0.1, 16, 16);
           const glowMaterial = new THREE.MeshBasicMaterial({
             color: initialColor,
             transparent: true,
@@ -922,16 +989,19 @@ export const Scene3DViewer = () => {
           let sprite: THREE.Sprite;
           
           if (context) {
-            canvas.width = 256;
-            canvas.height = 64;
-            context.fillStyle = 'rgba(255, 255, 255, 0.95)';
-            context.roundRect(0, 0, canvas.width, canvas.height, 8);
-            context.fill();
-            context.fillStyle = '#1e40af';
-            context.font = 'bold 28px Arial';
+            canvas.width = 128;
+            canvas.height = 48;
+            
+            context.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            context.shadowBlur = 4;
+            context.shadowOffsetX = 1;
+            context.shadowOffsetY = 1;
+            
+            context.fillStyle = '#ffffff';
+            context.font = 'bold 20px Arial';
             context.textAlign = 'center';
             context.textBaseline = 'middle';
-            context.fillText(sensor.name, 128, 32);
+            context.fillText(sensor.name, 64, 24);
             
             const texture = new THREE.CanvasTexture(canvas);
             const spriteMaterial = new THREE.SpriteMaterial({ 
@@ -940,8 +1010,8 @@ export const Scene3DViewer = () => {
             });
             sprite = new THREE.Sprite(spriteMaterial);
             sprite.position.copy(originalPosition);
-            sprite.position.y += 0.5 / modelScale;
-            sprite.scale.set(1.2 / modelScale, 0.3 / modelScale, 1);
+            sprite.position.y += 0.4 / modelScale;
+            sprite.scale.set(0.8 / modelScale, 0.2 / modelScale, 1);
             sensorGroup.add(sprite);
 
             sensorMeshes.set(sensor.id, { sphere, glow, sprite });
@@ -1089,19 +1159,70 @@ export const Scene3DViewer = () => {
     }
   };
 
+  const getComparisonIcon = () => {
+    if (!currentOutdoorData || !indoorAverage || !interpolationRange) return null;
+
+    const outdoorValue = selectedMetric === 'temperature' ? currentOutdoorData.temperature :
+                         selectedMetric === 'humidity' ? currentOutdoorData.humidity :
+                         selectedMetric === 'absoluteHumidity' ? currentOutdoorData.absoluteHumidity :
+                         currentOutdoorData.dewPoint;
+
+    const indoorValue = selectedMetric === 'temperature' ? indoorAverage.temperature :
+                        selectedMetric === 'humidity' ? indoorAverage.humidity :
+                        selectedMetric === 'absoluteHumidity' ? indoorAverage.absoluteHumidity :
+                        indoorAverage.dewPoint;
+
+    const diff = Math.abs(outdoorValue - indoorValue);
+    const range = interpolationRange.max - interpolationRange.min;
+    const threshold = range * 0.1; // 10% of range
+
+    if (diff < threshold) {
+      return <Minus size={14} className="text-gray-400" />;
+    } else if (outdoorValue > indoorValue) {
+      return <TrendingUp size={14} className="text-orange-500" />;
+    } else {
+      return <TrendingDown size={14} className="text-blue-500" />;
+    }
+  };
+
+  const getOutdoorBackgroundColor = () => {
+    if (!currentOutdoorData || !interpolationRange) return 'bg-white/80 dark:bg-black/80';
+
+    const outdoorValue = selectedMetric === 'temperature' ? currentOutdoorData.temperature :
+                         selectedMetric === 'humidity' ? currentOutdoorData.humidity :
+                         selectedMetric === 'absoluteHumidity' ? currentOutdoorData.absoluteHumidity :
+                         currentOutdoorData.dewPoint;
+
+    const color = getColorFromValue(outdoorValue, interpolationRange.min, interpolationRange.max, selectedMetric);
+    const threeColor = new THREE.Color(color);
+    
+    // Convert to RGB and create a light background
+    const r = Math.round(threeColor.r * 255);
+    const g = Math.round(threeColor.g * 255);
+    const b = Math.round(threeColor.b * 255);
+    
+    return `rgba(${r}, ${g}, ${b}, 0.15)`;
+  };
+
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
       <ColorLegend />
       
       {/* Outdoor data badge */}
-      {hasOutdoorData && currentOutdoorData && dataReady && (
+      {hasOutdoorData && currentOutdoorData && dataReady && interpolationRange && (
         <div className="absolute bottom-4 right-4 z-10">
-          <div className="bg-white/80 dark:bg-black/80 backdrop-blur-xl rounded-xl p-3 shadow-lg border border-white/40">
+          <div 
+            className="backdrop-blur-xl rounded-xl p-3 shadow-lg border border-white/40"
+            style={{ backgroundColor: getOutdoorBackgroundColor() }}
+          >
             <div className="flex items-center gap-2">
               {getMetricIcon()}
               <div>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">Extérieur</p>
-                <p className="text-sm font-semibold">{getMetricValue()}</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-[10px] text-gray-600 dark:text-gray-300">Extérieur</p>
+                  {getComparisonIcon()}
+                </div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{getMetricValue()}</p>
               </div>
             </div>
           </div>
