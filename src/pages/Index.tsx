@@ -7,6 +7,7 @@ import { AuthPage } from '@/components/AuthPage';
 import { SpaceManager } from '@/components/SpaceManager';
 import { Dashboard } from '@/components/Dashboard';
 import { Loader2 } from 'lucide-react';
+import { showError } from '@/utils/toast';
 
 const Index = () => {
   const [loading, setLoading] = useState(true);
@@ -43,15 +44,26 @@ const Index = () => {
     return () => subscription.unsubscribe();
   }, [setAuth, setCurrentSpace]);
 
+  const parseNumber = (value: any): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      // Replace comma with dot for decimal separator
+      return parseFloat(value.replace(',', '.'));
+    }
+    return 0;
+  };
+
   const handleSpaceSelected = async (space: any) => {
     try {
       setCurrentSpace(space);
 
       // Load GLTF model
       if (space.gltf_file_path) {
-        const { data: gltfData } = await supabase.storage
+        const { data: gltfData, error: gltfError } = await supabase.storage
           .from('models')
           .download(space.gltf_file_path);
+
+        if (gltfError) throw gltfError;
 
         if (gltfData) {
           const url = URL.createObjectURL(gltfData);
@@ -61,26 +73,49 @@ const Index = () => {
 
       // Load JSON positions
       if (space.json_file_path) {
-        const { data: jsonData } = await supabase.storage
+        const { data: jsonData, error: jsonError } = await supabase.storage
           .from('models')
           .download(space.json_file_path);
 
+        if (jsonError) throw jsonError;
+
         if (jsonData) {
-          const text = await jsonData.text();
+          let text = await jsonData.text();
+          
+          // Fix JSON: replace commas with dots in numeric values
+          // This regex finds patterns like "x": 1,234 or "y": -2,456
+          text = text.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+          
+          console.log('Fixed JSON text:', text);
+          
           const data = JSON.parse(text);
 
           if (data.points && Array.isArray(data.points)) {
-            const sensors = data.points.map((point: any, index: number) => ({
-              id: index + 1,
-              position: [
-                parseFloat(point.x),
-                parseFloat(point.y),
-                parseFloat(point.z)
-              ] as [number, number, number],
-              name: point.name || `Capteur ${index + 1}`,
-            }));
+            const sensors = data.points.map((point: any, index: number) => {
+              const x = parseNumber(point.x);
+              const y = parseNumber(point.y);
+              const z = parseNumber(point.z);
+              
+              if (isNaN(x) || isNaN(y) || isNaN(z)) {
+                console.error(`Invalid coordinates for point ${index}:`, point);
+                throw new Error(`Coordonnées invalides pour le point ${index + 1}`);
+              }
+              
+              return {
+                id: index + 1,
+                position: [x, y, z] as [number, number, number],
+                name: point.name || `Capteur ${index + 1}`,
+              };
+            });
 
+            if (sensors.length === 0) {
+              throw new Error('Aucun capteur trouvé dans le fichier JSON');
+            }
+
+            console.log('Loaded sensors:', sensors);
             setSensors(sensors);
+          } else {
+            throw new Error('Format JSON invalide : le fichier doit contenir un tableau "points"');
           }
         }
       }
@@ -88,6 +123,7 @@ const Index = () => {
       setShowSpaceManager(false);
     } catch (error) {
       console.error('Error loading space:', error);
+      showError(error instanceof Error ? error.message : 'Erreur lors du chargement de l\'espace');
     }
   };
 
