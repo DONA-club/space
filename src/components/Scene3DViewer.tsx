@@ -21,7 +21,7 @@ import { createScene, createCamera, createRenderer, setupLights, createControls 
 import { SceneRef, ModelBounds } from "@/types/scene.types";
 import { INTERPOLATION_OFFSET, INTERPOLATION_DEFAULTS, VISUALIZATION_DEFAULTS } from "@/constants/interpolation";
 import { calculateAirDensity, calculateWaterMass } from "@/utils/airCalculations";
-import { calculateSceneVolume, calculateInteriorAirVolume } from "@/utils/volumeCalculations";
+import { calculateSceneVolume } from "@/utils/volumeCalculations";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -253,7 +253,9 @@ export const Scene3DViewer = () => {
         setLoading(false);
         
         // Calculate EXACT volume from original GLB geometry BEFORE any transformation
-        const originalVolume = calculateInteriorAirVolume(gltf.scene);
+        // Use direct scene volume (not bounding box subtraction)
+        const originalVolume = calculateSceneVolume(gltf.scene);
+        console.log('📊 Volume calculé du GLB:', originalVolume.toFixed(2), 'm³');
         setExactAirVolume(originalVolume);
         
         const { bounds, originalBounds, scale, center, modelPosition } = processLoadedModel(gltf, scene);
