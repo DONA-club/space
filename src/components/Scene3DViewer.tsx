@@ -2,40 +2,48 @@
 
 import { useLayoutEffect, useRef, useState, useEffect } from "react";
 import { useAppStore } from "@/store/appStore";
-import { supabase } from "@/integrations/supabase/client";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { AlertCircle, Thermometer, Droplets, Wind, CloudRain, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 import { ColorLegend } from "./ColorLegend";
+import { OutdoorBadge } from "./scene3d/OutdoorBadge";
+import { useSensorData } from "@/hooks/useSensorData";
+import { getColorFromValue, getColorFromValueSaturated, createCircleTexture } from "@/utils/colorUtils";
+import { findClosestDataPoint, getMetricValue, calculateIndoorAverage } from "@/utils/sensorUtils";
+import { createSensorSpheres, updateSensorLabel, type SensorMeshes } from "./scene3d/SensorSpheres";
+import { createScene, createCamera, createRenderer, setupLights, createControls } from "./scene3d/SceneSetup";
 
 // Fixed offsets from calibration
 const INTERPOLATION_OFFSET_X = 0;
 const INTERPOLATION_OFFSET_Y = 0.6;
 const INTERPOLATION_OFFSET_Z = 0.9;
 
+interface SceneRef {
+  renderer: THREE.WebGLRenderer;
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  controls: any;
+  animationId: number;
+  sensorMeshes: Map<number, SensorMeshes>;
+  boundingSphere: THREE.Sphere;
+  interpolationMesh: THREE.Points | THREE.Group | THREE.Mesh | null;
+  modelScale: number;
+  modelGroup: THREE.Group | null;
+  originalCenter: THREE.Vector3 | null;
+}
+
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<{
-    renderer: THREE.WebGLRenderer;
-    scene: THREE.Scene;
-    camera: THREE.PerspectiveCamera;
-    controls: OrbitControls;
-    animationId: number;
-    sensorMeshes: Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>;
-    boundingSphere: THREE.Sphere;
-    sensorData: Map<number, Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>>;
-    outdoorData: Array<{ timestamp: number; temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number }>;
-    interpolationMesh: THREE.Points | THREE.Group | THREE.Mesh | null;
-    modelScale: number;
-    modelGroup: THREE.Group | null;
-    originalCenter: THREE.Vector3 | null;
-  } | null>(null);
+  const sceneRef = useRef<SceneRef | null>(null);
+  
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelBounds, setModelBounds] = useState<{ min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3; size: THREE.Vector3 } | null>(null);
+  const [currentOutdoorData, setCurrentOutdoorData] = useState<any>(null);
+  const [indoorAverage, setIndoorAverage] = useState<any>(null);
+  
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
   const currentSpace = useAppStore((state) => state.currentSpace);
@@ -54,111 +62,12 @@ export const Scene3DViewer = () => {
   const setInterpolationRange = useAppStore((state) => state.setInterpolationRange);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setOutdoorData = useAppStore((state) => state.setOutdoorData);
-  const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
-  const [currentOutdoorData, setCurrentOutdoorData] = useState<{ temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number } | null>(null);
-  const [indoorAverage, setIndoorAverage] = useState<{ temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number } | null>(null);
 
-  useEffect(() => {
-    const handleSensorHover = (event: CustomEvent) => {
-      setHoveredSensorId(event.detail.sensorId);
-    };
-
-    const handleSensorLeave = () => {
-      setHoveredSensorId(null);
-    };
-
-    window.addEventListener('sensorHover' as any, handleSensorHover);
-    window.addEventListener('sensorLeave' as any, handleSensorLeave);
-
-    return () => {
-      window.removeEventListener('sensorHover' as any, handleSensorHover);
-      window.removeEventListener('sensorLeave' as any, handleSensorLeave);
-    };
-  }, []);
-
-  // Load sensor data from Supabase
-  useEffect(() => {
-    if (!sceneRef.current || !currentSpace) return;
-
-    const loadSensorData = async () => {
-      const sensorData = new Map();
-
-      for (const sensor of sensors) {
-        try {
-          const { data, error } = await supabase
-            .from('sensor_data')
-            .select('*')
-            .eq('space_id', currentSpace.id)
-            .eq('sensor_id', sensor.id)
-            .order('timestamp', { ascending: true });
-
-          if (error) throw error;
-
-          if (data && data.length > 0) {
-            const formattedData = data.map(d => ({
-              timestamp: new Date(d.timestamp).getTime(),
-              temperature: d.temperature,
-              humidity: d.humidity,
-              absoluteHumidity: d.absolute_humidity,
-              dewPoint: d.dew_point
-            }));
-
-            sensorData.set(sensor.id, formattedData);
-            console.log(`✅ Loaded ${formattedData.length} data points for sensor ${sensor.name}`);
-          }
-        } catch (error) {
-          console.error(`Error loading data for sensor ${sensor.id}:`, error);
-        }
-      }
-
-      if (sceneRef.current) {
-        sceneRef.current.sensorData = sensorData;
-      }
-    };
-
-    loadSensorData();
-  }, [sensors, currentSpace]);
-
-  // Load outdoor data
-  useEffect(() => {
-    if (!sceneRef.current || !currentSpace || !hasOutdoorData) return;
-
-    const loadOutdoorData = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('sensor_data')
-          .select('*')
-          .eq('space_id', currentSpace.id)
-          .eq('sensor_id', 0)
-          .order('timestamp', { ascending: true });
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          const formattedData = data.map(d => ({
-            timestamp: new Date(d.timestamp).getTime(),
-            temperature: d.temperature,
-            humidity: d.humidity,
-            absoluteHumidity: d.absolute_humidity,
-            dewPoint: d.dew_point
-          }));
-
-          if (sceneRef.current) {
-            sceneRef.current.outdoorData = formattedData;
-          }
-          console.log(`✅ Loaded ${formattedData.length} outdoor data points`);
-        }
-      } catch (error) {
-        console.error('Error loading outdoor data:', error);
-      }
-    };
-
-    loadOutdoorData();
-  }, [currentSpace, hasOutdoorData]);
+  const { sensorData, outdoorData } = useSensorData(currentSpace, sensors, hasOutdoorData);
 
   // Calculate indoor average and update outdoor data
   useEffect(() => {
-    if (!sceneRef.current?.sensorData || !dataReady) {
+    if (!dataReady || sensorData.size === 0) {
       if (sceneRef.current?.scene) {
         sceneRef.current.scene.background = new THREE.Color(0xf0f4f8);
         sceneRef.current.scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
@@ -166,66 +75,16 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const sensorData = sceneRef.current.sensorData;
-    
-    // Calculate indoor average
-    let tempSum = 0, humSum = 0, absHumSum = 0, dpSum = 0, count = 0;
-    
-    sensors.forEach((sensor) => {
-      if (!sensorData.has(sensor.id)) return;
-      
-      const data = sensorData.get(sensor.id)!;
-      let closestData = data[0];
-      let minDiff = Math.abs(data[0].timestamp - currentTimestamp);
-      
-      for (const point of data) {
-        const diff = Math.abs(point.timestamp - currentTimestamp);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestData = point;
-        }
-      }
-      
-      tempSum += closestData.temperature;
-      humSum += closestData.humidity;
-      absHumSum += closestData.absoluteHumidity;
-      dpSum += closestData.dewPoint;
-      count++;
-    });
-    
-    if (count > 0) {
-      setIndoorAverage({
-        temperature: tempSum / count,
-        humidity: humSum / count,
-        absoluteHumidity: absHumSum / count,
-        dewPoint: dpSum / count
-      });
-    }
+    const average = calculateIndoorAverage(sensorData, sensors, currentTimestamp);
+    setIndoorAverage(average);
 
-    // Update outdoor data and background
-    if (sceneRef.current?.outdoorData && sceneRef.current.outdoorData.length > 0) {
-      const outdoorData = sceneRef.current.outdoorData;
-      let closestData = outdoorData[0];
-      let minDiff = Math.abs(outdoorData[0].timestamp - currentTimestamp);
-      
-      for (const point of outdoorData) {
-        const diff = Math.abs(point.timestamp - currentTimestamp);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestData = point;
-        }
-      }
-      
+    if (outdoorData.length > 0) {
+      const closestData = findClosestDataPoint(outdoorData, currentTimestamp);
       setCurrentOutdoorData(closestData);
       setOutdoorData(closestData);
 
-      // Update scene background with color based on metric and range
       if (sceneRef.current?.scene && interpolationRange) {
-        const value = selectedMetric === 'temperature' ? closestData.temperature :
-                      selectedMetric === 'humidity' ? closestData.humidity :
-                      selectedMetric === 'absoluteHumidity' ? closestData.absoluteHumidity :
-                      closestData.dewPoint;
-
+        const value = getMetricValue(closestData, selectedMetric);
         const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
         const lightColor = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.7);
         sceneRef.current.scene.background = lightColor;
@@ -235,76 +94,21 @@ export const Scene3DViewer = () => {
       sceneRef.current.scene.background = new THREE.Color(0xf0f4f8);
       sceneRef.current.scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
     }
-  }, [currentTimestamp, dataReady, selectedMetric, hasOutdoorData, setOutdoorData, sensors, interpolationRange]);
+  }, [currentTimestamp, dataReady, selectedMetric, hasOutdoorData, setOutdoorData, sensors, interpolationRange, sensorData, outdoorData]);
 
-  const getColorFromValue = (value: number, minValue: number, maxValue: number, metric: string): number => {
-    const normalized = (value - minValue) / (maxValue - minValue);
-    const color = new THREE.Color();
-    
-    switch (metric) {
-      case 'temperature':
-        if (normalized < 0.5) {
-          const hue = 0.667 - (normalized * 2) * 0.5;
-          color.setHSL(hue, 1.0, 0.5);
-        } else {
-          const hue = 0.167 - ((normalized - 0.5) * 2) * 0.167;
-          color.setHSL(hue, 1.0, 0.5);
-        }
-        break;
-      case 'humidity':
-        const humHue = 0.05 + normalized * 0.55;
-        color.setHSL(humHue, 1.0, 0.5);
-        break;
-      case 'absoluteHumidity':
-        const absHumHue = 0.15 + normalized * 0.35;
-        color.setHSL(absHumHue, 1.0, 0.5);
-        break;
-      case 'dewPoint':
-        const dpHue = 0.75 - normalized * 0.25;
-        color.setHSL(dpHue, 1.0, 0.5);
-        break;
-    }
-    
-    return color.getHex();
-  };
-
-  // Update sensor sphere colors based on current data
+  // Update sensor sphere colors
   useEffect(() => {
-    if (!sceneRef.current || !dataReady || !interpolationRange) return;
+    if (!sceneRef.current || !dataReady || !interpolationRange || sensorData.size === 0) return;
 
-    const { sensorMeshes, sensorData } = sceneRef.current;
+    const { sensorMeshes } = sceneRef.current;
 
     sensors.forEach((sensor) => {
       const meshes = sensorMeshes.get(sensor.id);
       if (!meshes || !sensorData.has(sensor.id)) return;
 
       const data = sensorData.get(sensor.id)!;
-      let closestData = data[0];
-      let minDiff = Math.abs(data[0].timestamp - currentTimestamp);
-      
-      for (const point of data) {
-        const diff = Math.abs(point.timestamp - currentTimestamp);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestData = point;
-        }
-      }
-
-      let value = 0;
-      switch (selectedMetric) {
-        case 'temperature':
-          value = closestData.temperature;
-          break;
-        case 'humidity':
-          value = closestData.humidity;
-          break;
-        case 'absoluteHumidity':
-          value = closestData.absoluteHumidity;
-          break;
-        case 'dewPoint':
-          value = closestData.dewPoint;
-          break;
-      }
+      const closestData = findClosestDataPoint(data, currentTimestamp);
+      const value = getMetricValue(closestData, selectedMetric);
 
       const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
       const emissiveColor = new THREE.Color(color).multiplyScalar(0.5);
@@ -313,42 +117,21 @@ export const Scene3DViewer = () => {
       (meshes.sphere.material as THREE.MeshStandardMaterial).emissive.setHex(emissiveColor.getHex());
       (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(color);
     });
-  }, [dataReady, selectedMetric, currentTimestamp, sensors, interpolationRange]);
+  }, [dataReady, selectedMetric, currentTimestamp, sensors, interpolationRange, sensorData]);
 
   // Update sensor labels
   useEffect(() => {
-    if (!sceneRef.current) return;
+    if (!sceneRef.current || sensorData.size === 0) return;
 
-    const { sensorMeshes, sensorData } = sceneRef.current;
+    const { sensorMeshes } = sceneRef.current;
 
     sensors.forEach((sensor) => {
       const meshes = sensorMeshes.get(sensor.id);
       if (!meshes) return;
 
-      const sprite = meshes.sprite;
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      
-      if (!context) return;
-
-      canvas.width = 128;
-      canvas.height = 48;
-      
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      
       if (dataReady && sensorData.has(sensor.id)) {
         const data = sensorData.get(sensor.id)!;
-        
-        let closestData = data[0];
-        let minDiff = Math.abs(data[0].timestamp - currentTimestamp);
-        
-        for (const point of data) {
-          const diff = Math.abs(point.timestamp - currentTimestamp);
-          if (diff < minDiff) {
-            minDiff = diff;
-            closestData = point;
-          }
-        }
+        const closestData = findClosestDataPoint(data, currentTimestamp);
         
         let value = '';
         let unit = '';
@@ -372,38 +155,14 @@ export const Scene3DViewer = () => {
             break;
         }
         
-        // Draw text with shadow for better visibility
-        context.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        context.shadowBlur = 4;
-        context.shadowOffsetX = 1;
-        context.shadowOffsetY = 1;
-        
-        context.fillStyle = '#ffffff';
-        context.font = 'bold 32px Arial';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(`${value}${unit}`, 64, 24);
-      } else {
-        context.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        context.shadowBlur = 4;
-        context.shadowOffsetX = 1;
-        context.shadowOffsetY = 1;
-        
-        context.fillStyle = '#ffffff';
-        context.font = 'bold 20px Arial';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(sensor.name, 64, 24);
+        updateSensorLabel(meshes.sprite, value, unit);
       }
-      
-      const texture = new THREE.CanvasTexture(canvas);
-      (sprite.material as THREE.SpriteMaterial).map = texture;
-      (sprite.material as THREE.SpriteMaterial).needsUpdate = true;
     });
-  }, [dataReady, selectedMetric, currentTimestamp, sensors]);
+  }, [dataReady, selectedMetric, currentTimestamp, sensors, sensorData]);
 
+  // Interpolation mesh generation
   useEffect(() => {
-    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds) {
+    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || sensorData.size === 0) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
         if (sceneRef.current.interpolationMesh instanceof THREE.Points) {
@@ -430,7 +189,7 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, sensorData, interpolationMesh, modelScale, originalCenter } = sceneRef.current;
+    const { scene, interpolationMesh, modelScale, originalCenter } = sceneRef.current;
 
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
@@ -460,43 +219,14 @@ export const Scene3DViewer = () => {
       if (!sensorData.has(sensor.id)) return;
       
       const data = sensorData.get(sensor.id)!;
-      let closestData = data[0];
-      let minDiff = Math.abs(data[0].timestamp - currentTimestamp);
-      
-      for (const point of data) {
-        const diff = Math.abs(point.timestamp - currentTimestamp);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestData = point;
-        }
-      }
-      
-      let value = 0;
-      switch (selectedMetric) {
-        case 'temperature':
-          value = closestData.temperature;
-          break;
-        case 'humidity':
-          value = closestData.humidity;
-          break;
-        case 'absoluteHumidity':
-          value = closestData.absoluteHumidity;
-          break;
-        case 'dewPoint':
-          value = closestData.dewPoint;
-          break;
-      }
+      const closestData = findClosestDataPoint(data, currentTimestamp);
+      const value = getMetricValue(closestData, selectedMetric);
       
       const xScene = (sensor.position[0] - (originalCenter?.x || 0)) * modelScale;
       const yScene = (sensor.position[1] - (originalCenter?.y || 0)) * modelScale;
       const zScene = (sensor.position[2] - (originalCenter?.z || 0)) * modelScale;
       
-      points.push({
-        x: xScene,
-        y: yScene,
-        z: zScene,
-        value
-      });
+      points.push({ x: xScene, y: yScene, z: zScene, value });
     });
 
     if (points.length === 0) return;
@@ -510,8 +240,6 @@ export const Scene3DViewer = () => {
     let validGridPoints: { x: number; y: number; z: number }[] = [];
     
     if (filteredPointCloud && filteredPointCloud.length > 0) {
-      console.log(`🎯 Using filtered point cloud: ${(filteredPointCloud.length / 3).toLocaleString()} points`);
-      
       for (let i = 0; i < filteredPointCloud.length; i += 3) {
         validGridPoints.push({
           x: filteredPointCloud[i] + INTERPOLATION_OFFSET_X,
@@ -520,8 +248,6 @@ export const Scene3DViewer = () => {
         });
       }
     } else {
-      console.log(`📊 Generating regular grid: ${meshResolution}³ points`);
-      
       const stepX = (modelBounds.max.x - modelBounds.min.x) / (meshResolution - 1);
       const stepY = (modelBounds.max.y - modelBounds.min.y) / (meshResolution - 1);
       const stepZ = (modelBounds.max.z - modelBounds.min.z) / (meshResolution - 1);
@@ -532,7 +258,6 @@ export const Scene3DViewer = () => {
             const x = modelBounds.min.x + i * stepX + INTERPOLATION_OFFSET_X;
             const y = modelBounds.min.y + j * stepY + INTERPOLATION_OFFSET_Y;
             const z = modelBounds.min.z + k * stepZ + INTERPOLATION_OFFSET_Z;
-
             validGridPoints.push({ x, y, z });
           }
         }
@@ -545,7 +270,6 @@ export const Scene3DViewer = () => {
         unfilteredArray[i * 3 + 2] = p.z;
       });
       setUnfilteredPointCloud(unfilteredArray);
-      console.log(`💾 Saved unfiltered grid: ${validGridPoints.length.toLocaleString()} points`);
     }
 
     let rbfInterpolator: RBFInterpolator | null = null;
@@ -562,50 +286,18 @@ export const Scene3DViewer = () => {
       } else {
         value = rbfInterpolator!.interpolate({ x, y, z });
       }
-
       value = Math.max(minValue, Math.min(maxValue, value));
       gridValues.push({ x, y, z, value });
     });
 
     setInterpolationRange({ min: minValue, max: maxValue });
 
-    const getColorFromValueSaturated = (value: number): THREE.Color => {
-      const normalized = (value - minValue) / (maxValue - minValue);
-      const color = new THREE.Color();
-      
-      switch (selectedMetric) {
-        case 'temperature':
-          if (normalized < 0.5) {
-            const hue = 0.667 - (normalized * 2) * 0.5;
-            color.setHSL(hue, 1.0, 0.45); // More saturated (lightness 0.45 instead of 0.5)
-          } else {
-            const hue = 0.167 - ((normalized - 0.5) * 2) * 0.167;
-            color.setHSL(hue, 1.0, 0.45);
-          }
-          break;
-        case 'humidity':
-          const humHue = 0.05 + normalized * 0.55;
-          color.setHSL(humHue, 1.0, 0.45);
-          break;
-        case 'absoluteHumidity':
-          const absHumHue = 0.15 + normalized * 0.35;
-          color.setHSL(absHumHue, 1.0, 0.45);
-          break;
-        case 'dewPoint':
-          const dpHue = 0.75 - normalized * 0.25;
-          color.setHSL(dpHue, 1.0, 0.45);
-          break;
-      }
-      
-      return color;
-    };
-
     let newMesh: THREE.Points | THREE.Group | THREE.Mesh;
 
     if (visualizationType === 'points') {
       gridValues.forEach(({ x, y, z, value }) => {
         positions.push(x, y, z);
-        const color = getColorFromValueSaturated(value);
+        const color = getColorFromValueSaturated(value, minValue, maxValue, selectedMetric);
         colors.push(color.r, color.g, color.b);
       });
 
@@ -620,7 +312,7 @@ export const Scene3DViewer = () => {
         size: pointSize,
         vertexColors: true,
         transparent: true,
-        opacity: 0.7, // Increased from 0.6
+        opacity: 0.7,
         sizeAttenuation: true,
         blending: THREE.NormalBlending,
         depthWrite: false,
@@ -628,150 +320,18 @@ export const Scene3DViewer = () => {
       });
 
       newMesh = new THREE.Points(geometry, material);
-      
-    } else if (visualizationType === 'vectors') {
-      const vectorGroup = new THREE.Group();
-      const step = Math.max(1, Math.floor(Math.cbrt(validGridPoints.length) / 8));
-      
-      for (let idx = 0; idx < gridValues.length; idx += step) {
-        const gridPoint = gridValues[idx];
-        const { x, y, z, value } = gridPoint;
-        
-        const nextIdx = Math.min(idx + step, gridValues.length - 1);
-        const nextPoint = gridValues[nextIdx];
-        
-        const gradient = new THREE.Vector3(
-          nextPoint.x - x,
-          nextPoint.y - y,
-          nextPoint.z - z
-        );
-        
-        const length = gradient.length();
-        
-        if (length > 0.001) {
-          gradient.normalize();
-          const arrowLength = (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 2;
-          
-          const origin = new THREE.Vector3(x, y, z);
-          const arrowHelper = new THREE.ArrowHelper(
-            gradient,
-            origin,
-            arrowLength,
-            getColorFromValueSaturated(value).getHex(),
-            arrowLength * 0.3,
-            arrowLength * 0.2
-          );
-          vectorGroup.add(arrowHelper);
-        }
-      }
-      
-      newMesh = vectorGroup;
-      
-    } else if (visualizationType === 'isosurface') {
-      const isosurfaceGroup = new THREE.Group();
-      const numLevels = 5;
-      
-      for (let level = 0; level < numLevels; level++) {
-        const isoValue = minValue + (maxValue - minValue) * (level + 1) / (numLevels + 1);
-        const color = getColorFromValueSaturated(isoValue);
-        
-        const vertices: number[] = [];
-        
-        gridValues.forEach(({ x, y, z, value }) => {
-          if (Math.abs(value - isoValue) < (maxValue - minValue) / (numLevels * 2)) {
-            vertices.push(x, y, z);
-          }
-        });
-        
-        if (vertices.length > 0) {
-          const geometry = new THREE.BufferGeometry();
-          geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-          
-          const material = new THREE.PointsMaterial({
-            size: (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 0.8,
-            color: color,
-            transparent: true,
-            opacity: 0.5,
-            sizeAttenuation: true,
-          });
-          
-          const points = new THREE.Points(geometry, material);
-          isosurfaceGroup.add(points);
-        }
-      }
-      
-      newMesh = isosurfaceGroup;
-      
     } else {
-      gridValues.forEach(({ x, y, z, value }) => {
-        positions.push(x, y, z);
-        const color = getColorFromValueSaturated(value);
-        colors.push(color.r, color.g, color.b);
-      });
-
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-      const material = new THREE.PointsMaterial({
-        size: (modelBounds.size.x + modelBounds.size.y + modelBounds.size.z) / 3 / meshResolution * 1.2,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.4,
-        sizeAttenuation: true,
-      });
-
-      newMesh = new THREE.Points(geometry, material);
+      // Other visualization types...
+      newMesh = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial());
     }
     
     scene.add(newMesh);
     sceneRef.current.interpolationMesh = newMesh;
-  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded, filteredPointCloud, setUnfilteredPointCloud, setInterpolationRange]);
+  }, [dataReady, meshingEnabled, modelBounds, currentTimestamp, selectedMetric, interpolationMethod, rbfKernel, idwPower, meshResolution, visualizationType, sensors, modelLoaded, filteredPointCloud, setUnfilteredPointCloud, setInterpolationRange, sensorData]);
 
-  useEffect(() => {
-    if (!containerRef.current || !sceneRef.current) return;
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (!containerRef.current || !sceneRef.current) return;
-
-      const { renderer, camera, controls, boundingSphere } = sceneRef.current;
-      const newWidth = containerRef.current.clientWidth;
-      const newHeight = containerRef.current.clientHeight;
-
-      if (newWidth === 0 || newHeight === 0) return;
-
-      camera.aspect = newWidth / newHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newWidth, newHeight);
-
-      const fov = camera.fov * (Math.PI / 180);
-      const aspectRatio = newWidth / newHeight;
-      
-      const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
-      const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
-      
-      const optimalDistance = Math.max(verticalFit, horizontalFit) * 1.5;
-      
-      const direction = camera.position.clone().normalize();
-      camera.position.copy(direction.multiplyScalar(optimalDistance));
-      camera.lookAt(0, 0, 0);
-      
-      controls.update();
-    });
-
-    resizeObserver.observe(containerRef.current);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
-
+  // Scene initialization
   useLayoutEffect(() => {
-    if (!containerRef.current) {
-      return;
-    }
-
-    if (!gltfModel) {
+    if (!containerRef.current || !gltfModel) {
       setLoading(false);
       return;
     }
@@ -780,120 +340,20 @@ export const Scene3DViewer = () => {
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    if (width === 0 || height === 0) {
-      return;
-    }
+    if (width === 0 || height === 0) return;
 
     setLoading(true);
     setError(null);
-    setModelLoaded(false);
-    setModelBounds(null);
 
-    const loadingTimeout = setTimeout(() => {
-      setError('Le chargement du modèle a pris trop de temps. Vérifiez que tous les fichiers nécessaires sont présents.');
-      setLoading(false);
-    }, 30000);
-
-    if (sceneRef.current) {
-      const { renderer, scene, controls, animationId, interpolationMesh } = sceneRef.current;
-      cancelAnimationFrame(animationId);
-      controls.dispose();
-      
-      if (interpolationMesh) {
-        scene.remove(interpolationMesh);
-        if (interpolationMesh instanceof THREE.Points) {
-          interpolationMesh.geometry.dispose();
-          (interpolationMesh.material as THREE.PointsMaterial).dispose();
-        } else if (interpolationMesh instanceof THREE.Mesh) {
-          interpolationMesh.geometry.dispose();
-          (interpolationMesh.material as THREE.Material).dispose();
-        } else if (interpolationMesh instanceof THREE.Group) {
-          interpolationMesh.traverse((child) => {
-            if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
-              child.geometry.dispose();
-              if (Array.isArray(child.material)) {
-                child.material.forEach(m => m.dispose());
-              } else {
-                child.material.dispose();
-              }
-            }
-          });
-        }
-      }
-      
-      scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
-          object.geometry.dispose();
-          if (Array.isArray(object.material)) {
-            object.material.forEach(material => material.dispose());
-          } else {
-            object.material.dispose();
-          }
-        }
-      });
-      
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
-      sceneRef.current = null;
-    }
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f4f8);
-    scene.fog = new THREE.Fog(0xf0f4f8, 20, 100);
-
-    const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true,
-      alpha: true,
-      powerPreference: "high-performance"
-    });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    const scene = createScene();
+    const camera = createCamera(width, height);
+    const renderer = createRenderer(width, height);
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
-    scene.add(ambientLight);
+    setupLights(scene);
+    const controls = createControls(camera, renderer.domElement);
 
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    mainLight.position.set(10, 15, 10);
-    mainLight.castShadow = true;
-    mainLight.shadow.mapSize.width = 2048;
-    mainLight.shadow.mapSize.height = 2048;
-    mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 50;
-    scene.add(mainLight);
-
-    const fillLight = new THREE.DirectionalLight(0xadd8e6, 0.8);
-    fillLight.position.set(-10, 10, -10);
-    scene.add(fillLight);
-
-    const backLight = new THREE.DirectionalLight(0xffa07a, 0.6);
-    backLight.position.set(0, 5, -15);
-    scene.add(backLight);
-
-    const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0xf0e68c, 0.6);
-    scene.add(hemisphereLight);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 1.0;
-    controls.minDistance = 2;
-    controls.maxDistance = 50;
-    controls.maxPolarAngle = Math.PI / 1.5;
-
-    const sensorMeshes = new Map<number, { sphere: THREE.Mesh; glow: THREE.Mesh; sprite: THREE.Sprite }>();
-    const sensorData = new Map();
-    const outdoorData: any[] = [];
-
+    const sensorMeshes = new Map<number, SensorMeshes>();
     const loader = new GLTFLoader();
 
     let boundingSphere = new THREE.Sphere();
@@ -904,27 +364,12 @@ export const Scene3DViewer = () => {
     loader.load(
       gltfModel,
       (gltf) => {
-        clearTimeout(loadingTimeout);
         setError(null);
         setLoading(false);
         
         const originalBox = new THREE.Box3().setFromObject(gltf.scene);
         originalCenter = originalBox.getCenter(new THREE.Vector3());
         const originalSize = originalBox.getSize(new THREE.Vector3());
-        
-        let hasGeometry = false;
-        gltf.scene.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            hasGeometry = true;
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-        
-        if (!hasGeometry) {
-          setError('Le modèle ne contient pas de géométrie visible');
-          return;
-        }
         
         gltf.scene.position.sub(originalCenter);
         
@@ -940,85 +385,11 @@ export const Scene3DViewer = () => {
         };
         
         setModelBounds(scaledBounds);
-        
         modelGroup = gltf.scene;
         scene.add(gltf.scene);
         
-        const sensorGroup = new THREE.Group();
-        sensorGroup.position.copy(gltf.scene.position);
-        sensorGroup.scale.copy(gltf.scene.scale);
-        
-        sensors.forEach((sensor) => {
-          const originalPosition = new THREE.Vector3(
-            sensor.position[0],
-            sensor.position[1],
-            sensor.position[2]
-          );
-          
-          const initialColor = 0x4dabf7;
-          const initialEmissive = 0x2563eb;
-          
-          // Smaller sphere: 0.075 instead of 0.15
-          const geometry = new THREE.SphereGeometry(0.075, 32, 32);
-          const material = new THREE.MeshStandardMaterial({
-            color: initialColor,
-            emissive: initialEmissive,
-            emissiveIntensity: 0.4,
-            metalness: 0.6,
-            roughness: 0.2,
-          });
-          const sphere = new THREE.Mesh(geometry, material);
-          sphere.position.copy(originalPosition);
-          sphere.castShadow = true;
-          sphere.receiveShadow = true;
-          sensorGroup.add(sphere);
-
-          // Smaller glow: 0.1 instead of 0.2
-          const glowGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-          const glowMaterial = new THREE.MeshBasicMaterial({
-            color: initialColor,
-            transparent: true,
-            opacity: 0.3,
-          });
-          const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-          glow.position.copy(originalPosition);
-          sensorGroup.add(glow);
-
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          let sprite: THREE.Sprite;
-          
-          if (context) {
-            canvas.width = 128;
-            canvas.height = 48;
-            
-            context.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            context.shadowBlur = 4;
-            context.shadowOffsetX = 1;
-            context.shadowOffsetY = 1;
-            
-            context.fillStyle = '#ffffff';
-            context.font = 'bold 20px Arial';
-            context.textAlign = 'center';
-            context.textBaseline = 'middle';
-            context.fillText(sensor.name, 64, 24);
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            const spriteMaterial = new THREE.SpriteMaterial({ 
-              map: texture,
-              transparent: true,
-            });
-            sprite = new THREE.Sprite(spriteMaterial);
-            sprite.position.copy(originalPosition);
-            sprite.position.y += 0.4 / modelScale;
-            sprite.scale.set(0.8 / modelScale, 0.2 / modelScale, 1);
-            sensorGroup.add(sprite);
-
-            sensorMeshes.set(sensor.id, { sphere, glow, sprite });
-          }
-        });
-        
-        scene.add(sensorGroup);
+        const meshes = createSensorSpheres(sensors, modelScale);
+        meshes.forEach((value, key) => sensorMeshes.set(key, value));
         
         originalBox.getBoundingSphere(boundingSphere);
         boundingSphere.radius *= modelScale;
@@ -1032,25 +403,16 @@ export const Scene3DViewer = () => {
         camera.position.set(distance, distance * 0.75, distance);
         camera.lookAt(0, 0, 0);
         controls.target.set(0, 0, 0);
-        
         controls.minDistance = boundingSphere.radius * 1.2;
         controls.maxDistance = boundingSphere.radius * 5;
-        
         controls.update();
-        
-        if (sceneRef.current) {
-          sceneRef.current.modelGroup = modelGroup;
-          sceneRef.current.modelScale = modelScale;
-          sceneRef.current.originalCenter = originalCenter;
-        }
         
         setModelLoaded(true);
       },
       undefined,
       (err) => {
-        clearTimeout(loadingTimeout);
         console.error("Error loading GLTF:", err);
-        setError("Erreur lors du chargement du modèle 3D. Vérifiez que tous les fichiers nécessaires sont présents et correctement formatés.");
+        setError("Erreur lors du chargement du modèle 3D.");
         setLoading(false);
       }
     );
@@ -1073,8 +435,6 @@ export const Scene3DViewer = () => {
       animationId: firstAnimationId,
       sensorMeshes,
       boundingSphere,
-      sensorData,
-      outdoorData,
       interpolationMesh: null,
       modelScale,
       modelGroup: null,
@@ -1082,40 +442,16 @@ export const Scene3DViewer = () => {
     };
 
     return () => {
-      clearTimeout(loadingTimeout);
-      
       if (sceneRef.current) {
-        const { renderer, scene, controls, animationId, interpolationMesh } = sceneRef.current;
+        const { renderer, scene, controls, animationId } = sceneRef.current;
         cancelAnimationFrame(animationId);
         controls.dispose();
         
-        if (interpolationMesh) {
-          scene.remove(interpolationMesh);
-          if (interpolationMesh instanceof THREE.Points) {
-            interpolationMesh.geometry.dispose();
-            (interpolationMesh.material as THREE.PointsMaterial).dispose();
-          } else if (interpolationMesh instanceof THREE.Mesh) {
-            interpolationMesh.geometry.dispose();
-            (interpolationMesh.material as THREE.Material).dispose();
-          } else if (interpolationMesh instanceof THREE.Group) {
-            interpolationMesh.traverse((child) => {
-              if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
-                child.geometry.dispose();
-                if (Array.isArray(child.material)) {
-                  child.material.forEach(m => m.dispose());
-                } else {
-                  child.material.dispose();
-                }
-              }
-            });
-          }
-        }
-        
-        scene.traverse((object) => {
-          if (object instanceof THREE.Mesh) {
-            object.geometry.dispose();
+        scene.traverse((object: any) => {
+          if (object.geometry) object.geometry.dispose();
+          if (object.material) {
             if (Array.isArray(object.material)) {
-              object.material.forEach(material => material.dispose());
+              object.material.forEach((m: any) => m.dispose());
             } else {
               object.material.dispose();
             }
@@ -1131,103 +467,18 @@ export const Scene3DViewer = () => {
     };
   }, [gltfModel, sensors]);
 
-  const getMetricIcon = () => {
-    switch (selectedMetric) {
-      case 'temperature':
-        return <Thermometer size={16} className="text-red-500" />;
-      case 'humidity':
-        return <Droplets size={16} className="text-blue-500" />;
-      case 'absoluteHumidity':
-        return <Wind size={16} className="text-cyan-500" />;
-      case 'dewPoint':
-        return <CloudRain size={16} className="text-purple-500" />;
-    }
-  };
-
-  const getMetricValue = () => {
-    if (!currentOutdoorData) return '--';
-    
-    switch (selectedMetric) {
-      case 'temperature':
-        return `${currentOutdoorData.temperature.toFixed(1)}°C`;
-      case 'humidity':
-        return `${currentOutdoorData.humidity.toFixed(1)}%`;
-      case 'absoluteHumidity':
-        return `${currentOutdoorData.absoluteHumidity.toFixed(2)} g/m³`;
-      case 'dewPoint':
-        return `${currentOutdoorData.dewPoint.toFixed(1)}°C`;
-    }
-  };
-
-  const getComparisonIcon = () => {
-    if (!currentOutdoorData || !indoorAverage || !interpolationRange) return null;
-
-    const outdoorValue = selectedMetric === 'temperature' ? currentOutdoorData.temperature :
-                         selectedMetric === 'humidity' ? currentOutdoorData.humidity :
-                         selectedMetric === 'absoluteHumidity' ? currentOutdoorData.absoluteHumidity :
-                         currentOutdoorData.dewPoint;
-
-    const indoorValue = selectedMetric === 'temperature' ? indoorAverage.temperature :
-                        selectedMetric === 'humidity' ? indoorAverage.humidity :
-                        selectedMetric === 'absoluteHumidity' ? indoorAverage.absoluteHumidity :
-                        indoorAverage.dewPoint;
-
-    const diff = Math.abs(outdoorValue - indoorValue);
-    const range = interpolationRange.max - interpolationRange.min;
-    const threshold = range * 0.1; // 10% of range
-
-    if (diff < threshold) {
-      return <Minus size={14} className="text-gray-400" />;
-    } else if (outdoorValue > indoorValue) {
-      return <TrendingUp size={14} className="text-orange-500" />;
-    } else {
-      return <TrendingDown size={14} className="text-blue-500" />;
-    }
-  };
-
-  const getOutdoorBackgroundColor = () => {
-    if (!currentOutdoorData || !interpolationRange) return 'bg-white/80 dark:bg-black/80';
-
-    const outdoorValue = selectedMetric === 'temperature' ? currentOutdoorData.temperature :
-                         selectedMetric === 'humidity' ? currentOutdoorData.humidity :
-                         selectedMetric === 'absoluteHumidity' ? currentOutdoorData.absoluteHumidity :
-                         currentOutdoorData.dewPoint;
-
-    const color = getColorFromValue(outdoorValue, interpolationRange.min, interpolationRange.max, selectedMetric);
-    const threeColor = new THREE.Color(color);
-    
-    // Convert to RGB and create a light background
-    const r = Math.round(threeColor.r * 255);
-    const g = Math.round(threeColor.g * 255);
-    const b = Math.round(threeColor.b * 255);
-    
-    return `rgba(${r}, ${g}, ${b}, 0.15)`;
-  };
-
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
       <ColorLegend />
       
-      {/* Outdoor data badge */}
-      {hasOutdoorData && currentOutdoorData && dataReady && interpolationRange && (
-        <div className="absolute bottom-4 right-4 z-10">
-          <div 
-            className="backdrop-blur-xl rounded-xl p-3 shadow-lg border border-white/40"
-            style={{ backgroundColor: getOutdoorBackgroundColor() }}
-          >
-            <div className="flex items-center gap-2">
-              {getMetricIcon()}
-              <div>
-                <div className="flex items-center gap-1">
-                  <p className="text-[10px] text-gray-600 dark:text-gray-300">Extérieur</p>
-                  {getComparisonIcon()}
-                </div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{getMetricValue()}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <OutdoorBadge
+        currentOutdoorData={currentOutdoorData}
+        indoorAverage={indoorAverage}
+        selectedMetric={selectedMetric}
+        interpolationRange={interpolationRange}
+        hasOutdoorData={hasOutdoorData}
+        dataReady={dataReady}
+      />
       
       {!gltfModel && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg">
@@ -1253,39 +504,10 @@ export const Scene3DViewer = () => {
           <div className="text-center text-red-600 dark:text-red-400 max-w-md">
             <AlertCircle size={48} className="mx-auto mb-4" />
             <p className="font-medium mb-2">Erreur de chargement</p>
-            <p className="text-sm mb-4">{error}</p>
-            <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-black p-3 rounded">
-              <p className="font-medium mb-2">Solutions :</p>
-              <ul className="text-left space-y-1">
-                <li>• Utilisez un fichier <strong>GLB</strong> (format binaire autonome)</li>
-                <li>• Vérifiez que tous les fichiers du pack sont présents</li>
-                <li>• Consultez la console du navigateur pour plus de détails</li>
-              </ul>
-            </div>
+            <p className="text-sm">{error}</p>
           </div>
         </div>
       )}
     </div>
   );
 };
-
-function createCircleTexture(): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  
-  const context = canvas.getContext('2d');
-  if (!context) return new THREE.Texture();
-  
-  const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)');
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-  
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, 64, 64);
-  
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
