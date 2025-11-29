@@ -108,15 +108,14 @@ export const Scene3DViewer = () => {
     const updateStartTime = performance.now();
     console.log(`🔄 Interpolation update STARTING for timestamp: ${new Date(currentTimestamp).toLocaleString('fr-FR')}`);
 
-    const { scene, interpolationMesh, modelScale, originalCenter, modelGroup } = sceneRef.current;
-    const modelPosition = modelGroup?.position || null;
+    const { scene, interpolationMesh, modelScale, originalCenter } = sceneRef.current;
 
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
       disposeInterpolationMesh(interpolationMesh);
     }
 
-    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter, modelPosition);
+    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter);
     if (points.length === 0) {
       console.warn('⚠️ No interpolation points generated');
       return;
@@ -226,10 +225,10 @@ export const Scene3DViewer = () => {
           size: bounds.size.toArray()
         });
         
-        console.log('\n📍 SENSOR TRANSFORMATION (same as model):');
+        console.log('\n📍 SENSOR TRANSFORMATION (WITHOUT model position offset):');
         console.log('   Step 1: Subtract original center');
         console.log('   Step 2: Multiply by scale');
-        console.log('   Step 3: Add model position offset');
+        console.log('   Step 3: SKIP (no model position offset)');
         
         const sensorMeshes = createSensorSpheres(sensors, modelScale, originalCenter, modelPosition);
         
@@ -359,8 +358,7 @@ const buildInterpolationPoints = (
   currentTimestamp: number,
   selectedMetric: string,
   modelScale: number,
-  originalCenter: THREE.Vector3 | null,
-  modelPosition: THREE.Vector3 | null
+  originalCenter: THREE.Vector3 | null
 ): Point3D[] => {
   const points: Point3D[] = [];
   
@@ -381,21 +379,18 @@ const buildInterpolationPoints = (
     const value = getMetricValue(closestData, selectedMetric as any);
     console.log(`         Value: ${value.toFixed(2)}`);
     
-    // Apply EXACT same transformation as sensor spheres:
+    // Apply transformation WITHOUT model position offset:
     // Step 1: Center
     const xCentered = sensor.position[0] - (originalCenter?.x || 0);
     const yCentered = sensor.position[1] - (originalCenter?.y || 0);
     const zCentered = sensor.position[2] - (originalCenter?.z || 0);
     
     // Step 2: Scale
-    const xScaled = xCentered * modelScale;
-    const yScaled = yCentered * modelScale;
-    const zScaled = zCentered * modelScale;
+    const xFinal = xCentered * modelScale;
+    const yFinal = yCentered * modelScale;
+    const zFinal = zCentered * modelScale;
     
-    // Step 3: Add model position offset
-    const xFinal = xScaled + (modelPosition?.x || 0);
-    const yFinal = yScaled + (modelPosition?.y || 0);
-    const zFinal = zScaled + (modelPosition?.z || 0);
+    // NO Step 3 - we don't add model position offset
     
     points.push({ x: xFinal, y: yFinal, z: zFinal, value });
   });
