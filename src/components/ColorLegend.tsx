@@ -105,8 +105,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.3 }}
-        className="absolute top-4 left-1/2 z-10"
-        style={{ transform: 'translateX(-50%)' }}
+        className="absolute top-4 left-0 right-0 z-10 flex justify-center"
       >
         <div className="space-y-2 flex flex-col items-center">
           {/* Metric label - engraved */}
