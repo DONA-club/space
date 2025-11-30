@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { showSuccess, showError } from '@/utils/toast';
-import { Loader2, Plus, Trash2, Upload, FolderOpen, AlertCircle, Info, CheckCircle2, MoreVertical, Eye, Box, Activity, Cloud, Calendar, MapPin, AlertTriangle, Radio } from 'lucide-react';
+import { Loader2, Plus, Trash2, Upload, FolderOpen, AlertCircle, Info, CheckCircle2, MoreVertical, Eye, Box, Activity, Cloud, Calendar, MapPin, AlertTriangle, Radio, Link2, FileUp, FileX, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
@@ -16,6 +16,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import {
@@ -24,6 +25,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from './ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
 
 interface Space {
   id: string;
@@ -36,6 +44,8 @@ interface Space {
   last_csv_date: string | null;
   created_at: string;
   updated_at: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface SpaceManagerProps {
@@ -49,6 +59,7 @@ interface SpaceStats {
   dataEndDate: Date | null;
   hasDataGaps: boolean;
   isLiveConnected: boolean;
+  dataDelayDays: number | null;
 }
 
 export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
@@ -58,10 +69,14 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
   const [newSpaceDescription, setNewSpaceDescription] = useState('');
+  const [newSpaceLatitude, setNewSpaceLatitude] = useState('');
+  const [newSpaceLongitude, setNewSpaceLongitude] = useState('');
   const [gltfFile, setGltfFile] = useState<File | null>(null);
   const [jsonFile, setJsonFile] = useState<File | null>(null);
   const [jsonValidation, setJsonValidation] = useState<{ valid: boolean; message: string; sensorCount?: number } | null>(null);
   const [spaceStats, setSpaceStats] = useState<Map<string, SpaceStats>>(new Map());
+  const [showMapDialog, setShowMapDialog] = useState(false);
+  const [selectedSpaceForMap, setSelectedSpaceForMap] = useState<Space | null>(null);
 
   useEffect(() => {
     loadSpaces();
@@ -133,6 +148,15 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           .limit(1)
           .single();
 
+        // Calculate data delay
+        let dataDelayDays: number | null = null;
+        if (maxData) {
+          const lastDataDate = new Date(maxData.timestamp);
+          const now = new Date();
+          const diffMs = now.getTime() - lastDataDate.getTime();
+          dataDelayDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        }
+
         // Check for data gaps (simplified - could be more sophisticated)
         const hasDataGaps = false; // TODO: Implement gap detection
 
@@ -143,6 +167,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           dataEndDate: maxData ? new Date(maxData.timestamp) : null,
           hasDataGaps,
           isLiveConnected: false, // TODO: Implement live connection check
+          dataDelayDays,
         });
       } catch (error) {
         console.error(`Error loading stats for space ${space.id}:`, error);
@@ -237,6 +262,19 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
       return;
     }
 
+    if (!newSpaceLatitude || !newSpaceLongitude) {
+      showError('La localisation est requise');
+      return;
+    }
+
+    const lat = parseFloat(newSpaceLatitude);
+    const lng = parseFloat(newSpaceLongitude);
+
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      showError('Coordonnées GPS invalides');
+      return;
+    }
+
     setCreating(true);
 
     try {
@@ -267,6 +305,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           gltf_file_name: gltfFile.name,
           json_file_path: jsonPath,
           json_file_name: jsonFile.name,
+          latitude: lat,
+          longitude: lng,
         })
         .select()
         .single();
@@ -277,6 +317,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
       setShowCreateForm(false);
       setNewSpaceName('');
       setNewSpaceDescription('');
+      setNewSpaceLatitude('');
+      setNewSpaceLongitude('');
       setGltfFile(null);
       setJsonFile(null);
       setJsonValidation(null);
@@ -329,6 +371,41 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     }
     
     return `${diffDays}j`;
+  };
+
+  const formatPreciseDateRange = (start: Date | null, end: Date | null): string => {
+    if (!start || !end) return 'Aucune donnée disponible';
+    
+    const startStr = start.toLocaleDateString('fr-FR', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    const endStr = end.toLocaleDateString('fr-FR', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    return `Du ${startStr} au ${endStr}`;
+  };
+
+  const handleObserveSpace = (space: Space) => {
+    if (!space.latitude || !space.longitude) {
+      showError('La localisation de cet espace n\'est pas définie. Veuillez la configurer avant d\'observer.');
+      return;
+    }
+    onSpaceSelected(space);
+  };
+
+  const openMapDialog = (space: Space) => {
+    setSelectedSpaceForMap(space);
+    setShowMapDialog(true);
   };
 
   if (loading) {
@@ -386,6 +463,31 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                     placeholder="Description de l'espace..."
                     rows={3}
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="space-latitude">Latitude *</Label>
+                    <Input
+                      id="space-latitude"
+                      type="number"
+                      step="any"
+                      value={newSpaceLatitude}
+                      onChange={(e) => setNewSpaceLatitude(e.target.value)}
+                      placeholder="Ex: 48.8566"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="space-longitude">Longitude *</Label>
+                    <Input
+                      id="space-longitude"
+                      type="number"
+                      step="any"
+                      value={newSpaceLongitude}
+                      onChange={(e) => setNewSpaceLongitude(e.target.value)}
+                      placeholder="Ex: 2.3522"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -473,7 +575,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                 <div className="flex gap-2">
                   <Button
                     onClick={createSpace}
-                    disabled={creating || !newSpaceName || !gltfFile || !jsonFile || !jsonValidation?.valid}
+                    disabled={creating || !newSpaceName || !gltfFile || !jsonFile || !jsonValidation?.valid || !newSpaceLatitude || !newSpaceLongitude}
                     className="flex-1"
                   >
                     {creating ? (
@@ -491,6 +593,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                       setShowCreateForm(false);
                       setNewSpaceName('');
                       setNewSpaceDescription('');
+                      setNewSpaceLatitude('');
+                      setNewSpaceLongitude('');
                       setGltfFile(null);
                       setJsonFile(null);
                       setJsonValidation(null);
@@ -544,12 +648,39 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem>
+                          <Link2 size={14} className="mr-2" />
+                          Rattacher un système
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openMapDialog(space)}>
+                          <MapPin size={14} className="mr-2" />
+                          Changer la localisation
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem>
+                          <FileUp size={14} className="mr-2" />
+                          Charger modèle 3D
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <FileX size={14} className="mr-2" />
+                          Effacer modèle 3D
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem>
+                          <FileUp size={14} className="mr-2" />
+                          Charger mapping capteurs
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <FileX size={14} className="mr-2" />
+                          Effacer mapping capteurs
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => deleteSpace(space)}
                           className="text-red-600 dark:text-red-400"
                         >
                           <Trash2 size={14} className="mr-2" />
-                          Supprimer
+                          Supprimer l'espace
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -570,7 +701,10 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                           </Badge>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="text-xs">{space.gltf_file_name || 'Aucun modèle'}</p>
+                          <p className="text-xs font-medium">{space.gltf_file_name || 'Aucun modèle 3D chargé'}</p>
+                          {space.gltf_file_name && (
+                            <p className="text-xs text-gray-400">Fichier: {space.gltf_file_name}</p>
+                          )}
                         </TooltipContent>
                       </Tooltip>
 
@@ -586,7 +720,10 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                           </Badge>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="text-xs">{space.json_file_name || 'Aucun fichier JSON'}</p>
+                          <p className="text-xs font-medium">{stats?.indoorSensorCount || 0} capteur{(stats?.indoorSensorCount || 0) > 1 ? 's' : ''} intérieur{(stats?.indoorSensorCount || 0) > 1 ? 's' : ''}</p>
+                          {space.json_file_name && (
+                            <p className="text-xs text-gray-400">Mapping: {space.json_file_name}</p>
+                          )}
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -620,7 +757,12 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                                 </Badge>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p className="text-xs">{stats?.hasOutdoorData ? 'Données extérieures disponibles' : 'Aucune donnée extérieure'}</p>
+                                <p className="text-xs font-medium">
+                                  {stats?.hasOutdoorData ? 'Données extérieures disponibles' : 'Aucune donnée extérieure'}
+                                </p>
+                                {stats?.hasOutdoorData && (
+                                  <p className="text-xs text-gray-400">Capteur météo configuré</p>
+                                )}
                               </TooltipContent>
                             </Tooltip>
 
@@ -636,13 +778,39 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                                 </Badge>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p className="text-xs">
-                                  {stats?.dataStartDate && stats?.dataEndDate
-                                    ? `${stats.dataStartDate.toLocaleDateString('fr-FR')} → ${stats.dataEndDate.toLocaleDateString('fr-FR')}`
-                                    : 'Aucune donnée historique'}
+                                <p className="text-xs font-medium">Période couverte</p>
+                                <p className="text-xs text-gray-400">
+                                  {formatPreciseDateRange(stats?.dataStartDate || null, stats?.dataEndDate || null)}
                                 </p>
                               </TooltipContent>
                             </Tooltip>
+
+                            {/* Data Delay Badge */}
+                            {stats?.dataDelayDays !== null && stats.dataDelayDays > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`text-xs ${
+                                      stats.dataDelayDays > 7 
+                                        ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' 
+                                        : stats.dataDelayDays > 1
+                                        ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
+                                        : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+                                    }`}
+                                  >
+                                    <Clock size={12} className="mr-1" />
+                                    -{stats.dataDelayDays}j
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs font-medium">Retard des données</p>
+                                  <p className="text-xs text-gray-400">
+                                    Dernière mise à jour il y a {stats.dataDelayDays} jour{stats.dataDelayDays > 1 ? 's' : ''}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
                           </TooltipProvider>
                         </div>
 
@@ -676,14 +844,19 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                           <Button
                             size="sm"
                             className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-                            onClick={() => onSpaceSelected(space)}
+                            onClick={() => handleObserveSpace(space)}
+                            disabled={!space.latitude || !space.longitude}
                           >
                             <Eye size={16} className="mr-2" />
                             Observer
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="text-xs">Entrer dans la visualisation 3D</p>
+                          <p className="text-xs">
+                            {space.latitude && space.longitude 
+                              ? 'Entrer dans la visualisation 3D' 
+                              : 'Localisation requise pour observer'}
+                          </p>
                         </TooltipContent>
                       </Tooltip>
 
@@ -693,12 +866,17 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                             size="sm"
                             variant="outline"
                             className="w-10 p-0"
+                            onClick={() => openMapDialog(space)}
                           >
                             <MapPin size={16} />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="text-xs">Localisation sur la carte</p>
+                          <p className="text-xs">
+                            {space.latitude && space.longitude 
+                              ? `Voir sur la carte (${space.latitude.toFixed(4)}, ${space.longitude.toFixed(4)})` 
+                              : 'Définir la localisation'}
+                          </p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -709,6 +887,29 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           })}
         </div>
       )}
+
+      {/* Map Dialog */}
+      <Dialog open={showMapDialog} onOpenChange={setShowMapDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Localisation de {selectedSpaceForMap?.name}</DialogTitle>
+            <DialogDescription>
+              Visualisez ou modifiez la position géographique de cet espace
+            </DialogDescription>
+          </DialogHeader>
+          <div className="w-full h-96 bg-gray-200 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+            <div className="text-center text-gray-500 dark:text-gray-400">
+              <MapPin size={48} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Carte interactive à venir</p>
+              {selectedSpaceForMap?.latitude && selectedSpaceForMap?.longitude && (
+                <p className="text-xs mt-2">
+                  Position actuelle: {selectedSpaceForMap.latitude.toFixed(6)}, {selectedSpaceForMap.longitude.toFixed(6)}
+                </p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
