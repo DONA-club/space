@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { showSuccess, showError } from '@/utils/toast';
-import { Loader2, Plus, Trash2, Upload, FolderOpen, AlertCircle, Info, CheckCircle2, MoreVertical, Eye, Box, Activity, Cloud, Calendar, MapPin, AlertTriangle, Radio, Link2, FileUp, FileX, Clock } from 'lucide-react';
+import { Loader2, Plus, Trash2, Upload, FolderOpen, AlertCircle, Info, CheckCircle2, MoreVertical, Eye, Box, Activity, Cloud, Calendar, MapPin, AlertTriangle, Radio, Link2, FileUp, FileX, Clock, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
@@ -82,6 +82,11 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [tempMapLat, setTempMapLat] = useState<number>(48.8566);
   const [tempMapLng, setTempMapLng] = useState<number>(2.3522);
   const [updatingLocation, setUpdatingLocation] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [selectedSpaceForRename, setSelectedSpaceForRename] = useState<Space | null>(null);
+  const [newName, setNewName] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [spaceAddresses, setSpaceAddresses] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     loadSpaces();
@@ -90,6 +95,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   useEffect(() => {
     if (spaces.length > 0) {
       loadSpaceStats();
+      loadSpaceAddresses();
     }
   }, [spaces]);
 
@@ -108,6 +114,29 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadSpaceAddresses = async () => {
+    const addressMap = new Map<string, string>();
+
+    for (const space of spaces) {
+      if (space.latitude && space.longitude) {
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${space.latitude}&lon=${space.longitude}&zoom=18&addressdetails=1`
+          );
+          const data = await response.json();
+          
+          if (data.display_name) {
+            addressMap.set(space.id, data.display_name);
+          }
+        } catch (error) {
+          console.error(`Error fetching address for space ${space.id}:`, error);
+        }
+      }
+    }
+
+    setSpaceAddresses(addressMap);
   };
 
   const loadSpaceStats = async () => {
@@ -343,6 +372,192 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     } catch (error) {
       console.error('Error deleting space:', error);
       showError('Erreur lors de la suppression de l\'espace');
+    }
+  };
+
+  const handleUploadGltf = async (space: Space) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.glb,.gltf';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Non authentifié');
+
+        const gltfPath = `${user.id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('models')
+          .upload(gltfPath, file);
+
+        if (uploadError) throw uploadError;
+
+        if (space.gltf_file_path) {
+          await supabase.storage.from('models').remove([space.gltf_file_path]);
+        }
+
+        const { error: updateError } = await supabase
+          .from('spaces')
+          .update({
+            gltf_file_path: gltfPath,
+            gltf_file_name: file.name,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', space.id);
+
+        if (updateError) throw updateError;
+
+        showSuccess('Modèle 3D chargé avec succès');
+        loadSpaces();
+      } catch (error) {
+        console.error('Error uploading GLTF:', error);
+        showError('Erreur lors du chargement du modèle 3D');
+      }
+    };
+    input.click();
+  };
+
+  const handleDeleteGltf = async (space: Space) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer le modèle 3D ?')) {
+      return;
+    }
+
+    try {
+      if (space.gltf_file_path) {
+        await supabase.storage.from('models').remove([space.gltf_file_path]);
+      }
+
+      const { error } = await supabase
+        .from('spaces')
+        .update({
+          gltf_file_path: null,
+          gltf_file_name: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', space.id);
+
+      if (error) throw error;
+
+      showSuccess('Modèle 3D supprimé avec succès');
+      loadSpaces();
+    } catch (error) {
+      console.error('Error deleting GLTF:', error);
+      showError('Erreur lors de la suppression du modèle 3D');
+    }
+  };
+
+  const handleUploadJson = async (space: Space) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        let text = await file.text();
+        text = text.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+        const data = JSON.parse(text);
+
+        if (!data.points || !Array.isArray(data.points) || data.points.length === 0) {
+          throw new Error('Format JSON invalide');
+        }
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Non authentifié');
+
+        const jsonPath = `${user.id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('models')
+          .upload(jsonPath, file);
+
+        if (uploadError) throw uploadError;
+
+        if (space.json_file_path) {
+          await supabase.storage.from('models').remove([space.json_file_path]);
+        }
+
+        const { error: updateError } = await supabase
+          .from('spaces')
+          .update({
+            json_file_path: jsonPath,
+            json_file_name: file.name,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', space.id);
+
+        if (updateError) throw updateError;
+
+        showSuccess('Mapping des capteurs chargé avec succès');
+        loadSpaces();
+      } catch (error) {
+        console.error('Error uploading JSON:', error);
+        showError('Erreur lors du chargement du mapping');
+      }
+    };
+    input.click();
+  };
+
+  const handleDeleteJson = async (space: Space) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer le mapping des capteurs ?')) {
+      return;
+    }
+
+    try {
+      if (space.json_file_path) {
+        await supabase.storage.from('models').remove([space.json_file_path]);
+      }
+
+      const { error } = await supabase
+        .from('spaces')
+        .update({
+          json_file_path: null,
+          json_file_name: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', space.id);
+
+      if (error) throw error;
+
+      showSuccess('Mapping des capteurs supprimé avec succès');
+      loadSpaces();
+    } catch (error) {
+      console.error('Error deleting JSON:', error);
+      showError('Erreur lors de la suppression du mapping');
+    }
+  };
+
+  const openRenameDialog = (space: Space) => {
+    setSelectedSpaceForRename(space);
+    setNewName(space.name);
+    setShowRenameDialog(true);
+  };
+
+  const handleRename = async () => {
+    if (!selectedSpaceForRename || !newName.trim()) return;
+
+    setRenaming(true);
+    try {
+      const { error } = await supabase
+        .from('spaces')
+        .update({
+          name: newName.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedSpaceForRename.id);
+
+      if (error) throw error;
+
+      showSuccess('Espace renommé avec succès');
+      setShowRenameDialog(false);
+      loadSpaces();
+    } catch (error) {
+      console.error('Error renaming space:', error);
+      showError('Erreur lors du renommage de l\'espace');
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -624,6 +839,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {spaces.map((space) => {
             const stats = spaceStats.get(space.id);
+            const address = spaceAddresses.get(space.id);
             
             return (
               <motion.div
@@ -637,9 +853,21 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-lg mb-1 truncate">{space.name}</h3>
                       {space.description && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">
                           {space.description}
                         </p>
+                      )}
+                      {(space.latitude && space.longitude) && (
+                        <div className="text-[10px] text-gray-500 dark:text-gray-400 space-y-0.5">
+                          {address && (
+                            <p className="line-clamp-1" title={address}>
+                              📍 {address}
+                            </p>
+                          )}
+                          <p className="font-mono">
+                            {space.latitude.toFixed(6)}, {space.longitude.toFixed(6)}
+                          </p>
+                        </div>
                       )}
                     </div>
                     
@@ -650,6 +878,10 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openRenameDialog(space)}>
+                          <Edit2 size={14} className="mr-2" />
+                          Renommer l'espace
+                        </DropdownMenuItem>
                         <DropdownMenuItem>
                           <Link2 size={14} className="mr-2" />
                           Rattacher un système
@@ -659,23 +891,29 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                           Changer la localisation
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem>
-                          <FileUp size={14} className="mr-2" />
-                          Charger modèle 3D
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <FileX size={14} className="mr-2" />
-                          Effacer modèle 3D
-                        </DropdownMenuItem>
+                        {space.gltf_file_path ? (
+                          <DropdownMenuItem onClick={() => handleDeleteGltf(space)}>
+                            <FileX size={14} className="mr-2" />
+                            Effacer modèle 3D
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onClick={() => handleUploadGltf(space)}>
+                            <FileUp size={14} className="mr-2" />
+                            Charger modèle 3D
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem>
-                          <FileUp size={14} className="mr-2" />
-                          Charger mapping capteurs
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <FileX size={14} className="mr-2" />
-                          Effacer mapping capteurs
-                        </DropdownMenuItem>
+                        {space.json_file_path ? (
+                          <DropdownMenuItem onClick={() => handleDeleteJson(space)}>
+                            <FileX size={14} className="mr-2" />
+                            Effacer mapping capteurs
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onClick={() => handleUploadJson(space)}>
+                            <FileUp size={14} className="mr-2" />
+                            Charger mapping capteurs
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => deleteSpace(space)}
@@ -911,6 +1149,45 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                 </>
               ) : (
                 'Enregistrer'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Renommer l'espace</DialogTitle>
+            <DialogDescription>
+              Modifier le nom de "{selectedSpaceForRename?.name}"
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="new-name">Nouveau nom</Label>
+              <Input
+                id="new-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Entrez le nouveau nom"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleRename} disabled={renaming || !newName.trim()}>
+              {renaming ? (
+                <>
+                  <Loader2 className="animate-spin mr-2" size={16} />
+                  Renommage...
+                </>
+              ) : (
+                'Renommer'
               )}
             </Button>
           </DialogFooter>
