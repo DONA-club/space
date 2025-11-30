@@ -297,7 +297,41 @@ export const Scene3DViewer = () => {
       }
     );
 
+    // Handle window resize
+    const handleResize = () => {
+      if (!sceneRef.current || !containerRef.current) return;
+
+      const newWidth = containerRef.current.clientWidth;
+      const newHeight = containerRef.current.clientHeight;
+
+      if (newWidth === 0 || newHeight === 0) return;
+
+      // Update camera aspect ratio
+      sceneRef.current.camera.aspect = newWidth / newHeight;
+      sceneRef.current.camera.updateProjectionMatrix();
+
+      // Update renderer size
+      sceneRef.current.renderer.setSize(newWidth, newHeight);
+
+      // Reposition camera to fit model perfectly in new viewport
+      positionCamera(
+        sceneRef.current.camera,
+        sceneRef.current.controls,
+        sceneRef.current.boundingSphere,
+        newWidth,
+        newHeight
+      );
+    };
+
+    // Use ResizeObserver for better performance
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+
+    resizeObserver.observe(container);
+
     return () => {
+      resizeObserver.disconnect();
       if (sceneRef.current) {
         cleanupScene(sceneRef.current, container);
         sceneRef.current = null;
@@ -869,8 +903,8 @@ const positionCamera = (
   const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
   const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
   
-  // Use 1.05x multiplier for minimal padding - much tighter zoom
-  const distance = Math.max(verticalFit, horizontalFit) * 1.05;
+  // Use 1.5x multiplier for comfortable padding
+  const distance = Math.max(verticalFit, horizontalFit) * 1.5;
   
   // Position camera at optimal distance with better centering
   camera.position.set(distance * 0.7, distance * 0.5, distance * 0.7);
