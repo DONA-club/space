@@ -781,7 +781,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                               </TooltipContent>
                             </Tooltip>
 
-                            {stats?.dataDelayDays !== null && stats.dataDelayDays > 0 && (
+                            {stats?.dataDelayDays !== null && stats?.dataDelayDays !== undefined && stats.dataDelayDays > 0 && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Badge 
