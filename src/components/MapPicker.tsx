@@ -36,23 +36,33 @@ function LocationMarker({ position, onPositionChange }: {
   });
 
   useEffect(() => {
-    if (markerRef.current) {
-      markerRef.current.setLatLng(position);
+    const marker = markerRef.current;
+    if (marker) {
+      marker.setLatLng(position);
+      
+      // Enable dragging
+      if (marker.dragging) {
+        marker.dragging.enable();
+      }
+      
+      // Handle dragend event
+      const handleDragEnd = () => {
+        const pos = marker.getLatLng();
+        onPositionChange(pos.lat, pos.lng);
+      };
+      
+      marker.on('dragend', handleDragEnd);
+      
+      return () => {
+        marker.off('dragend', handleDragEnd);
+      };
     }
-  }, [position]);
+  }, [position, onPositionChange]);
 
   return (
     <Marker
       ref={markerRef}
       position={position}
-      draggable={true}
-      eventHandlers={{
-        dragend: (e) => {
-          const marker = e.target;
-          const position = marker.getLatLng();
-          onPositionChange(position.lat, position.lng);
-        },
-      }}
     />
   );
 }
@@ -199,13 +209,13 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
       <div className="relative h-96 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-700">
         <MapContainer
           ref={mapRef}
-          center={position}
+          {...{ center: position } as any}
           zoom={13}
           style={{ height: '100%', width: '100%' }}
           scrollWheelZoom={true}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            {...{ attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' } as any}
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <LocationMarker position={position} onPositionChange={handlePositionChange} />
