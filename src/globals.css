@@ -119,11 +119,11 @@
   
   /* Force tooltips to appear above everything */
   [data-radix-popper-content-wrapper] {
-    z-index: 9999 !important;
+    z-index: 99999 !important;
   }
   
   [role="tooltip"] {
-    z-index: 9999 !important;
+    z-index: 99999 !important;
   }
 
   /* Leaflet map fixes */
