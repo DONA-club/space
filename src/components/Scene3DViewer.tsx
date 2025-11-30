@@ -904,7 +904,7 @@ const positionCamera = (
   const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
   
   // Use 0.7x multiplier for comfortable padding
-  const distance = Math.max(verticalFit, horizontalFit) * 0.;
+  const distance = Math.max(verticalFit, horizontalFit) * 0.7;
   
   // Position camera at optimal distance with better centering
   camera.position.set(distance * 0.7, distance * 0.5, distance * 0.7);
