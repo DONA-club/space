@@ -99,11 +99,11 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
+        exit={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.3 }}
-        className="absolute bottom-4 left-4 z-10"
+        className="absolute top-4 left-1/2 -translate-x-1/2 z-10"
       >
         <div className="space-y-2">
           {/* Metric label - engraved */}
@@ -111,8 +111,8 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
             <span 
               className="text-xs font-semibold tracking-wide"
               style={{
-                textShadow: '0 1px 2px rgba(0, 0, 0, 0.3), 0 -1px 0 rgba(255, 255, 255, 0.5)',
-                color: 'rgba(0, 0, 0, 0.6)'
+                textShadow: '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
+                color: 'rgba(0, 0, 0, 0.4)'
               }}
             >
               {metricInfo.label}
@@ -178,8 +178,8 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               className="absolute left-0 -translate-x-1/2"
               style={{
                 color: minColor,
-                textShadow: '0 1px 2px rgba(0, 0, 0, 0.4), 0 -1px 0 rgba(255, 255, 255, 0.3)',
-                filter: 'brightness(0.85)'
+                textShadow: '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
+                filter: 'brightness(0.9) opacity(0.8)'
               }}
             >
               {interpolationRange.min.toFixed(1)}{metricInfo.unit}
@@ -188,8 +188,8 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               className="absolute right-0 translate-x-1/2"
               style={{
                 color: maxColor,
-                textShadow: '0 1px 2px rgba(0, 0, 0, 0.4), 0 -1px 0 rgba(255, 255, 255, 0.3)',
-                filter: 'brightness(0.85)'
+                textShadow: '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
+                filter: 'brightness(0.9) opacity(0.8)'
               }}
             >
               {interpolationRange.max.toFixed(1)}{metricInfo.unit}

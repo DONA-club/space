@@ -31,7 +31,7 @@ export const OutdoorBadge = ({
   }
 
   const getMetricIcon = () => {
-    const iconProps = { size: 14, strokeWidth: 2.5 };
+    const iconProps = { size: 13, strokeWidth: 2.5 };
     switch (selectedMetric) {
       case 'temperature':
         return <Thermometer {...iconProps} />;
@@ -74,22 +74,22 @@ export const OutdoorBadge = ({
   const metricColor = getMetricColor();
 
   const textStyle = {
-    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3), 0 -1px 0 rgba(255, 255, 255, 0.5)',
-    color: 'rgba(0, 0, 0, 0.65)'
+    textShadow: '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
+    color: 'rgba(0, 0, 0, 0.4)'
   };
 
   const valueStyle = {
-    textShadow: '0 1px 2px rgba(0, 0, 0, 0.4), 0 -1px 0 rgba(255, 255, 255, 0.4)',
+    textShadow: '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.25)',
     color: metricColor,
-    filter: 'brightness(0.85)'
+    filter: 'brightness(0.9) opacity(0.8)'
   };
 
   return (
-    <div className="absolute top-4 left-4 z-10">
+    <div className="absolute bottom-4 left-4 z-10">
       <div className="space-y-2">
         {/* Title with icon */}
         <div className="flex items-center gap-2">
-          <div style={{ color: metricColor, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.3)) brightness(0.85)' }}>
+          <div style={{ color: metricColor, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.15)) brightness(0.9) opacity(0.7)' }}>
             {getMetricIcon()}
           </div>
           <span className="text-xs font-bold tracking-wide" style={textStyle}>
@@ -109,13 +109,13 @@ export const OutdoorBadge = ({
         
         {/* Difference with interior */}
         {meshingEnabled && volumetricAverage !== null && differenceText && (
-          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-black/10">
+          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-black/5">
             <span className="text-[10px] font-medium" style={textStyle}>
               Δ Intérieur
             </span>
-            <span className="text-[11px] font-bold" style={{
-              textShadow: '0 1px 2px rgba(0, 0, 0, 0.4), 0 -1px 0 rgba(255, 255, 255, 0.4)',
-              color: 'rgba(0, 0, 0, 0.75)'
+            <span className="text-[10px] font-bold" style={{
+              textShadow: '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.25)',
+              color: 'rgba(0, 0, 0, 0.5)'
             }}>
               {differenceText}
             </span>
