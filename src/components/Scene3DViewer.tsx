@@ -8,7 +8,6 @@ import { AlertCircle } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 import { ColorLegend } from "./ColorLegend";
 import { OutdoorBadge } from "./scene3d/OutdoorBadge";
-import { AverageTemperatureBadge } from "./scene3d/AverageTemperatureBadge";
 import { AirVolumeInfoBadge } from "./scene3d/AirVolumeInfoBadge";
 import { useSensorData } from "@/hooks/useSensorData";
 import { useSceneBackground } from "@/hooks/useSceneBackground";
@@ -159,7 +158,6 @@ export const Scene3DViewer = () => {
 
     setInterpolationRange({ min: minValue, max: maxValue });
 
-    // Calculate air mass and water mass using EXACT volume from GLB
     const { mass, waterMass: calculatedWaterMass, avgTemp, avgHumidity } = calculateAirProperties(
       gridValues,
       sensors,
@@ -173,7 +171,7 @@ export const Scene3DViewer = () => {
       originalCenter,
       modelPosition,
       sensorOffset,
-      exactAirVolume // Use exact volume from GLB
+      exactAirVolume
     );
     
     setAirMass(mass);
@@ -247,8 +245,6 @@ export const Scene3DViewer = () => {
         setError(null);
         setLoading(false);
         
-        // Calculate EXACT volume from original GLB geometry BEFORE any transformation
-        // Use direct scene volume (not bounding box subtraction)
         const originalVolume = calculateSceneVolume(gltf.scene);
         console.log('📊 Volume calculé du GLB:', originalVolume.toFixed(2), 'm³');
         setExactAirVolume(originalVolume);
@@ -297,7 +293,6 @@ export const Scene3DViewer = () => {
       }
     );
 
-    // Handle window resize
     const handleResize = () => {
       if (!sceneRef.current || !containerRef.current) return;
 
@@ -306,14 +301,11 @@ export const Scene3DViewer = () => {
 
       if (newWidth === 0 || newHeight === 0) return;
 
-      // Update camera aspect ratio
       sceneRef.current.camera.aspect = newWidth / newHeight;
       sceneRef.current.camera.updateProjectionMatrix();
 
-      // Update renderer size
       sceneRef.current.renderer.setSize(newWidth, newHeight);
 
-      // Reposition camera to fit model perfectly in new viewport
       positionCamera(
         sceneRef.current.camera,
         sceneRef.current.controls,
@@ -323,7 +315,6 @@ export const Scene3DViewer = () => {
       );
     };
 
-    // Use ResizeObserver for better performance
     const resizeObserver = new ResizeObserver(() => {
       handleResize();
     });
@@ -341,13 +332,15 @@ export const Scene3DViewer = () => {
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
-      <AverageTemperatureBadge
-        averageValue={volumetricAverage}
+      <OutdoorBadge
+        currentOutdoorData={currentOutdoorData}
+        indoorAverage={indoorAverage}
         selectedMetric={selectedMetric}
         interpolationRange={interpolationRange}
-        meshingEnabled={meshingEnabled}
+        hasOutdoorData={hasOutdoorData}
         dataReady={dataReady}
-        pointCount={interpolationPointCount}
+        volumetricAverage={volumetricAverage}
+        meshingEnabled={meshingEnabled}
       />
       
       <AirVolumeInfoBadge
@@ -360,16 +353,7 @@ export const Scene3DViewer = () => {
         dataReady={dataReady}
       />
       
-      <ColorLegend />
-      
-      <OutdoorBadge
-        currentOutdoorData={currentOutdoorData}
-        indoorAverage={indoorAverage}
-        selectedMetric={selectedMetric}
-        interpolationRange={interpolationRange}
-        hasOutdoorData={hasOutdoorData}
-        dataReady={dataReady}
-      />
+      <ColorLegend volumetricAverage={volumetricAverage} />
       
       {!gltfModel && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg">
@@ -403,6 +387,7 @@ export const Scene3DViewer = () => {
   );
 };
 
+// Helper functions remain the same...
 const disposeInterpolationMesh = (mesh: THREE.Points | THREE.Group | THREE.Mesh) => {
   if (mesh instanceof THREE.Points || mesh instanceof THREE.Mesh) {
     mesh.geometry.dispose();
@@ -545,9 +530,8 @@ const calculateAirProperties = (
   originalCenter: THREE.Vector3 | null,
   modelPosition: THREE.Vector3,
   sensorOffset: { x: number; y: number; z: number },
-  exactVolume: number // Use exact volume from GLB
+  exactVolume: number
 ): { mass: number; waterMass: number; avgTemp: number; avgHumidity: number } => {
-  // Build temperature and humidity points from ALL sensor data
   const tempPoints: Point3D[] = [];
   const humidityPoints: Point3D[] = [];
   
@@ -557,7 +541,6 @@ const calculateAirProperties = (
     const data = sensorData.get(sensor.id)!;
     const closestData = findClosestDataPoint(data, currentTimestamp);
     
-    // Transform sensor position to match grid coordinates
     const xCentered = sensor.position[0] - (originalCenter?.x || 0);
     const yCentered = sensor.position[1] - (originalCenter?.y || 0);
     const zCentered = sensor.position[2] - (originalCenter?.z || 0);
@@ -619,11 +602,9 @@ const calculateAirProperties = (
   const avgTemp = totalTemp / validGridPoints.length;
   const avgHumidity = totalHumidity / validGridPoints.length;
 
-  // Calculate air mass using EXACT volume and average conditions
   const density = calculateAirDensity(avgTemp, avgHumidity);
   const totalMass = density * exactVolume;
   
-  // Calculate water mass using EXACT volume
   const totalWaterMass = calculateWaterMass(exactVolume, avgTemp, avgHumidity);
 
   return {
@@ -898,21 +879,14 @@ const positionCamera = (
   const fov = camera.fov * (Math.PI / 180);
   const aspectRatio = width / height;
   
-  // Calculate distance to fit model perfectly in viewport
-  // Use the smaller of vertical or horizontal fit to ensure full visibility
   const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
   const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
   
-  // Use 0.7x multiplier for comfortable padding
-  const distance = Math.max(verticalFit, horizontalFit) * 0.7;
+  const distance = Math.max(verticalFit, horizontalFit) * 1.5;
   
-  // Position camera at optimal distance with better centering
   camera.position.set(distance * 0.7, distance * 0.5, distance * 0.7);
-  
-  // Look at the exact center of the bounding sphere (not origin)
   camera.lookAt(0, 0, 0);
   
-  // Set controls target to center of model
   controls.target.set(0, 0, 0);
   controls.minDistance = boundingSphere.radius * 0.5;
   controls.maxDistance = boundingSphere.radius * 4;

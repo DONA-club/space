@@ -1,7 +1,7 @@
 import { Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
 import { SensorDataPoint, MetricType } from '@/types/sensor.types';
 import { getColorFromValue, rgbaFromColor } from '@/utils/colorUtils';
-import { formatMetricValue, getMetricLabel } from '@/utils/metricUtils';
+import { formatMetricValue, getMetricUnit } from '@/utils/metricUtils';
 
 interface OutdoorBadgeProps {
   currentOutdoorData: SensorDataPoint | null;
@@ -76,17 +76,17 @@ export const OutdoorBadge = ({
     
     const sign = diff > 0 ? '+' : '';
     const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
+    const unit = getMetricUnit(selectedMetric);
     
-    return `${sign}${diff.toFixed(decimals)}`;
+    return `${sign}${diff.toFixed(decimals)}${unit}`;
   };
 
   const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
   const displayValue = formatMetricValue(currentOutdoorData[selectedMetric], selectedMetric, decimals);
   const differenceText = getDifferenceText();
-  const metricLabel = getMetricLabel(selectedMetric);
 
   return (
-    <div className="absolute bottom-4 right-4 z-10">
+    <div className="absolute top-4 left-4 z-10">
       <div 
         className="backdrop-blur-xl rounded-xl p-3 shadow-lg border border-white/40"
         style={{ backgroundColor: getBackgroundColor() }}
@@ -102,10 +102,9 @@ export const OutdoorBadge = ({
           </div>
 
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] text-gray-600 dark:text-gray-400">{metricLabel}:</span>
+            <div className="flex items-center justify-center">
               <span 
-                className="text-sm font-semibold"
+                className="text-lg font-bold"
                 style={{ color: getTextColor() }}
               >
                 {displayValue}
@@ -114,7 +113,7 @@ export const OutdoorBadge = ({
             
             {meshingEnabled && volumetricAverage !== null && differenceText && (
               <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/20">
-                <span className="text-[10px] text-gray-600 dark:text-gray-400">Δ Volumique:</span>
+                <span className="text-[10px] text-gray-600 dark:text-gray-400">Int./Ext.:</span>
                 <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                   {differenceText}
                 </span>
