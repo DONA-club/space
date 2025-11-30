@@ -62,6 +62,8 @@ interface SpaceStats {
   hasDataGaps: boolean;
   isLiveConnected: boolean;
   dataDelayDays: number | null;
+  totalDataPoints: number;
+  lastDataDate: Date | null;
 }
 
 export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
@@ -179,9 +181,15 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           .limit(1)
           .single();
 
+        const { count: totalPoints } = await supabase
+          .from('sensor_data')
+          .select('*', { count: 'exact', head: true })
+          .eq('space_id', space.id);
+
         let dataDelayDays: number | null = null;
+        let lastDataDate: Date | null = null;
         if (maxData) {
-          const lastDataDate = new Date(maxData.timestamp);
+          lastDataDate = new Date(maxData.timestamp);
           const now = new Date();
           const diffMs = now.getTime() - lastDataDate.getTime();
           dataDelayDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -197,6 +205,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           hasDataGaps,
           isLiveConnected: false,
           dataDelayDays,
+          totalDataPoints: totalPoints || 0,
+          lastDataDate,
         });
       } catch (error) {
         console.error(`Error loading stats for space ${space.id}:`, error);
@@ -561,18 +571,36 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     }
   };
 
-  const formatDateRange = (start: Date | null, end: Date | null): string => {
+  const formatPreciseDuration = (start: Date | null, end: Date | null): string => {
     if (!start || !end) return 'Aucune donnée';
     
     const diffMs = end.getTime() - start.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     
-    if (diffDays < 1) {
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      return `${diffHours}h`;
+    if (days > 0) {
+      return `${days}j, ${hours}h`;
+    } else if (hours > 0) {
+      return `${hours}h, ${minutes}m`;
+    } else {
+      return `${minutes}m`;
     }
+  };
+
+  const formatPreciseDelay = (lastDate: Date | null): string => {
+    if (!lastDate) return '';
     
-    return `${diffDays}j`;
+    const now = new Date();
+    const diffMs = now.getTime() - lastDate.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    if (days > 0) {
+      return `${days}j, ${hours}h`;
+    } else {
+      return `${hours}h`;
+    }
   };
 
   const formatPreciseDateRange = (start: Date | null, end: Date | null): string => {
@@ -595,6 +623,18 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     });
     
     return `Du ${startStr} au ${endStr}`;
+  };
+
+  const formatLastUpdateDate = (date: Date | null): string => {
+    if (!date) return '';
+    
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const handleObserveSpace = (space: Space) => {
@@ -840,6 +880,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           {spaces.map((space) => {
             const stats = spaceStats.get(space.id);
             const address = spaceAddresses.get(space.id);
+            const hasLocation = space.latitude && space.longitude;
             
             return (
               <motion.div
@@ -849,25 +890,24 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                 exit={{ opacity: 0, scale: 0.9 }}
               >
                 <LiquidGlassCard className="p-5 hover:shadow-lg transition-shadow h-full flex flex-col">
-                  <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-lg mb-1 truncate">{space.name}</h3>
-                      {space.description && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">
-                          {space.description}
+                      <h3 className="font-semibold text-lg truncate">{space.name}</h3>
+                      {hasLocation ? (
+                        address && (
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5" title={address}>
+                            {address}
+                          </p>
+                        )
+                      ) : (
+                        <p className="text-[10px] text-red-600 dark:text-red-400 mt-0.5">
+                          Adresse indisponible
                         </p>
                       )}
-                      {(space.latitude && space.longitude) && (
-                        <div className="text-[10px] text-gray-500 dark:text-gray-400 space-y-0.5">
-                          {address && (
-                            <p className="line-clamp-1" title={address}>
-                              📍 {address}
-                            </p>
-                          )}
-                          <p className="font-mono">
-                            {space.latitude.toFixed(6)}, {space.longitude.toFixed(6)}
-                          </p>
-                        </div>
+                      {space.description && (
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mt-2">
+                          {space.description}
+                        </p>
                       )}
                     </div>
                     
@@ -959,7 +999,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         <TooltipContent>
                           <p className="text-xs font-medium">{stats?.indoorSensorCount || 0} capteur{(stats?.indoorSensorCount || 0) > 1 ? 's' : ''} intérieur{(stats?.indoorSensorCount || 0) > 1 ? 's' : ''}</p>
                           {space.json_file_name && (
-                            <p className="text-xs text-gray-400">Mapping: {space.json_file_name}</p>
+                            <p className="text-xs text-gray-400">Fichier: {space.json_file_name}</p>
                           )}
                         </TooltipContent>
                       </Tooltip>
@@ -1008,7 +1048,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                                   className={`text-xs ${stats?.dataStartDate ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-800/20 opacity-50'}`}
                                 >
                                   <Calendar size={12} className="mr-1" />
-                                  {formatDateRange(stats?.dataStartDate || null, stats?.dataEndDate || null)}
+                                  {formatPreciseDuration(stats?.dataStartDate || null, stats?.dataEndDate || null)}
                                 </Badge>
                               </TooltipTrigger>
                               <TooltipContent>
@@ -1016,30 +1056,35 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                                 <p className="text-xs text-gray-400">
                                   {formatPreciseDateRange(stats?.dataStartDate || null, stats?.dataEndDate || null)}
                                 </p>
+                                {stats?.totalDataPoints && (
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    {stats.totalDataPoints.toLocaleString()} points de données
+                                  </p>
+                                )}
                               </TooltipContent>
                             </Tooltip>
 
-                            {stats?.dataDelayDays !== null && stats?.dataDelayDays !== undefined && stats.dataDelayDays > 0 && (
+                            {stats?.lastDataDate && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Badge 
                                     variant="outline" 
                                     className={`text-xs ${
-                                      stats.dataDelayDays > 7 
+                                      (stats.dataDelayDays || 0) > 7 
                                         ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' 
-                                        : stats.dataDelayDays > 1
+                                        : (stats.dataDelayDays || 0) > 1
                                         ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
                                         : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
                                     }`}
                                   >
                                     <Clock size={12} className="mr-1" />
-                                    -{stats.dataDelayDays}j
+                                    -{formatPreciseDelay(stats.lastDataDate)}
                                   </Badge>
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p className="text-xs font-medium">Retard des données</p>
                                   <p className="text-xs text-gray-400">
-                                    Dernière mise à jour il y a {stats.dataDelayDays} jour{stats.dataDelayDays > 1 ? 's' : ''}
+                                    Dernière mise à jour : {formatLastUpdateDate(stats.lastDataDate)}
                                   </p>
                                 </TooltipContent>
                               </Tooltip>
@@ -1076,7 +1121,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                             size="sm"
                             className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
                             onClick={() => handleObserveSpace(space)}
-                            disabled={!space.latitude || !space.longitude}
+                            disabled={!hasLocation}
                           >
                             <Eye size={16} className="mr-2" />
                             Observer
@@ -1084,29 +1129,9 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         </TooltipTrigger>
                         <TooltipContent>
                           <p className="text-xs">
-                            {space.latitude && space.longitude 
+                            {hasLocation 
                               ? 'Entrer dans la visualisation 3D' 
                               : 'Localisation requise pour observer'}
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-10 p-0"
-                            onClick={() => openMapDialog(space)}
-                          >
-                            <MapPin size={16} />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-xs">
-                            {space.latitude && space.longitude 
-                              ? `Voir sur la carte (${space.latitude.toFixed(4)}, ${space.longitude.toFixed(4)})` 
-                              : 'Définir la localisation'}
                           </p>
                         </TooltipContent>
                       </Tooltip>
