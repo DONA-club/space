@@ -1,7 +1,7 @@
 import { Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
 import { SensorDataPoint, MetricType } from '@/types/sensor.types';
 import { getColorFromValue, rgbaFromColor } from '@/utils/colorUtils';
-import { formatMetricValue } from '@/utils/metricUtils';
+import { formatMetricValue, getMetricLabel } from '@/utils/metricUtils';
 
 interface OutdoorBadgeProps {
   currentOutdoorData: SensorDataPoint | null;
@@ -10,6 +10,8 @@ interface OutdoorBadgeProps {
   interpolationRange: { min: number; max: number } | null;
   hasOutdoorData: boolean;
   dataReady: boolean;
+  volumetricAverage: number | null;
+  meshingEnabled: boolean;
 }
 
 export const OutdoorBadge = ({
@@ -18,7 +20,9 @@ export const OutdoorBadge = ({
   selectedMetric,
   interpolationRange,
   hasOutdoorData,
-  dataReady
+  dataReady,
+  volumetricAverage,
+  meshingEnabled
 }: OutdoorBadgeProps) => {
   if (!hasOutdoorData || !currentOutdoorData || !dataReady || !interpolationRange) {
     return null;
@@ -65,11 +69,10 @@ export const OutdoorBadge = ({
   };
 
   const getDifferenceText = () => {
-    if (!indoorAverage) return null;
+    if (!meshingEnabled || volumetricAverage === null) return null;
 
     const outdoorValue = currentOutdoorData[selectedMetric];
-    const indoorValue = indoorAverage[selectedMetric];
-    const diff = outdoorValue - indoorValue;
+    const diff = outdoorValue - volumetricAverage;
     
     const sign = diff > 0 ? '+' : '';
     const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
@@ -80,6 +83,7 @@ export const OutdoorBadge = ({
   const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
   const displayValue = formatMetricValue(currentOutdoorData[selectedMetric], selectedMetric, decimals);
   const differenceText = getDifferenceText();
+  const metricLabel = getMetricLabel(selectedMetric);
 
   return (
     <div className="absolute bottom-4 right-4 z-10">
@@ -87,25 +91,35 @@ export const OutdoorBadge = ({
         className="backdrop-blur-xl rounded-xl p-3 shadow-lg border border-white/40"
         style={{ backgroundColor: getBackgroundColor() }}
       >
-        <div className="flex items-center gap-2">
-          <div style={{ color: getTextColor() }}>
-            {getMetricIcon()}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 pb-2 border-b border-white/20">
+            <div style={{ color: getTextColor() }}>
+              {getMetricIcon()}
+            </div>
+            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+              Extérieur
+            </span>
           </div>
-          <div>
-            <p className="text-[10px] text-gray-600 dark:text-gray-300">Extérieur</p>
-            <div className="flex items-baseline gap-1">
-              <p 
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] text-gray-600 dark:text-gray-400">{metricLabel}:</span>
+              <span 
                 className="text-sm font-semibold"
                 style={{ color: getTextColor() }}
               >
                 {displayValue}
-              </p>
-              {differenceText && (
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  ({differenceText})
-                </span>
-              )}
+              </span>
             </div>
+            
+            {meshingEnabled && volumetricAverage !== null && differenceText && (
+              <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/20">
+                <span className="text-[10px] text-gray-600 dark:text-gray-400">Δ Volumique:</span>
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  {differenceText}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
