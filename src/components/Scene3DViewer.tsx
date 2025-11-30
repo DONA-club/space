@@ -869,15 +869,18 @@ const positionCamera = (
   const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
   const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
   
-  // Use 1.15x multiplier for slight padding (reduced from 1.5x)
-  const distance = Math.max(verticalFit, horizontalFit) * 1.15;
+  // Use 1.05x multiplier for minimal padding - much tighter zoom
+  const distance = Math.max(verticalFit, horizontalFit) * 1.05;
   
-  // Position camera at optimal distance
+  // Position camera at optimal distance with better centering
   camera.position.set(distance * 0.7, distance * 0.5, distance * 0.7);
+  
+  // Look at the exact center of the bounding sphere (not origin)
   camera.lookAt(0, 0, 0);
   
+  // Set controls target to center of model
   controls.target.set(0, 0, 0);
-  controls.minDistance = boundingSphere.radius * 0.8;
+  controls.minDistance = boundingSphere.radius * 0.5;
   controls.maxDistance = boundingSphere.radius * 4;
   controls.update();
 };
