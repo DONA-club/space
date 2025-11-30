@@ -3,7 +3,7 @@
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, SkipBack, SkipForward, Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Thermometer, Droplets, Wind, CloudRain, Repeat } from 'lucide-react';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
@@ -17,7 +17,7 @@ interface DewPointDifference {
 
 const POINTS_BEFORE = 500;
 const POINTS_AFTER = 500;
-const PRELOAD_THRESHOLD = 0.3;
+const PRELOAD_THRESHOLD = 100; // Charger 100 points avant la fin
 const COLOR_ZONE_RADIUS = 0.15;
 
 export const TimelineControl = () => {
@@ -39,7 +39,9 @@ export const TimelineControl = () => {
   const [dewPointDifferences, setDewPointDifferences] = useState<DewPointDifference[]>([]);
   const [loadedRanges, setLoadedRanges] = useState<Array<{start: number, end: number}>>([]);
   const [loadingRanges, setLoadingRanges] = useState<Set<string>>(new Set());
+  const [loopEnabled, setLoopEnabled] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const lastScrollLoadRef = useRef<number>(0);
 
   useEffect(() => {
     if (timeRange && rangeStart === null && rangeEnd === null) {
@@ -48,174 +50,192 @@ export const TimelineControl = () => {
     }
   }, [timeRange, rangeStart, rangeEnd]);
 
-  useEffect(() => {
-    if (!currentSpace || !hasOutdoorData || !timeRange) {
-      setDewPointDifferences([]);
-      setLoadedRanges([]);
-      return;
+  // Check if timestamp has loaded data
+  const hasDataAtTimestamp = (timestamp: number): boolean => {
+    return loadedRanges.some(r => r.start <= timestamp && r.end >= timestamp);
+  };
+
+  // Get the furthest loaded timestamp in a direction
+  const getFurthestLoadedTimestamp = (from: number, direction: 'forward' | 'backward'): number => {
+    const relevantRanges = loadedRanges.filter(r => 
+      direction === 'forward' ? r.start >= from : r.end <= from
+    );
+    
+    if (relevantRanges.length === 0) return from;
+    
+    if (direction === 'forward') {
+      return Math.max(...relevantRanges.map(r => r.end));
+    } else {
+      return Math.min(...relevantRanges.map(r => r.start));
     }
+  };
 
-    const loadDewPointWindow = async (targetTimestamp: number) => {
-      try {
-        const targetDate = new Date(targetTimestamp).toISOString();
-        const rangeKey = `${targetTimestamp}`;
+  // Load data window
+  const loadDewPointWindow = async (targetTimestamp: number) => {
+    if (!currentSpace || !hasOutdoorData || !timeRange) return;
 
-        if (loadingRanges.has(rangeKey)) return;
+    try {
+      const targetDate = new Date(targetTimestamp).toISOString();
+      const rangeKey = `${targetTimestamp}`;
 
-        const alreadyLoaded = loadedRanges.some(r => 
-          r.start <= targetTimestamp && 
-          r.end >= targetTimestamp
-        );
+      if (loadingRanges.has(rangeKey)) return;
 
-        if (alreadyLoaded) return;
+      const alreadyLoaded = loadedRanges.some(r => 
+        r.start <= targetTimestamp && 
+        r.end >= targetTimestamp
+      );
 
-        setLoadingRanges(prev => new Set(prev).add(rangeKey));
+      if (alreadyLoaded) return;
 
-        const { data: outdoorBefore, error: outdoorBeforeError } = await supabase
-          .from('sensor_data')
-          .select('timestamp, dew_point')
-          .eq('space_id', currentSpace.id)
-          .eq('sensor_id', 0)
-          .lt('timestamp', targetDate)
-          .order('timestamp', { ascending: false })
-          .limit(POINTS_BEFORE);
+      setLoadingRanges(prev => new Set(prev).add(rangeKey));
 
-        if (outdoorBeforeError) throw outdoorBeforeError;
+      const { data: outdoorBefore, error: outdoorBeforeError } = await supabase
+        .from('sensor_data')
+        .select('timestamp, dew_point')
+        .eq('space_id', currentSpace.id)
+        .eq('sensor_id', 0)
+        .lt('timestamp', targetDate)
+        .order('timestamp', { ascending: false })
+        .limit(POINTS_BEFORE);
 
-        const { data: outdoorAfter, error: outdoorAfterError } = await supabase
-          .from('sensor_data')
-          .select('timestamp, dew_point')
-          .eq('space_id', currentSpace.id)
-          .eq('sensor_id', 0)
-          .gte('timestamp', targetDate)
-          .order('timestamp', { ascending: true })
-          .limit(POINTS_AFTER);
+      if (outdoorBeforeError) throw outdoorBeforeError;
 
-        if (outdoorAfterError) throw outdoorAfterError;
+      const { data: outdoorAfter, error: outdoorAfterError } = await supabase
+        .from('sensor_data')
+        .select('timestamp, dew_point')
+        .eq('space_id', currentSpace.id)
+        .eq('sensor_id', 0)
+        .gte('timestamp', targetDate)
+        .order('timestamp', { ascending: true })
+        .limit(POINTS_AFTER);
 
-        const outdoorWindow = [...(outdoorBefore || []).reverse(), ...(outdoorAfter || [])];
+      if (outdoorAfterError) throw outdoorAfterError;
 
-        if (outdoorWindow.length === 0) {
-          setLoadingRanges(prev => {
-            const next = new Set(prev);
-            next.delete(rangeKey);
-            return next;
-          });
-          return;
-        }
+      const outdoorWindow = [...(outdoorBefore || []).reverse(), ...(outdoorAfter || [])];
 
-        const indoorDataPromises = sensors.map(async (sensor) => {
-          const { data: beforeData, error: beforeError } = await supabase
-            .from('sensor_data')
-            .select('timestamp, dew_point')
-            .eq('space_id', currentSpace.id)
-            .eq('sensor_id', sensor.id)
-            .lt('timestamp', targetDate)
-            .order('timestamp', { ascending: false })
-            .limit(POINTS_BEFORE);
-
-          if (beforeError) throw beforeError;
-
-          const { data: afterData, error: afterError } = await supabase
-            .from('sensor_data')
-            .select('timestamp, dew_point')
-            .eq('space_id', currentSpace.id)
-            .eq('sensor_id', sensor.id)
-            .gte('timestamp', targetDate)
-            .order('timestamp', { ascending: true })
-            .limit(POINTS_AFTER);
-
-          if (afterError) throw afterError;
-
-          const windowData = [...(beforeData || []).reverse(), ...(afterData || [])];
-          return { sensorId: sensor.id, data: windowData };
-        });
-
-        const indoorDataResults = await Promise.all(indoorDataPromises);
-
-        const newDifferences: DewPointDifference[] = [];
-
-        outdoorWindow.forEach((outdoorPoint) => {
-          const timestamp = new Date(outdoorPoint.timestamp).getTime();
-          const outdoorDewPoint = outdoorPoint.dew_point;
-
-          let totalIndoorDewPoint = 0;
-          let count = 0;
-
-          indoorDataResults.forEach(({ data }) => {
-            if (data.length === 0) return;
-
-            const closestIndoor = findClosestDataPoint(
-              data.map(d => ({
-                timestamp: new Date(d.timestamp).getTime(),
-                temperature: 0,
-                humidity: 0,
-                absoluteHumidity: 0,
-                dewPoint: d.dew_point
-              })),
-              timestamp
-            );
-
-            totalIndoorDewPoint += closestIndoor.dewPoint;
-            count++;
-          });
-
-          if (count > 0) {
-            const avgIndoorDewPoint = totalIndoorDewPoint / count;
-            const difference = avgIndoorDewPoint - outdoorDewPoint;
-            newDifferences.push({ timestamp, difference });
-          }
-        });
-
-        setDewPointDifferences(prev => {
-          const merged = [...prev, ...newDifferences]
-            .sort((a, b) => a.timestamp - b.timestamp)
-            .filter((item, index, arr) => 
-              index === 0 || item.timestamp !== arr[index - 1].timestamp
-            );
-          return merged;
-        });
-
-        if (newDifferences.length > 0) {
-          const minTimestamp = Math.min(...newDifferences.map(d => d.timestamp));
-          const maxTimestamp = Math.max(...newDifferences.map(d => d.timestamp));
-          
-          setLoadedRanges(prev => [...prev, {
-            start: minTimestamp,
-            end: maxTimestamp
-          }]);
-        }
-
+      if (outdoorWindow.length === 0) {
         setLoadingRanges(prev => {
           const next = new Set(prev);
           next.delete(rangeKey);
           return next;
         });
-      } catch (error) {
-        console.error('Error loading dew point window:', error);
-        setLoadingRanges(prev => {
-          const next = new Set(prev);
-          next.delete(`${targetTimestamp}`);
-          return next;
-        });
+        return;
       }
-    };
 
+      const indoorDataPromises = sensors.map(async (sensor) => {
+        const { data: beforeData, error: beforeError } = await supabase
+          .from('sensor_data')
+          .select('timestamp, dew_point')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', sensor.id)
+          .lt('timestamp', targetDate)
+          .order('timestamp', { ascending: false })
+          .limit(POINTS_BEFORE);
+
+        if (beforeError) throw beforeError;
+
+        const { data: afterData, error: afterError } = await supabase
+          .from('sensor_data')
+          .select('timestamp, dew_point')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', sensor.id)
+          .gte('timestamp', targetDate)
+          .order('timestamp', { ascending: true })
+          .limit(POINTS_AFTER);
+
+        if (afterError) throw afterError;
+
+        const windowData = [...(beforeData || []).reverse(), ...(afterData || [])];
+        return { sensorId: sensor.id, data: windowData };
+      });
+
+      const indoorDataResults = await Promise.all(indoorDataPromises);
+
+      const newDifferences: DewPointDifference[] = [];
+
+      outdoorWindow.forEach((outdoorPoint) => {
+        const timestamp = new Date(outdoorPoint.timestamp).getTime();
+        const outdoorDewPoint = outdoorPoint.dew_point;
+
+        let totalIndoorDewPoint = 0;
+        let count = 0;
+
+        indoorDataResults.forEach(({ data }) => {
+          if (data.length === 0) return;
+
+          const closestIndoor = findClosestDataPoint(
+            data.map(d => ({
+              timestamp: new Date(d.timestamp).getTime(),
+              temperature: 0,
+              humidity: 0,
+              absoluteHumidity: 0,
+              dewPoint: d.dew_point
+            })),
+            timestamp
+          );
+
+          totalIndoorDewPoint += closestIndoor.dewPoint;
+          count++;
+        });
+
+        if (count > 0) {
+          const avgIndoorDewPoint = totalIndoorDewPoint / count;
+          const difference = avgIndoorDewPoint - outdoorDewPoint;
+          newDifferences.push({ timestamp, difference });
+        }
+      });
+
+      setDewPointDifferences(prev => {
+        const merged = [...prev, ...newDifferences]
+          .sort((a, b) => a.timestamp - b.timestamp)
+          .filter((item, index, arr) => 
+            index === 0 || item.timestamp !== arr[index - 1].timestamp
+          );
+        return merged;
+      });
+
+      if (newDifferences.length > 0) {
+        const minTimestamp = Math.min(...newDifferences.map(d => d.timestamp));
+        const maxTimestamp = Math.max(...newDifferences.map(d => d.timestamp));
+        
+        setLoadedRanges(prev => [...prev, {
+          start: minTimestamp,
+          end: maxTimestamp
+        }]);
+      }
+
+      setLoadingRanges(prev => {
+        const next = new Set(prev);
+        next.delete(rangeKey);
+        return next;
+      });
+    } catch (error) {
+      console.error('Error loading dew point window:', error);
+      setLoadingRanges(prev => {
+        const next = new Set(prev);
+        next.delete(`${targetTimestamp}`);
+        return next;
+      });
+    }
+  };
+
+  // Initial load and preload on timestamp change
+  useEffect(() => {
+    if (!currentSpace || !hasOutdoorData || !timeRange || !rangeStart || !rangeEnd) return;
+
+    // Load current position
     loadDewPointWindow(currentTimestamp);
 
-    if (timeRange && rangeStart && rangeEnd) {
-      const totalRange = rangeEnd - rangeStart;
-      const distanceToEnd = rangeEnd - currentTimestamp;
-      const distanceToStart = currentTimestamp - rangeStart;
+    // Check if we need to preload ahead
+    const currentRange = loadedRanges.find(r => r.start <= currentTimestamp && r.end >= currentTimestamp);
+    if (currentRange) {
+      const pointsToEnd = (currentRange.end - currentTimestamp) / (60 * 1000); // Assuming 1 minute intervals
       
-      if (distanceToEnd < totalRange * PRELOAD_THRESHOLD) {
-        const preloadTimestamp = currentTimestamp + (POINTS_AFTER * 60 * 1000);
-        loadDewPointWindow(preloadTimestamp);
-      }
-      
-      if (distanceToStart < totalRange * PRELOAD_THRESHOLD) {
-        const preloadTimestamp = currentTimestamp - (POINTS_BEFORE * 60 * 1000);
-        loadDewPointWindow(preloadTimestamp);
+      if (pointsToEnd < PRELOAD_THRESHOLD) {
+        const preloadTimestamp = currentRange.end + (POINTS_AFTER * 60 * 1000);
+        if (preloadTimestamp <= rangeEnd) {
+          loadDewPointWindow(preloadTimestamp);
+        }
       }
     }
   }, [currentSpace, hasOutdoorData, timeRange, sensors, currentTimestamp, rangeStart, rangeEnd]);
@@ -233,55 +253,88 @@ export const TimelineControl = () => {
     return { minDiff: min, maxDiff: max, diffRange: range };
   }, [dewPointDifferences]);
 
+  // Playback with loop
   useEffect(() => {
     if (!isPlaying || !rangeStart || !rangeEnd) return;
 
     const interval = setInterval(() => {
       setCurrentTimestamp((prev) => {
         const next = prev + (1000 * playbackSpeed);
+        
+        // Check if we have data at next position
+        if (!hasDataAtTimestamp(next)) {
+          const furthest = getFurthestLoadedTimestamp(prev, 'forward');
+          if (furthest > prev && furthest <= rangeEnd) {
+            return furthest;
+          }
+        }
+        
         if (next > rangeEnd) {
-          setPlaying(false);
-          return rangeEnd;
+          if (loopEnabled) {
+            return rangeStart;
+          } else {
+            setPlaying(false);
+            return rangeEnd;
+          }
         }
         return next;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, playbackSpeed, rangeStart, rangeEnd, setCurrentTimestamp, setPlaying]);
+  }, [isPlaying, playbackSpeed, rangeStart, rangeEnd, setCurrentTimestamp, setPlaying, loopEnabled, hasDataAtTimestamp, getFurthestLoadedTimestamp]);
 
-  // Handle wheel event with proper non-passive listener
+  // Handle wheel event with data loading
   useEffect(() => {
     const timelineElement = timelineRef.current;
     if (!timelineElement || !timeRange || !rangeStart || !rangeEnd) return;
 
     const handleWheel = (e: WheelEvent) => {
-      // Prevent default scroll behavior
       e.preventDefault();
       e.stopPropagation();
 
-      // Use both deltaX (horizontal scroll) and deltaY (vertical scroll)
       const delta = e.deltaX !== 0 ? e.deltaX : e.deltaY;
       
       if (delta === 0) return;
 
       const rangeSize = rangeEnd - rangeStart;
-      // Adjust sensitivity: 1% of range per 100px scroll
       const timeShift = (delta / 100) * rangeSize * 0.01;
 
       const newTimestamp = currentTimestamp + timeShift;
-      const clampedTimestamp = Math.max(rangeStart, Math.min(newTimestamp, rangeEnd));
+      
+      // Clamp to loaded data range
+      let clampedTimestamp = newTimestamp;
+      
+      if (!hasDataAtTimestamp(newTimestamp)) {
+        if (timeShift > 0) {
+          // Moving forward - clamp to furthest loaded
+          const furthest = getFurthestLoadedTimestamp(currentTimestamp, 'forward');
+          clampedTimestamp = Math.min(newTimestamp, furthest);
+        } else {
+          // Moving backward - clamp to furthest loaded
+          const furthest = getFurthestLoadedTimestamp(currentTimestamp, 'backward');
+          clampedTimestamp = Math.max(newTimestamp, furthest);
+        }
+      }
+      
+      clampedTimestamp = Math.max(rangeStart, Math.min(clampedTimestamp, rangeEnd));
       
       setCurrentTimestamp(clampedTimestamp);
+      
+      // Trigger load if we haven't loaded recently
+      const now = Date.now();
+      if (now - lastScrollLoadRef.current > 500) {
+        lastScrollLoadRef.current = now;
+        loadDewPointWindow(clampedTimestamp);
+      }
     };
 
-    // Add listener with { passive: false } to allow preventDefault
     timelineElement.addEventListener('wheel', handleWheel, { passive: false });
 
     return () => {
       timelineElement.removeEventListener('wheel', handleWheel);
     };
-  }, [timeRange, rangeStart, rangeEnd, currentTimestamp, setCurrentTimestamp]);
+  }, [timeRange, rangeStart, rangeEnd, currentTimestamp, setCurrentTimestamp, hasDataAtTimestamp, getFurthestLoadedTimestamp]);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -314,8 +367,19 @@ export const TimelineControl = () => {
     const percentage = x / rect.width;
     const newTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) * percentage;
 
-    const clampedTimestamp = Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1]));
+    let clampedTimestamp = Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1]));
+    
+    // Clamp to loaded data
+    if (!hasDataAtTimestamp(clampedTimestamp)) {
+      const direction = clampedTimestamp > currentTimestamp ? 'forward' : 'backward';
+      const furthest = getFurthestLoadedTimestamp(currentTimestamp, direction);
+      clampedTimestamp = direction === 'forward' 
+        ? Math.min(clampedTimestamp, furthest)
+        : Math.max(clampedTimestamp, furthest);
+    }
+    
     setCurrentTimestamp(clampedTimestamp);
+    loadDewPointWindow(clampedTimestamp);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -331,7 +395,18 @@ export const TimelineControl = () => {
     } else if (isDragging === 'end') {
       setRangeEnd(Math.max(newTimestamp, rangeStart || timeRange[0]));
     } else if (isDragging === 'current') {
-      setCurrentTimestamp(Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1])));
+      let clampedTimestamp = Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1]));
+      
+      // Clamp to loaded data
+      if (!hasDataAtTimestamp(clampedTimestamp)) {
+        const direction = clampedTimestamp > currentTimestamp ? 'forward' : 'backward';
+        const furthest = getFurthestLoadedTimestamp(currentTimestamp, direction);
+        clampedTimestamp = direction === 'forward' 
+          ? Math.min(clampedTimestamp, furthest)
+          : Math.max(clampedTimestamp, furthest);
+      }
+      
+      setCurrentTimestamp(clampedTimestamp);
     }
   };
 
@@ -348,7 +423,7 @@ export const TimelineControl = () => {
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, rangeStart, rangeEnd, timeRange]);
+  }, [isDragging, rangeStart, rangeEnd, timeRange, currentTimestamp]);
 
   const getDayMarkers = () => {
     if (!timeRange) return [];
@@ -606,6 +681,27 @@ export const TimelineControl = () => {
                 <TooltipPrimitive.Trigger asChild>
                   <Button
                     size="sm"
+                    variant={loopEnabled ? "default" : "outline"}
+                    onClick={() => setLoopEnabled(!loopEnabled)}
+                    className={loopEnabled 
+                      ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 h-8 w-8 p-0"
+                      : "bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
+                    }
+                  >
+                    <Repeat size={14} />
+                  </Button>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                    {loopEnabled ? 'Boucle activée' : 'Activer la boucle'}
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
+
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
+                  <Button
+                    size="sm"
                     variant="outline"
                     onClick={() => setCurrentTimestamp(rangeEnd)}
                     className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
@@ -810,18 +906,6 @@ export const TimelineControl = () => {
 
         <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"></div>
-              <span>Début</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full"></div>
-              <span>Fin</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full"></div>
-              <span>Actuel</span>
-            </div>
             {hasOutdoorData && dewPointDifferences.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <div className="w-8 h-2 bg-gradient-to-r from-blue-500 to-green-500 rounded-full"></div>
