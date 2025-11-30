@@ -96,6 +96,8 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const minColor = metricInfo.colors[0];
   const maxColor = metricInfo.colors[metricInfo.colors.length - 1];
 
+  const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
+
   return (
     <AnimatePresence>
       <motion.div
@@ -103,9 +105,10 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.3 }}
-        className="absolute top-4 left-1/2 -translate-x-1/2 z-10"
+        className="absolute top-4 left-1/2 z-10"
+        style={{ transform: 'translateX(-50%)' }}
       >
-        <div className="space-y-2">
+        <div className="space-y-2 flex flex-col items-center">
           {/* Metric label - engraved */}
           <div className="flex items-center justify-center">
             <span 
@@ -131,48 +134,30 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
             
             {/* Volumetric average indicator */}
             {averagePosition !== null && (
-              <div className="absolute top-0 left-0 right-0 group">
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  className="absolute top-[3px] -translate-x-1/2 cursor-help"
-                  style={{ left: `${averagePosition}%` }}
-                >
-                  <div 
-                    className="w-3 h-3 rounded-full border-2 border-white shadow-lg relative"
-                    style={{ backgroundColor: averageColor }}
-                  >
-                    <div 
-                      className="absolute inset-0 rounded-full animate-ping opacity-75" 
-                      style={{ backgroundColor: averageColor }}
-                    ></div>
-                  </div>
-                </motion.div>
-                
-                {/* Tooltip on hover */}
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="absolute -translate-x-1/2"
+                style={{ 
+                  left: `${averagePosition}%`,
+                  top: '0px'
+                }}
+              >
                 <div 
-                  className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium z-[99999]"
-                  style={{ 
-                    left: `${averagePosition}%`,
-                    transform: 'translateX(-50%)',
-                    background: 'rgba(0, 0, 0, 0.8)',
-                    color: 'white'
-                  }}
+                  className="w-3 h-3 rounded-full border-2 border-white shadow-lg relative"
+                  style={{ backgroundColor: averageColor }}
                 >
-                  <span style={{ color: averageColor }}>
-                    Moyenne volumique: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
-                  </span>
                   <div 
-                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45"
-                    style={{ background: 'rgba(0, 0, 0, 0.8)' }}
+                    className="absolute inset-0 rounded-full animate-ping opacity-75" 
+                    style={{ backgroundColor: averageColor }}
                   ></div>
                 </div>
-              </div>
+              </motion.div>
             )}
           </div>
           
-          {/* Min/Max values - engraved and colored, perfectly centered on gradient edges */}
+          {/* Min/Max/Average values - engraved and colored, perfectly centered on gradient edges */}
           <div className="relative w-[200px] flex items-center justify-between text-[11px] font-bold">
             <span 
               className="absolute left-0 -translate-x-1/2"
@@ -182,8 +167,23 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                 filter: 'brightness(0.9) opacity(0.8)'
               }}
             >
-              {interpolationRange.min.toFixed(1)}{metricInfo.unit}
+              {interpolationRange.min.toFixed(decimals)}{metricInfo.unit}
             </span>
+            
+            {averagePosition !== null && (
+              <span 
+                className="absolute -translate-x-1/2"
+                style={{
+                  left: `${averagePosition}%`,
+                  color: averageColor,
+                  textShadow: '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
+                  filter: 'brightness(0.9) opacity(0.8)'
+                }}
+              >
+                {volumetricAverage.toFixed(decimals)}{metricInfo.unit}
+              </span>
+            )}
+            
             <span 
               className="absolute right-0 translate-x-1/2"
               style={{
@@ -192,7 +192,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                 filter: 'brightness(0.9) opacity(0.8)'
               }}
             >
-              {interpolationRange.max.toFixed(1)}{metricInfo.unit}
+              {interpolationRange.max.toFixed(decimals)}{metricInfo.unit}
             </span>
           </div>
         </div>
