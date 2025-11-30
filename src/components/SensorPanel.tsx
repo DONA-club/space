@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,7 @@ export const SensorPanel = () => {
   const setVisualizationType = useAppStore((state) => state.setVisualizationType);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setHasOutdoorData = useAppStore((state) => state.setHasOutdoorData);
+  const timeRange = useAppStore((state) => state.timeRange);
   
   const [isExpanded, setIsExpanded] = useState(true);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
@@ -474,87 +475,56 @@ export const SensorPanel = () => {
     return 'récent';
   };
 
+  const getDataPeriodDuration = (): string | null => {
+    if (!timeRange) return null;
+    
+    const duration = (timeRange[1] - timeRange[0]) / (1000 * 60 * 60);
+    const days = Math.floor(duration / 24);
+    const hours = Math.floor(duration % 24);
+    
+    if (days > 0) {
+      return `${days}j ${hours}h`;
+    }
+    return `${hours}h`;
+  };
+
   useEffect(() => {
     if (dataReady) {
       setIsExpanded(false);
     }
   }, [dataReady]);
 
+  const indoorSensorsWithData = sensors.filter(s => (sensorDataCounts.get(s.id) || 0) > 0).length;
+  const dataPeriod = getDataPeriodDuration();
+
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
-      {/* Outdoor Sensor Card */}
-      {currentSpace && mode === 'replay' && (
-        <LiquidGlassCard className="flex-shrink-0">
-          <div className="p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <CloudSun size={14} className="text-blue-500" />
-                <h2 className="text-sm font-semibold">Extérieur</h2>
-                {hasOutdoorData && (
-                  <Badge variant="outline" className="text-xs h-5">
-                    {outdoorDataCount.toLocaleString()}
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            {hasOutdoorData ? (
-              <div className="flex gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex-1 h-7 text-[10px] bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
-                  disabled
-                >
-                  <CloudSun size={10} className="mr-1" />
-                  Données chargées
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 w-7 p-0"
-                  onClick={deleteOutdoorData}
-                >
-                  <Trash2 size={10} />
-                </Button>
-              </div>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full h-7 text-[10px]"
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = '.csv';
-                  input.onchange = (e) => {
-                    const file = (e.target as HTMLInputElement).files?.[0];
-                    if (file) handleOutdoorCSVUpload(file);
-                  };
-                  input.click();
-                }}
-                disabled={loading}
-              >
-                <Upload size={10} className="mr-1" />
-                Charger données extérieures
-              </Button>
-            )}
-            <p className="text-[9px] text-gray-500 dark:text-gray-400 mt-1 text-center">
-              Optionnel • Fichier: balcon_data.csv ou exterieur_data.csv
-            </p>
-          </div>
-        </LiquidGlassCard>
-      )}
-
-      {/* Sensors List Card */}
+      {/* Data Panel Card */}
       <LiquidGlassCard className="flex-shrink-0">
         <div className="p-3">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold">Capteurs</h2>
-              <Badge variant="outline" className="text-xs h-5">
-                {sensors.length}
-              </Badge>
+              <Database size={16} className="text-blue-600" />
+              <h2 className="text-sm font-semibold">Données</h2>
+              {!isExpanded && (
+                <div className="flex items-center gap-1.5">
+                  <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1">
+                    <Home size={10} />
+                    {indoorSensorsWithData}/{sensors.length}
+                  </Badge>
+                  {hasOutdoorData && (
+                    <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700">
+                      <Cloud size={10} className="text-blue-600" />
+                    </Badge>
+                  )}
+                  {dataPeriod && (
+                    <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1">
+                      <Clock size={10} />
+                      {dataPeriod}
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
             <Button
               size="sm"
@@ -574,168 +544,241 @@ export const SensorPanel = () => {
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.2 }}
               >
+                {/* Outdoor Sensor Section */}
                 {currentSpace && mode === 'replay' && (
-                  <div className="mb-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border-blue-300 dark:border-blue-700 h-8"
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = '.csv';
-                        input.multiple = true;
-                        input.onchange = (e) => {
-                          const files = (e.target as HTMLInputElement).files;
-                          if (files && files.length > 0) handleBulkCSVUpload(files);
-                        };
-                        input.click();
-                      }}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="animate-spin mr-2" size={14} />
-                          Chargement...
-                        </>
-                      ) : (
-                        <>
-                          <FolderUp size={14} className="mr-2" />
-                          Charger plusieurs CSV
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center">
-                      Matching intelligent (capteurs + extérieur)
+                  <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <CloudSun size={14} className="text-blue-500" />
+                        <h3 className="text-xs font-semibold">Extérieur</h3>
+                        {hasOutdoorData && (
+                          <Badge variant="outline" className="text-xs h-5">
+                            {outdoorDataCount.toLocaleString()}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {hasOutdoorData ? (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 h-7 text-[10px] bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
+                          disabled
+                        >
+                          <CloudSun size={10} className="mr-1" />
+                          Données chargées
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 w-7 p-0"
+                          onClick={deleteOutdoorData}
+                        >
+                          <Trash2 size={10} />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-7 text-[10px]"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = '.csv';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) handleOutdoorCSVUpload(file);
+                          };
+                          input.click();
+                        }}
+                        disabled={loading}
+                      >
+                        <Upload size={10} className="mr-1" />
+                        Charger données extérieures
+                      </Button>
+                    )}
+                    <p className="text-[9px] text-gray-500 dark:text-gray-400 mt-1 text-center">
+                      Optionnel • Fichier: balcon_data.csv ou exterieur_data.csv
                     </p>
                   </div>
                 )}
 
-                {sensors.length === 0 ? (
-                  <div className="text-center text-gray-500 dark:text-gray-400 py-4">
-                    <AlertCircle size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Aucun capteur</p>
+                {/* Indoor Sensors Section */}
+                <div className="mb-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Home size={14} className="text-purple-600" />
+                    <h3 className="text-xs font-semibold">Intérieur</h3>
+                    <Badge variant="outline" className="text-xs h-5">
+                      {sensors.length}
+                    </Badge>
                   </div>
-                ) : (
-                  <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                    {sensors.map((sensor) => {
-                      const dataCount = sensorDataCounts.get(sensor.id) || 0;
-                      const hasData = dataCount > 0;
-                      const lastDate = lastDataDates.get(sensor.id);
-                      const isOld = lastDate && isDataOld(lastDate);
 
-                      return (
-                        <motion.div
-                          key={sensor.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className={`p-2 rounded-lg border transition-all cursor-pointer ${
-                            hoveredSensorId === sensor.id 
-                              ? 'border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20' 
-                              : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-black/50'
-                          }`}
-                          onMouseEnter={() => handleSensorHover(sensor.id)}
-                          onMouseLeave={handleSensorLeave}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium truncate">{sensor.name}</span>
-                            <div className="flex items-center gap-1">
-                              {hasData && (
-                                <Badge variant="outline" className="text-[9px] h-4 px-1">
-                                  {dataCount.toLocaleString()}
+                  {currentSpace && mode === 'replay' && (
+                    <div className="mb-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border-blue-300 dark:border-blue-700 h-8"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = '.csv';
+                          input.multiple = true;
+                          input.onchange = (e) => {
+                            const files = (e.target as HTMLInputElement).files;
+                            if (files && files.length > 0) handleBulkCSVUpload(files);
+                          };
+                          input.click();
+                        }}
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="animate-spin mr-2" size={14} />
+                            Chargement...
+                          </>
+                        ) : (
+                          <>
+                            <FolderUp size={14} className="mr-2" />
+                            Charger plusieurs CSV
+                          </>
+                        )}
+                      </Button>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center">
+                        Matching intelligent (capteurs + extérieur)
+                      </p>
+                    </div>
+                  )}
+
+                  {sensors.length === 0 ? (
+                    <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+                      <AlertCircle size={32} className="mx-auto mb-2 opacity-50" />
+                      <p className="text-xs">Aucun capteur</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                      {sensors.map((sensor) => {
+                        const dataCount = sensorDataCounts.get(sensor.id) || 0;
+                        const hasData = dataCount > 0;
+                        const lastDate = lastDataDates.get(sensor.id);
+                        const isOld = lastDate && isDataOld(lastDate);
+
+                        return (
+                          <motion.div
+                            key={sensor.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className={`p-2 rounded-lg border transition-all cursor-pointer ${
+                              hoveredSensorId === sensor.id 
+                                ? 'border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20' 
+                                : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-black/50'
+                            }`}
+                            onMouseEnter={() => handleSensorHover(sensor.id)}
+                            onMouseLeave={handleSensorLeave}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium truncate">{sensor.name}</span>
+                              <div className="flex items-center gap-1">
+                                {hasData && (
+                                  <Badge variant="outline" className="text-[9px] h-4 px-1">
+                                    {dataCount.toLocaleString()}
+                                  </Badge>
+                                )}
+                                <Badge 
+                                  variant={sensor.currentData ? "default" : "secondary"}
+                                  className="text-[10px] h-4 px-1.5"
+                                >
+                                  {sensor.currentData ? "●" : "○"}
                                 </Badge>
-                              )}
-                              <Badge 
-                                variant={sensor.currentData ? "default" : "secondary"}
-                                className="text-[10px] h-4 px-1.5"
-                              >
-                                {sensor.currentData ? "●" : "○"}
-                              </Badge>
-                            </div>
-                          </div>
-
-                          {sensor.currentData && (
-                            <div className="grid grid-cols-2 gap-1 mb-1">
-                              <div className="flex items-center gap-1 text-[10px]">
-                                <Thermometer size={10} className="text-red-500" />
-                                <span>{sensor.currentData.temperature.toFixed(1)}°C</span>
-                              </div>
-                              <div className="flex items-center gap-1 text-[10px]">
-                                <Droplets size={10} className="text-blue-500" />
-                                <span>{sensor.currentData.humidity.toFixed(1)}%</span>
                               </div>
                             </div>
-                          )}
 
-                          {lastDate && (
-                            <Alert className={`mb-1 py-1 px-2 ${isOld ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'}`}>
-                              <div className="flex items-center gap-1.5">
-                                <Clock className={`h-3 w-3 flex-shrink-0 ${isOld ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`} />
-                                <AlertDescription className={`text-[10px] leading-tight ${isOld ? 'text-orange-800 dark:text-orange-200' : 'text-green-800 dark:text-green-200'}`}>
-                                  Dernières données : {formatRelativeTime(lastDate)}
-                                </AlertDescription>
+                            {sensor.currentData && (
+                              <div className="grid grid-cols-2 gap-1 mb-1">
+                                <div className="flex items-center gap-1 text-[10px]">
+                                  <Thermometer size={10} className="text-red-500" />
+                                  <span>{sensor.currentData.temperature.toFixed(1)}°C</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px]">
+                                  <Droplets size={10} className="text-blue-500" />
+                                  <span>{sensor.currentData.humidity.toFixed(1)}%</span>
+                                </div>
                               </div>
-                            </Alert>
-                          )}
+                            )}
 
-                          {currentSpace && mode === 'replay' && (
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="flex-1 h-6 text-[10px]"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const input = document.createElement('input');
-                                  input.type = 'file';
-                                  input.accept = '.csv';
-                                  input.onchange = (e) => {
-                                    const file = (e.target as HTMLInputElement).files?.[0];
-                                    if (file) handleCSVUpload(sensor.id, file);
-                                  };
-                                  input.click();
-                                }}
-                                disabled={loading}
-                              >
-                                <Upload size={10} className="mr-1" />
-                                CSV
-                              </Button>
+                            {lastDate && (
+                              <Alert className={`mb-1 py-1 px-2 ${isOld ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'}`}>
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className={`h-3 w-3 flex-shrink-0 ${isOld ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`} />
+                                  <AlertDescription className={`text-[10px] leading-tight ${isOld ? 'text-orange-800 dark:text-orange-200' : 'text-green-800 dark:text-green-200'}`}>
+                                    Dernières données : {formatRelativeTime(lastDate)}
+                                  </AlertDescription>
+                                </div>
+                              </Alert>
+                            )}
 
-                              {hasData && (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-6 w-6 p-0"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      downloadAllData(sensor.id);
-                                    }}
-                                  >
-                                    <Download size={10} />
-                                  </Button>
+                            {currentSpace && mode === 'replay' && (
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 h-6 text-[10px]"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const input = document.createElement('input');
+                                    input.type = 'file';
+                                    input.accept = '.csv';
+                                    input.onchange = (e) => {
+                                      const file = (e.target as HTMLInputElement).files?.[0];
+                                      if (file) handleCSVUpload(sensor.id, file);
+                                    };
+                                    input.click();
+                                  }}
+                                  disabled={loading}
+                                >
+                                  <Upload size={10} className="mr-1" />
+                                  CSV
+                                </Button>
 
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-6 w-6 p-0"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteAllData(sensor.id);
-                                    }}
-                                  >
-                                    <Trash2 size={10} />
-                                  </Button>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                )}
+                                {hasData && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 w-6 p-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        downloadAllData(sensor.id);
+                                      }}
+                                    >
+                                      <Download size={10} />
+                                    </Button>
+
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 w-6 p-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteAllData(sensor.id);
+                                      }}
+                                    >
+                                      <Trash2 size={10} />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

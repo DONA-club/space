@@ -7,7 +7,6 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { AlertCircle } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 import { ColorLegend } from "./ColorLegend";
-import { OutdoorBadge } from "./scene3d/OutdoorBadge";
 import { AirVolumeInfoBadge } from "./scene3d/AirVolumeInfoBadge";
 import { useSensorData } from "@/hooks/useSensorData";
 import { useSceneBackground } from "@/hooks/useSceneBackground";
@@ -32,7 +31,6 @@ export const Scene3DViewer = () => {
   const [modelBounds, setModelBounds] = useState<ModelBounds | null>(null);
   const [originalModelBounds, setOriginalModelBounds] = useState<ModelBounds | null>(null);
   const [exactAirVolume, setExactAirVolume] = useState<number | null>(null);
-  const [currentOutdoorData, setCurrentOutdoorData] = useState<any>(null);
   const [indoorAverage, setIndoorAverage] = useState<any>(null);
   const [volumetricAverage, setVolumetricAverage] = useState<number | null>(null);
   const [interpolationPointCount, setInterpolationPointCount] = useState<number>(0);
@@ -79,7 +77,6 @@ export const Scene3DViewer = () => {
 
     if (outdoorData.length > 0) {
       const closestData = findClosestDataPoint(outdoorData, currentTimestamp);
-      setCurrentOutdoorData(closestData);
       setOutdoorData(closestData);
     }
   }, [currentTimestamp, dataReady, hasOutdoorData, setOutdoorData, sensors, sensorData, outdoorData]);
@@ -93,6 +90,65 @@ export const Scene3DViewer = () => {
     interpolationRange,
     dataReady
   });
+
+  // Handle sensor hover pulse effect
+  useEffect(() => {
+    const handleSensorHover = (event: CustomEvent) => {
+      if (!sceneRef.current) return;
+      
+      const { sensorId } = event.detail;
+      const meshes = sceneRef.current.sensorMeshes.get(sensorId);
+      
+      if (meshes) {
+        // Animate pulse effect
+        const startScale = 1;
+        const endScale = 1.3;
+        const duration = 500;
+        const startTime = Date.now();
+        
+        const animate = () => {
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          
+          // Ease in-out
+          const eased = progress < 0.5 
+            ? 2 * progress * progress 
+            : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+          
+          const scale = startScale + (endScale - startScale) * Math.sin(eased * Math.PI);
+          
+          meshes.sphere.scale.setScalar(scale);
+          meshes.glow.scale.setScalar(scale * 1.5);
+          
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            meshes.sphere.scale.setScalar(1);
+            meshes.glow.scale.setScalar(1);
+          }
+        };
+        
+        animate();
+      }
+    };
+    
+    const handleSensorLeave = () => {
+      if (!sceneRef.current) return;
+      
+      sceneRef.current.sensorMeshes.forEach((meshes) => {
+        meshes.sphere.scale.setScalar(1);
+        meshes.glow.scale.setScalar(1);
+      });
+    };
+    
+    window.addEventListener('sensorHover', handleSensorHover as EventListener);
+    window.addEventListener('sensorLeave', handleSensorLeave);
+    
+    return () => {
+      window.removeEventListener('sensorHover', handleSensorHover as EventListener);
+      window.removeEventListener('sensorLeave', handleSensorLeave);
+    };
+  }, []);
 
   useEffect(() => {
     if (!sceneRef.current || !modelLoaded) return;
@@ -332,17 +388,6 @@ export const Scene3DViewer = () => {
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
-      <OutdoorBadge
-        currentOutdoorData={currentOutdoorData}
-        indoorAverage={indoorAverage}
-        selectedMetric={selectedMetric}
-        interpolationRange={interpolationRange}
-        hasOutdoorData={hasOutdoorData}
-        dataReady={dataReady}
-        volumetricAverage={volumetricAverage}
-        meshingEnabled={meshingEnabled}
-      />
-      
       <AirVolumeInfoBadge
         airVolume={exactAirVolume}
         airMass={airMass}
@@ -387,6 +432,7 @@ export const Scene3DViewer = () => {
   );
 };
 
+// Helper functions remain the same...
 const disposeInterpolationMesh = (mesh: THREE.Points | THREE.Group | THREE.Mesh) => {
   if (mesh instanceof THREE.Points || mesh instanceof THREE.Mesh) {
     mesh.geometry.dispose();
@@ -881,7 +927,6 @@ const positionCamera = (
   const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
   const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
   
-  // Changed from 1.5 to 0.7 for closer zoom
   const distance = Math.max(verticalFit, horizontalFit) * 0.7;
   
   camera.position.set(distance * 0.7, distance * 0.5, distance * 0.7);
