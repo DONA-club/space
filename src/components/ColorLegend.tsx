@@ -1,7 +1,6 @@
 "use client";
 
 import { useAppStore } from '@/store/appStore';
-import { LiquidGlassCard } from './LiquidGlassCard';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ColorLegendProps {
@@ -20,25 +19,29 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
     switch (selectedMetric) {
       case 'temperature':
         return {
-          label: 'Température',
+          label: 'T°',
+          fullLabel: 'Température',
           unit: '°C',
           colors: ['#3b82f6', '#06b6d4', '#10b981', '#fbbf24', '#f97316', '#ef4444'],
         };
       case 'humidity':
         return {
-          label: 'Humidité Relative',
+          label: 'HR',
+          fullLabel: 'Humidité Relative',
           unit: '%',
           colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#3b82f6'],
         };
       case 'absoluteHumidity':
         return {
-          label: 'Humidité Absolue',
+          label: 'HA',
+          fullLabel: 'Humidité Absolue',
           unit: 'g/m³',
           colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7'],
         };
       case 'dewPoint':
         return {
-          label: 'Point de Rosée',
+          label: 'PR',
+          fullLabel: 'Point de Rosée',
           unit: '°C',
           colors: ['#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4'],
         };
@@ -100,31 +103,42 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
         transition={{ duration: 0.3 }}
-        className="absolute bottom-4 left-4 z-10"
+        className="absolute bottom-3 left-3 z-10"
       >
-        <LiquidGlassCard className="p-3 min-w-[200px]">
-          <div className="space-y-2">
-            <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
-              {metricInfo.label}
+        <div className="relative overflow-hidden rounded-xl backdrop-blur-md bg-white/30 dark:bg-black/30 border border-white/40 dark:border-white/20 shadow-xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
+          
+          <div className="relative px-3 py-2 space-y-2">
+            {/* Header with metric label */}
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">
+                {metricInfo.label}
+              </span>
+              {volumetricAverage !== null && (
+                <span className="text-[9px] font-bold text-gray-800 dark:text-white">
+                  Moy: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
+                </span>
+              )}
             </div>
             
-            <div className="relative pt-4">
-              <div className="relative h-3 rounded-full overflow-hidden" style={{ background: gradient }}>
+            {/* Gradient bar with cursor */}
+            <div className="relative">
+              <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: gradient }}>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
               </div>
               
-              {/* Volumetric average indicator - perfectly centered on bar */}
+              {/* Volumetric average indicator */}
               {averagePosition !== null && (
                 <div className="absolute top-0 left-0 right-0 group">
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    className="absolute top-[10px] -translate-x-1/2 cursor-help"
+                    className="absolute top-[5px] -translate-x-1/2 cursor-help"
                     style={{ left: `${averagePosition}%` }}
                   >
                     <div 
-                      className="w-3 h-3 rounded-full border-2 border-white shadow-lg relative"
+                      className="w-2.5 h-2.5 rounded-full border-2 border-white shadow-lg relative"
                       style={{ backgroundColor: averageColor }}
                     >
                       <div 
@@ -134,37 +148,32 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                     </div>
                   </motion.div>
                   
-                  {/* Tooltip on hover - positioned above with proper z-index */}
+                  {/* Tooltip on hover */}
                   <div 
-                    className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-2 py-1 rounded text-[10px] font-medium z-[99999]"
+                    className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-2 py-0.5 rounded text-[9px] font-medium z-[99999]"
                     style={{ 
                       left: `${averagePosition}%`,
                       transform: 'translateX(-50%)'
                     }}
                   >
-                    Moy. vol.: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
+                    {metricInfo.fullLabel}
+                    <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-gray-900 rotate-45"></div>
                   </div>
                 </div>
               )}
             </div>
             
-            <div className="flex items-center justify-between text-[10px] font-medium">
-              <div className="flex items-center gap-1">
-                <span className="text-blue-600 dark:text-blue-400">Min:</span>
-                <span className="text-gray-900 dark:text-gray-100">
-                  {interpolationRange.min.toFixed(1)}{metricInfo.unit}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-red-600 dark:text-red-400">Max:</span>
-                <span className="text-gray-900 dark:text-gray-100">
-                  {interpolationRange.max.toFixed(1)}{metricInfo.unit}
-                </span>
-              </div>
+            {/* Min/Max values - inline */}
+            <div className="flex items-center justify-between text-[9px] font-medium">
+              <span className="text-blue-600 dark:text-blue-400">
+                {interpolationRange.min.toFixed(1)}{metricInfo.unit}
+              </span>
+              <span className="text-red-600 dark:text-red-400">
+                {interpolationRange.max.toFixed(1)}{metricInfo.unit}
+              </span>
             </div>
           </div>
-        </LiquidGlassCard>
+        </div>
       </motion.div>
     </AnimatePresence>
   );
