@@ -696,7 +696,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
               Space
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Gérez vos modèles 3D et données de capteurs
+              Créez et gérez vos espaces instrumentés
             </p>
           </div>
           <Button onClick={() => setShowCreateForm(!showCreateForm)}>

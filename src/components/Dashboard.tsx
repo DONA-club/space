@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { Scene3DViewer } from './Scene3DViewer';
@@ -26,6 +27,35 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   const gltfModel = useAppStore((state) => state.gltfModel);
   const dataReady = useAppStore((state) => state.dataReady);
   const currentSpace = useAppStore((state) => state.currentSpace);
+  
+  const [spaceAddress, setSpaceAddress] = useState<string>('');
+  const [loadingAddress, setLoadingAddress] = useState(false);
+
+  useEffect(() => {
+    if (currentSpace?.latitude && currentSpace?.longitude) {
+      loadSpaceAddress();
+    }
+  }, [currentSpace]);
+
+  const loadSpaceAddress = async () => {
+    if (!currentSpace?.latitude || !currentSpace?.longitude) return;
+
+    setLoadingAddress(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentSpace.latitude}&lon=${currentSpace.longitude}&zoom=18&addressdetails=1`
+      );
+      const data = await response.json();
+      
+      if (data.display_name) {
+        setSpaceAddress(data.display_name);
+      }
+    } catch (error) {
+      console.error('Error fetching address:', error);
+    } finally {
+      setLoadingAddress(false);
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -64,7 +94,15 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                     {currentSpace?.name || 'Space'}
                   </h1>
                   <p className="text-sm text-gray-600 dark:text-gray-300">
-                    {currentSpace?.description || `Visualisation environnementale 3D - ${sensors.length} capteurs`}
+                    {loadingAddress ? (
+                      'Chargement de la localisation...'
+                    ) : spaceAddress ? (
+                      spaceAddress
+                    ) : currentSpace?.description ? (
+                      currentSpace.description
+                    ) : (
+                      `${sensors.length} capteur${sensors.length > 1 ? 's' : ''} configuré${sensors.length > 1 ? 's' : ''}`
+                    )}
                   </p>
                 </div>
               </div>
