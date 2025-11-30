@@ -31,7 +31,7 @@ export const OutdoorBadge = ({
   }
 
   const getMetricIcon = () => {
-    const iconProps = { size: 14, strokeWidth: 2 };
+    const iconProps = { size: 14, strokeWidth: 2.5 };
     switch (selectedMetric) {
       case 'temperature':
         return <Thermometer {...iconProps} />;
@@ -73,44 +73,54 @@ export const OutdoorBadge = ({
   const differenceText = getDifferenceText();
   const metricColor = getMetricColor();
 
-  return (
-    <div className="absolute top-3 left-3 z-10">
-      <div className="relative overflow-hidden rounded-xl backdrop-blur-md bg-white/30 dark:bg-black/30 border border-white/40 dark:border-white/20 shadow-xl">
-        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-        
-        <div className="relative px-3 py-2 space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <div 
-              className="p-1 rounded-lg bg-white/50 dark:bg-white/10"
-              style={{ color: metricColor }}
-            >
-              {getMetricIcon()}
-            </div>
-            <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">
-              Extérieur
-            </span>
-          </div>
+  const textStyle = {
+    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3), 0 -1px 0 rgba(255, 255, 255, 0.5)',
+    color: 'rgba(0, 0, 0, 0.65)'
+  };
 
-          <div className="flex items-center justify-center">
-            <span 
-              className="text-xl font-black tracking-tight"
-              style={{ color: metricColor }}
-            >
-              {displayValue}
+  const valueStyle = {
+    textShadow: '0 1px 2px rgba(0, 0, 0, 0.4), 0 -1px 0 rgba(255, 255, 255, 0.4)',
+    color: metricColor,
+    filter: 'brightness(0.85)'
+  };
+
+  return (
+    <div className="absolute top-4 left-4 z-10">
+      <div className="space-y-2">
+        {/* Title with icon */}
+        <div className="flex items-center gap-2">
+          <div style={{ color: metricColor, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.3)) brightness(0.85)' }}>
+            {getMetricIcon()}
+          </div>
+          <span className="text-xs font-bold tracking-wide" style={textStyle}>
+            Extérieur
+          </span>
+        </div>
+
+        {/* Main value */}
+        <div className="flex items-center justify-center">
+          <span 
+            className="text-2xl font-black tracking-tight"
+            style={valueStyle}
+          >
+            {displayValue}
+          </span>
+        </div>
+        
+        {/* Difference with interior */}
+        {meshingEnabled && volumetricAverage !== null && differenceText && (
+          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-black/10">
+            <span className="text-[10px] font-medium" style={textStyle}>
+              Δ Intérieur
+            </span>
+            <span className="text-[11px] font-bold" style={{
+              textShadow: '0 1px 2px rgba(0, 0, 0, 0.4), 0 -1px 0 rgba(255, 255, 255, 0.4)',
+              color: 'rgba(0, 0, 0, 0.75)'
+            }}>
+              {differenceText}
             </span>
           </div>
-          
-          {meshingEnabled && volumetricAverage !== null && differenceText && (
-            <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/30">
-              <span className="text-[9px] font-medium text-gray-600 dark:text-gray-400">
-                Δ Intérieur
-              </span>
-              <span className="text-[10px] font-bold text-gray-800 dark:text-white">
-                {differenceText}
-              </span>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

@@ -92,6 +92,10 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const averagePosition = getAveragePosition();
   const averageColor = getAverageColor();
 
+  // Couleurs pour min et max
+  const minColor = metricInfo.colors[0];
+  const maxColor = metricInfo.colors[metricInfo.colors.length - 1];
+
   return (
     <AnimatePresence>
       <motion.div
@@ -99,72 +103,97 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
         transition={{ duration: 0.3 }}
-        className="absolute bottom-3 left-3 z-10"
+        className="absolute bottom-4 left-4 z-10"
       >
-        <div className="relative overflow-hidden rounded-xl backdrop-blur-md bg-white/30 dark:bg-black/30 border border-white/40 dark:border-white/20 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
+        <div className="space-y-2">
+          {/* Metric label - engraved */}
+          <div className="flex items-center justify-center">
+            <span 
+              className="text-xs font-semibold tracking-wide"
+              style={{
+                textShadow: '0 1px 2px rgba(0, 0, 0, 0.3), 0 -1px 0 rgba(255, 255, 255, 0.5)',
+                color: 'rgba(0, 0, 0, 0.6)'
+              }}
+            >
+              {metricInfo.label}
+            </span>
+          </div>
           
-          <div className="relative px-3 py-2 space-y-2">
-            {/* Header with metric label */}
-            <div className="flex items-center justify-center">
-              <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">
-                {metricInfo.label}
-              </span>
-            </div>
+          {/* Gradient bar - fixed width 200px */}
+          <div className="relative w-[200px]">
+            <div 
+              className="h-3 rounded-full shadow-inner" 
+              style={{ 
+                background: gradient,
+                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.2)'
+              }}
+            ></div>
             
-            {/* Gradient bar with cursor */}
-            <div className="relative">
-              <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: gradient }}>
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-              </div>
-              
-              {/* Volumetric average indicator - raised by half its radius */}
-              {averagePosition !== null && (
-                <div className="absolute top-0 left-0 right-0 group">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    className="absolute top-[3.75px] -translate-x-1/2 cursor-help"
-                    style={{ left: `${averagePosition}%` }}
+            {/* Volumetric average indicator */}
+            {averagePosition !== null && (
+              <div className="absolute top-0 left-0 right-0 group">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                  className="absolute top-[3px] -translate-x-1/2 cursor-help"
+                  style={{ left: `${averagePosition}%` }}
+                >
+                  <div 
+                    className="w-3 h-3 rounded-full border-2 border-white shadow-lg relative"
+                    style={{ backgroundColor: averageColor }}
                   >
                     <div 
-                      className="w-2.5 h-2.5 rounded-full border-2 border-white shadow-lg relative"
+                      className="absolute inset-0 rounded-full animate-ping opacity-75" 
                       style={{ backgroundColor: averageColor }}
-                    >
-                      <div 
-                        className="absolute inset-0 rounded-full animate-ping opacity-75" 
-                        style={{ backgroundColor: averageColor }}
-                      ></div>
-                    </div>
-                  </motion.div>
-                  
-                  {/* Tooltip on hover - shows volumetric average */}
-                  <div 
-                    className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-2 py-1 rounded text-[9px] font-medium z-[99999]"
-                    style={{ 
-                      left: `${averagePosition}%`,
-                      transform: 'translateX(-50%)'
-                    }}
-                  >
-                    <span style={{ color: averageColor }}>
-                      Moyenne volumique: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
-                    </span>
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
+                    ></div>
                   </div>
+                </motion.div>
+                
+                {/* Tooltip on hover */}
+                <div 
+                  className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium z-[99999]"
+                  style={{ 
+                    left: `${averagePosition}%`,
+                    transform: 'translateX(-50%)',
+                    background: 'rgba(0, 0, 0, 0.8)',
+                    color: 'white'
+                  }}
+                >
+                  <span style={{ color: averageColor }}>
+                    Moyenne volumique: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
+                  </span>
+                  <div 
+                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45"
+                    style={{ background: 'rgba(0, 0, 0, 0.8)' }}
+                  ></div>
                 </div>
-              )}
-            </div>
-            
-            {/* Min/Max values - inline */}
-            <div className="flex items-center justify-between text-[9px] font-medium">
-              <span className="text-blue-600 dark:text-blue-400">
-                {interpolationRange.min.toFixed(1)}{metricInfo.unit}
-              </span>
-              <span className="text-red-600 dark:text-red-400">
-                {interpolationRange.max.toFixed(1)}{metricInfo.unit}
-              </span>
-            </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Min/Max values - engraved and colored, perfectly centered on gradient edges */}
+          <div className="relative w-[200px] flex items-center justify-between text-[11px] font-bold">
+            <span 
+              className="absolute left-0 -translate-x-1/2"
+              style={{
+                color: minColor,
+                textShadow: '0 1px 2px rgba(0, 0, 0, 0.4), 0 -1px 0 rgba(255, 255, 255, 0.3)',
+                filter: 'brightness(0.85)'
+              }}
+            >
+              {interpolationRange.min.toFixed(1)}{metricInfo.unit}
+            </span>
+            <span 
+              className="absolute right-0 translate-x-1/2"
+              style={{
+                color: maxColor,
+                textShadow: '0 1px 2px rgba(0, 0, 0, 0.4), 0 -1px 0 rgba(255, 255, 255, 0.3)',
+                filter: 'brightness(0.85)'
+              }}
+            >
+              {interpolationRange.max.toFixed(1)}{metricInfo.unit}
+            </span>
           </div>
         </div>
       </motion.div>
