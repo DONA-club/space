@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Button } from './ui/button';
@@ -23,6 +23,16 @@ interface MapPickerProps {
   onLocationSelect: (lat: number, lng: number) => void;
 }
 
+function MapController({ center }: { center: [number, number] }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    map.setView(center, map.getZoom());
+  }, [center, map]);
+  
+  return null;
+}
+
 function LocationMarker({ position, onPositionChange }: { 
   position: [number, number]; 
   onPositionChange: (lat: number, lng: number) => void;
@@ -40,12 +50,10 @@ function LocationMarker({ position, onPositionChange }: {
     if (marker) {
       marker.setLatLng(position);
       
-      // Enable dragging
       if (marker.dragging) {
         marker.dragging.enable();
       }
       
-      // Handle dragend event
       const handleDragEnd = () => {
         const pos = marker.getLatLng();
         onPositionChange(pos.lat, pos.lng);
@@ -71,7 +79,6 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
   const [position, setPosition] = useState<[number, number]>([initialLat, initialLng]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
-  const mapRef = useRef<L.Map>(null);
 
   const handlePositionChange = (lat: number, lng: number) => {
     setPosition([lat, lng]);
@@ -83,7 +90,6 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
 
     setSearching(true);
     try {
-      // Using Nominatim (OpenStreetMap) geocoding service
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`
       );
@@ -94,11 +100,6 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
         const newPosition: [number, number] = [parseFloat(lat), parseFloat(lon)];
         setPosition(newPosition);
         onLocationSelect(newPosition[0], newPosition[1]);
-        
-        // Center map on new position
-        if (mapRef.current) {
-          mapRef.current.setView(newPosition, 13);
-        }
       }
     } catch (error) {
       console.error('Geocoding error:', error);
@@ -117,10 +118,6 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
           ];
           setPosition(newPosition);
           onLocationSelect(newPosition[0], newPosition[1]);
-          
-          if (mapRef.current) {
-            mapRef.current.setView(newPosition, 13);
-          }
         },
         (error) => {
           console.error('Geolocation error:', error);
@@ -131,7 +128,6 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
 
   return (
     <div className="space-y-4">
-      {/* Search Bar */}
       <div className="flex gap-2">
         <div className="flex-1">
           <Label htmlFor="search-location" className="sr-only">Rechercher une adresse</Label>
@@ -171,7 +167,6 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
         </Button>
       </div>
 
-      {/* Coordinates Display */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-xs text-gray-600 dark:text-gray-400">Latitude</Label>
@@ -205,10 +200,8 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
         </div>
       </div>
 
-      {/* Map */}
       <div className="relative h-96 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-700">
         <MapContainer
-          ref={mapRef}
           {...{ center: position } as any}
           zoom={13}
           style={{ height: '100%', width: '100%' }}
@@ -218,11 +211,11 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
             {...{ attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' } as any}
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          <MapController center={position} />
           <LocationMarker position={position} onPositionChange={handlePositionChange} />
         </MapContainer>
       </div>
 
-      {/* Instructions */}
       <div className="text-xs text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
         <div className="flex items-start gap-2">
           <MapPin size={14} className="mt-0.5 shrink-0" />
