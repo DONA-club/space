@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Button } from './ui/button';
@@ -21,16 +21,6 @@ interface MapPickerProps {
   initialLat?: number;
   initialLng?: number;
   onLocationSelect: (lat: number, lng: number) => void;
-}
-
-function MapController({ center }: { center: [number, number] }) {
-  const map = useMap();
-  
-  useEffect(() => {
-    map.setView(center, map.getZoom());
-  }, [center, map]);
-  
-  return null;
 }
 
 function LocationMarker({ position, onPositionChange }: { 
@@ -77,6 +67,7 @@ function LocationMarker({ position, onPositionChange }: {
 
 export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocationSelect }: MapPickerProps) => {
   const [position, setPosition] = useState<[number, number]>([initialLat, initialLng]);
+  const [mapKey, setMapKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
 
@@ -100,6 +91,7 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
         const newPosition: [number, number] = [parseFloat(lat), parseFloat(lon)];
         setPosition(newPosition);
         onLocationSelect(newPosition[0], newPosition[1]);
+        setMapKey(prev => prev + 1);
       }
     } catch (error) {
       console.error('Geocoding error:', error);
@@ -118,6 +110,7 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
           ];
           setPosition(newPosition);
           onLocationSelect(newPosition[0], newPosition[1]);
+          setMapKey(prev => prev + 1);
         },
         (error) => {
           console.error('Geolocation error:', error);
@@ -202,6 +195,7 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
 
       <div className="relative h-96 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-700">
         <MapContainer
+          key={mapKey}
           {...{ center: position } as any}
           zoom={13}
           style={{ height: '100%', width: '100%' }}
@@ -211,7 +205,6 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
             {...{ attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' } as any}
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <MapController center={position} />
           <LocationMarker position={position} onPositionChange={handlePositionChange} />
         </MapContainer>
       </div>
