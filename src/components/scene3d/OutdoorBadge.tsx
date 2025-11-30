@@ -1,6 +1,6 @@
 import { Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
 import { SensorDataPoint, MetricType } from '@/types/sensor.types';
-import { getColorFromValue, rgbaFromColor } from '@/utils/colorUtils';
+import { getColorFromValue } from '@/utils/colorUtils';
 import { formatMetricValue, getMetricUnit } from '@/utils/metricUtils';
 
 interface OutdoorBadgeProps {
@@ -29,7 +29,7 @@ export const OutdoorBadge = ({
   }
 
   const getMetricIcon = () => {
-    const iconProps = { size: 16 };
+    const iconProps = { size: 18, strokeWidth: 2.5 };
     switch (selectedMetric) {
       case 'temperature':
         return <Thermometer {...iconProps} />;
@@ -42,23 +42,8 @@ export const OutdoorBadge = ({
     }
   };
 
-  const getBackgroundColor = () => {
+  const getMetricColor = () => {
     const outdoorValue = currentOutdoorData[selectedMetric];
-    
-    // Clamp outdoor value to indoor range for color calculation
-    const clampedValue = Math.max(
-      interpolationRange.min,
-      Math.min(interpolationRange.max, outdoorValue)
-    );
-    
-    const color = getColorFromValue(clampedValue, interpolationRange.min, interpolationRange.max, selectedMetric);
-    return rgbaFromColor(color, 0.15);
-  };
-
-  const getTextColor = () => {
-    const outdoorValue = currentOutdoorData[selectedMetric];
-    
-    // Clamp outdoor value to indoor range for color calculation
     const clampedValue = Math.max(
       interpolationRange.min,
       Math.min(interpolationRange.max, outdoorValue)
@@ -84,42 +69,60 @@ export const OutdoorBadge = ({
   const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
   const displayValue = formatMetricValue(currentOutdoorData[selectedMetric], selectedMetric, decimals);
   const differenceText = getDifferenceText();
+  const metricColor = getMetricColor();
 
   return (
     <div className="absolute top-4 left-4 z-10">
-      <div 
-        className="backdrop-blur-xl rounded-xl p-3 shadow-lg border border-white/40"
-        style={{ backgroundColor: getBackgroundColor() }}
-      >
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 pb-2 border-b border-white/20">
-            <div style={{ color: getTextColor() }}>
+      <div className="relative overflow-hidden rounded-2xl backdrop-blur-xl bg-white/40 dark:bg-black/20 border border-white/60 dark:border-white/20 shadow-2xl">
+        {/* Gradient overlay for depth */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent pointer-events-none"></div>
+        
+        <div className="relative p-4 space-y-3">
+          {/* Header */}
+          <div className="flex items-center gap-2.5">
+            <div 
+              className="p-2 rounded-xl bg-white/60 dark:bg-white/10 backdrop-blur-sm shadow-lg"
+              style={{ color: metricColor }}
+            >
               {getMetricIcon()}
             </div>
-            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+            <span className="text-sm font-bold text-gray-800 dark:text-white">
               Extérieur
             </span>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-center">
+          {/* Main value with enhanced contrast */}
+          <div className="flex items-center justify-center py-2">
+            <div 
+              className="px-4 py-2 rounded-xl bg-white/80 dark:bg-black/40 backdrop-blur-sm shadow-inner"
+            >
               <span 
-                className="text-lg font-bold"
-                style={{ color: getTextColor() }}
+                className="text-2xl font-black tracking-tight"
+                style={{ 
+                  color: metricColor,
+                  textShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
               >
                 {displayValue}
               </span>
             </div>
-            
-            {meshingEnabled && volumetricAverage !== null && differenceText && (
-              <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/20">
-                <span className="text-[10px] text-gray-600 dark:text-gray-400">Int./Ext.:</span>
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  {differenceText}
-                </span>
-              </div>
-            )}
           </div>
+          
+          {/* Delta with better contrast */}
+          {meshingEnabled && volumetricAverage !== null && differenceText && (
+            <div className="pt-2 border-t border-white/40 dark:border-white/20">
+              <div className="flex items-center justify-between px-2">
+                <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                  Int./Ext.:
+                </span>
+                <div className="px-2 py-1 rounded-lg bg-white/70 dark:bg-black/30 backdrop-blur-sm">
+                  <span className="text-xs font-bold text-gray-900 dark:text-white">
+                    {differenceText}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

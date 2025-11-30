@@ -3,8 +3,6 @@
 import { useAppStore } from '@/store/appStore';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getColorFromValue } from '@/utils/colorUtils';
-import * as THREE from 'three';
 
 interface ColorLegendProps {
   volumetricAverage?: number | null;
@@ -24,30 +22,31 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
         return {
           label: 'Température',
           unit: '°C',
-          gradient: 'linear-gradient(to right, #3b82f6, #06b6d4, #10b981, #fbbf24, #f97316, #ef4444)',
+          colors: ['#3b82f6', '#06b6d4', '#10b981', '#fbbf24', '#f97316', '#ef4444'],
         };
       case 'humidity':
         return {
           label: 'Humidité Relative',
           unit: '%',
-          gradient: 'linear-gradient(to right, #fbbf24, #f97316, #ef4444, #ec4899, #a855f7, #3b82f6)',
+          colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#3b82f6'],
         };
       case 'absoluteHumidity':
         return {
           label: 'Humidité Absolue',
           unit: 'g/m³',
-          gradient: 'linear-gradient(to right, #fbbf24, #f97316, #ef4444, #ec4899, #a855f7)',
+          colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7'],
         };
       case 'dewPoint':
         return {
           label: 'Point de Rosée',
           unit: '°C',
-          gradient: 'linear-gradient(to right, #a855f7, #8b5cf6, #6366f1, #3b82f6, #06b6d4)',
+          colors: ['#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4'],
         };
     }
   };
 
   const metricInfo = getMetricInfo();
+  const gradient = `linear-gradient(to right, ${metricInfo.colors.join(', ')})`;
 
   // Calculate position of volumetric average on gradient bar
   const getAveragePosition = () => {
@@ -58,11 +57,41 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
     return percentage;
   };
 
+  // Calculate exact color from gradient based on position
   const getAverageColor = () => {
     if (volumetricAverage === null || volumetricAverage === undefined) return '#ffffff';
     
-    const color = getColorFromValue(volumetricAverage, interpolationRange.min, interpolationRange.max, selectedMetric);
-    return `#${color.toString(16).padStart(6, '0')}`;
+    const normalized = (volumetricAverage - interpolationRange.min) / (interpolationRange.max - interpolationRange.min);
+    const clampedNormalized = Math.max(0, Math.min(1, normalized));
+    
+    const colors = metricInfo.colors;
+    const segmentSize = 1 / (colors.length - 1);
+    const segmentIndex = Math.floor(clampedNormalized / segmentSize);
+    const segmentProgress = (clampedNormalized % segmentSize) / segmentSize;
+    
+    const startColorIndex = Math.min(segmentIndex, colors.length - 2);
+    const endColorIndex = startColorIndex + 1;
+    
+    const startColor = colors[startColorIndex];
+    const endColor = colors[endColorIndex];
+    
+    // Parse hex colors
+    const parseHex = (hex: string) => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return { r, g, b };
+    };
+    
+    const start = parseHex(startColor);
+    const end = parseHex(endColor);
+    
+    // Interpolate
+    const r = Math.round(start.r + (end.r - start.r) * segmentProgress);
+    const g = Math.round(start.g + (end.g - start.g) * segmentProgress);
+    const b = Math.round(start.b + (end.b - start.b) * segmentProgress);
+    
+    return `rgb(${r}, ${g}, ${b})`;
   };
 
   const averagePosition = getAveragePosition();
@@ -84,32 +113,41 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
             </div>
             
             <div className="relative">
-              <div className="relative h-3 rounded-full overflow-hidden" style={{ background: metricInfo.gradient }}>
+              <div className="relative h-3 rounded-full overflow-hidden" style={{ background: gradient }}>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
               </div>
               
-              {/* Volumetric average indicator */}
+              {/* Volumetric average indicator - perfectly centered */}
               {averagePosition !== null && (
                 <div className="relative group">
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    className="absolute -top-[6px] -translate-x-1/2 cursor-help"
-                    style={{ left: `${averagePosition}%` }}
+                    className="absolute top-0 -translate-y-1/2 -translate-x-1/2 cursor-help"
+                    style={{ 
+                      left: `${averagePosition}%`,
+                      top: '6px' // Half of the 12px (h-3) bar height
+                    }}
                   >
                     <div 
-                      className="w-3 h-3 rounded-full border-2 border-white shadow-lg"
+                      className="w-3 h-3 rounded-full border-2 border-white shadow-lg relative"
                       style={{ backgroundColor: averageColor }}
                     >
-                      <div className="absolute inset-0 rounded-full animate-ping opacity-75" style={{ backgroundColor: averageColor }}></div>
+                      <div 
+                        className="absolute inset-0 rounded-full animate-ping opacity-75" 
+                        style={{ backgroundColor: averageColor }}
+                      ></div>
                     </div>
                   </motion.div>
                   
-                  {/* Tooltip on hover */}
+                  {/* Tooltip on hover - increased z-index */}
                   <div 
-                    className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-2 py-1 rounded text-[10px] font-medium"
-                    style={{ left: `${averagePosition}%`, transform: 'translateX(-50%)' }}
+                    className="absolute -top-14 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-2 py-1 rounded text-[10px] font-medium z-[9999]"
+                    style={{ 
+                      left: `${averagePosition}%`,
+                      transform: 'translateX(-50%)'
+                    }}
                   >
                     Moyenne volumique: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
                     <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
