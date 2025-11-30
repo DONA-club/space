@@ -688,134 +688,135 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Space
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Gérez vos modèles 3D et données de capteurs
-          </p>
+    <TooltipProvider delayDuration={300}>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Space
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Gérez vos modèles 3D et données de capteurs
+            </p>
+          </div>
+          <Button onClick={() => setShowCreateForm(!showCreateForm)}>
+            <Plus size={16} className="mr-2" />
+            Nouvel Espace
+          </Button>
         </div>
-        <Button onClick={() => setShowCreateForm(!showCreateForm)}>
-          <Plus size={16} className="mr-2" />
-          Nouvel Espace
-        </Button>
-      </div>
 
-      <AnimatePresence>
-        {showCreateForm && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            <LiquidGlassCard className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Créer un nouvel espace</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="space-name">Nom de l'espace *</Label>
-                  <Input
-                    id="space-name"
-                    value={newSpaceName}
-                    onChange={(e) => setNewSpaceName(e.target.value)}
-                    placeholder="Ex: Salon Vesta"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="space-description">Description</Label>
-                  <Textarea
-                    id="space-description"
-                    value={newSpaceDescription}
-                    onChange={(e) => setNewSpaceDescription(e.target.value)}
-                    placeholder="Description de l'espace..."
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <Label className="mb-2 block">Localisation *</Label>
-                  <MapPicker
-                    initialLat={newSpaceLatitude}
-                    initialLng={newSpaceLongitude}
-                    onLocationSelect={(lat, lng) => {
-                      setNewSpaceLatitude(lat);
-                      setNewSpaceLongitude(lng);
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <Label>Modèle 3D (GLB/GLTF) *</Label>
-                  <div className="mt-2">
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = '.glb,.gltf';
-                        input.onchange = (e) => {
-                          const file = (e.target as HTMLInputElement).files?.[0];
-                          if (file) setGltfFile(file);
-                        };
-                        input.click();
-                      }}
-                    >
-                      <Upload size={16} className="mr-2" />
-                      {gltfFile ? gltfFile.name : 'Choisir un fichier'}
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Positions des capteurs (JSON) *</Label>
-                  <div className="mt-2 space-y-2">
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = '.json';
-                        input.onchange = (e) => {
-                          const file = (e.target as HTMLInputElement).files?.[0];
-                          if (file) handleJsonFileSelect(file);
-                        };
-                        input.click();
-                      }}
-                    >
-                      <Upload size={16} className="mr-2" />
-                      {jsonFile ? jsonFile.name : 'Choisir un fichier'}
-                    </Button>
-
-                    {jsonValidation && (
-                      <Alert className={jsonValidation.valid 
-                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                      }>
-                        {jsonValidation.valid ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                        ) : (
-                          <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                        )}
-                        <AlertDescription className={`text-xs whitespace-pre-line ${
-                          jsonValidation.valid 
-                            ? 'text-green-800 dark:text-green-200'
-                            : 'text-red-800 dark:text-red-200'
-                        }`}>
-                          {jsonValidation.message}
-                        </AlertDescription>
-                      </Alert>
-                    )}
+        <AnimatePresence>
+          {showCreateForm && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <LiquidGlassCard className="p-6">
+                <h3 className="text-lg font-semibold mb-4">Créer un nouvel espace</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="space-name">Nom de l'espace *</Label>
+                    <Input
+                      id="space-name"
+                      value={newSpaceName}
+                      onChange={(e) => setNewSpaceName(e.target.value)}
+                      placeholder="Ex: Salon Vesta"
+                    />
                   </div>
 
-                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <p className="font-medium mb-1">Format JSON attendu :</p>
-                    <pre className="text-xs overflow-x-auto bg-white dark:bg-black p-2 rounded">
+                  <div>
+                    <Label htmlFor="space-description">Description</Label>
+                    <Textarea
+                      id="space-description"
+                      value={newSpaceDescription}
+                      onChange={(e) => setNewSpaceDescription(e.target.value)}
+                      placeholder="Description de l'espace..."
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="mb-2 block">Localisation *</Label>
+                    <MapPicker
+                      initialLat={newSpaceLatitude}
+                      initialLng={newSpaceLongitude}
+                      onLocationSelect={(lat, lng) => {
+                        setNewSpaceLatitude(lat);
+                        setNewSpaceLongitude(lng);
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Modèle 3D (GLB/GLTF) *</Label>
+                    <div className="mt-2">
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = '.glb,.gltf';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) setGltfFile(file);
+                          };
+                          input.click();
+                        }}
+                      >
+                        <Upload size={16} className="mr-2" />
+                        {gltfFile ? gltfFile.name : 'Choisir un fichier'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label>Positions des capteurs (JSON) *</Label>
+                    <div className="mt-2 space-y-2">
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = '.json';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) handleJsonFileSelect(file);
+                          };
+                          input.click();
+                        }}
+                      >
+                        <Upload size={16} className="mr-2" />
+                        {jsonFile ? jsonFile.name : 'Choisir un fichier'}
+                      </Button>
+
+                      {jsonValidation && (
+                        <Alert className={jsonValidation.valid 
+                          ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                          : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                        }>
+                          {jsonValidation.valid ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                          )}
+                          <AlertDescription className={`text-xs whitespace-pre-line ${
+                            jsonValidation.valid 
+                              ? 'text-green-800 dark:text-green-200'
+                              : 'text-red-800 dark:text-red-200'
+                          }`}>
+                            {jsonValidation.message}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+
+                    <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <p className="font-medium mb-1">Format JSON attendu :</p>
+                      <pre className="text-xs overflow-x-auto bg-white dark:bg-black p-2 rounded">
 {`{
   "points": [
     {
@@ -826,153 +827,152 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     }
   ]
 }`}
-                    </pre>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    onClick={createSpace}
-                    disabled={creating || !newSpaceName || !gltfFile || !jsonFile || !jsonValidation?.valid}
-                    className="flex-1"
-                  >
-                    {creating ? (
-                      <>
-                        <Loader2 className="animate-spin mr-2" size={16} />
-                        Création...
-                      </>
-                    ) : (
-                      'Créer l\'espace'
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowCreateForm(false);
-                      setNewSpaceName('');
-                      setNewSpaceDescription('');
-                      setNewSpaceLatitude(48.8566);
-                      setNewSpaceLongitude(2.3522);
-                      setGltfFile(null);
-                      setJsonFile(null);
-                      setJsonValidation(null);
-                    }}
-                  >
-                    Annuler
-                  </Button>
-                </div>
-              </div>
-            </LiquidGlassCard>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {spaces.length === 0 ? (
-        <LiquidGlassCard className="p-12">
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            <FolderOpen size={48} className="mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium mb-2">Aucun espace créé</p>
-            <p className="text-sm">Créez votre premier espace pour commencer</p>
-          </div>
-        </LiquidGlassCard>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {spaces.map((space) => {
-            const stats = spaceStats.get(space.id);
-            const address = spaceAddresses.get(space.id);
-            const hasLocation = space.latitude && space.longitude;
-            
-            return (
-              <motion.div
-                key={space.id}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-              >
-                <LiquidGlassCard className="p-5 hover:shadow-lg transition-shadow h-full flex flex-col">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-lg truncate">{space.name}</h3>
-                      {hasLocation ? (
-                        address && (
-                          <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5" title={address}>
-                            {address}
-                          </p>
-                        )
-                      ) : (
-                        <p className="text-[10px] text-red-600 dark:text-red-400 mt-0.5">
-                          Adresse indisponible
-                        </p>
-                      )}
-                      {space.description && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mt-2">
-                          {space.description}
-                        </p>
-                      )}
+                      </pre>
                     </div>
-                    
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
-                          <MoreVertical size={16} />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openRenameDialog(space)}>
-                          <Edit2 size={14} className="mr-2" />
-                          Renommer l'espace
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Link2 size={14} className="mr-2" />
-                          Rattacher un système
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openMapDialog(space)}>
-                          <MapPin size={14} className="mr-2" />
-                          Changer la localisation
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {space.gltf_file_path ? (
-                          <DropdownMenuItem onClick={() => handleDeleteGltf(space)}>
-                            <FileX size={14} className="mr-2" />
-                            Effacer modèle 3D
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem onClick={() => handleUploadGltf(space)}>
-                            <FileUp size={14} className="mr-2" />
-                            Charger modèle 3D
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        {space.json_file_path ? (
-                          <DropdownMenuItem onClick={() => handleDeleteJson(space)}>
-                            <FileX size={14} className="mr-2" />
-                            Effacer mapping capteurs
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem onClick={() => handleUploadJson(space)}>
-                            <FileUp size={14} className="mr-2" />
-                            Charger mapping capteurs
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => deleteSpace(space)}
-                          className="text-red-600 dark:text-red-400"
-                        >
-                          <Trash2 size={14} className="mr-2" />
-                          Supprimer l'espace
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    <TooltipProvider>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={createSpace}
+                      disabled={creating || !newSpaceName || !gltfFile || !jsonFile || !jsonValidation?.valid}
+                      className="flex-1"
+                    >
+                      {creating ? (
+                        <>
+                          <Loader2 className="animate-spin mr-2" size={16} />
+                          Création...
+                        </>
+                      ) : (
+                        'Créer l\'espace'
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowCreateForm(false);
+                        setNewSpaceName('');
+                        setNewSpaceDescription('');
+                        setNewSpaceLatitude(48.8566);
+                        setNewSpaceLongitude(2.3522);
+                        setGltfFile(null);
+                        setJsonFile(null);
+                        setJsonValidation(null);
+                      }}
+                    >
+                      Annuler
+                    </Button>
+                  </div>
+                </div>
+              </LiquidGlassCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {spaces.length === 0 ? (
+          <LiquidGlassCard className="p-12">
+            <div className="text-center text-gray-500 dark:text-gray-400">
+              <FolderOpen size={48} className="mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium mb-2">Aucun espace créé</p>
+              <p className="text-sm">Créez votre premier espace pour commencer</p>
+            </div>
+          </LiquidGlassCard>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {spaces.map((space) => {
+              const stats = spaceStats.get(space.id);
+              const address = spaceAddresses.get(space.id);
+              const hasLocation = space.latitude && space.longitude;
+              
+              return (
+                <motion.div
+                  key={space.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                >
+                  <LiquidGlassCard className="p-5 hover:shadow-lg transition-shadow h-full flex flex-col">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-lg truncate">{space.name}</h3>
+                        {hasLocation ? (
+                          address && (
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5" title={address}>
+                              {address}
+                            </p>
+                          )
+                        ) : (
+                          <p className="text-[10px] text-red-600 dark:text-red-400 mt-0.5">
+                            Adresse indisponible
+                          </p>
+                        )}
+                        {space.description && (
+                          <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mt-2">
+                            {space.description}
+                          </p>
+                        )}
+                      </div>
+                      
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                            <MoreVertical size={16} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openRenameDialog(space)}>
+                            <Edit2 size={14} className="mr-2" />
+                            Renommer l'espace
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <Link2 size={14} className="mr-2" />
+                            Rattacher un système
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openMapDialog(space)}>
+                            <MapPin size={14} className="mr-2" />
+                            Changer la localisation
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {space.gltf_file_path ? (
+                            <DropdownMenuItem onClick={() => handleDeleteGltf(space)}>
+                              <FileX size={14} className="mr-2" />
+                              Effacer modèle 3D
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => handleUploadGltf(space)}>
+                              <FileUp size={14} className="mr-2" />
+                              Charger modèle 3D
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          {space.json_file_path ? (
+                            <DropdownMenuItem onClick={() => handleDeleteJson(space)}>
+                              <FileX size={14} className="mr-2" />
+                              Effacer mapping capteurs
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => handleUploadJson(space)}>
+                              <FileUp size={14} className="mr-2" />
+                              Charger mapping capteurs
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => deleteSpace(space)}
+                            className="text-red-600 dark:text-red-400"
+                          >
+                            <Trash2 size={14} className="mr-2" />
+                            Supprimer l'espace
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mb-3">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Badge 
                             variant="outline" 
-                            className={`text-xs ${space.gltf_file_name ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-800/20'}`}
+                            className={`text-xs cursor-help ${space.gltf_file_name ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-800/20'}`}
                           >
                             <Box size={12} className="mr-1" />
                             Modèle 3D
@@ -990,7 +990,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         <TooltipTrigger asChild>
                           <Badge 
                             variant="outline" 
-                            className={`text-xs ${stats?.indoorSensorCount ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700' : 'bg-gray-50 dark:bg-gray-800/20'}`}
+                            className={`text-xs cursor-help ${stats?.indoorSensorCount ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700' : 'bg-gray-50 dark:bg-gray-800/20'}`}
                           >
                             <Activity size={12} className="mr-1" />
                             {stats?.indoorSensorCount || 0} capteurs
@@ -1003,29 +1003,27 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                           )}
                         </TooltipContent>
                       </Tooltip>
-                    </TooltipProvider>
-                  </div>
+                    </div>
 
-                  <div className="space-y-2 mb-4 flex-1">
-                    {stats?.isLiveConnected ? (
-                      <div className="flex items-center gap-2 text-xs">
-                        <Radio size={12} className="text-green-500 animate-pulse" />
-                        <span className="text-green-600 dark:text-green-400 font-medium">Système connecté (Live)</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                          <Radio size={12} className="text-gray-400" />
-                          <span>Hors ligne - Données historiques</span>
+                    <div className="space-y-2 mb-4 flex-1">
+                      {stats?.isLiveConnected ? (
+                        <div className="flex items-center gap-2 text-xs">
+                          <Radio size={12} className="text-green-500 animate-pulse" />
+                          <span className="text-green-600 dark:text-green-400 font-medium">Système connecté (Live)</span>
                         </div>
-                        
-                        <div className="flex flex-wrap gap-2">
-                          <TooltipProvider>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                            <Radio size={12} className="text-gray-400" />
+                            <span>Hors ligne - Données historiques</span>
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-2">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Badge 
                                   variant="outline" 
-                                  className={`text-xs ${stats?.hasOutdoorData ? 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-700' : 'bg-gray-50 dark:bg-gray-800/20 opacity-50'}`}
+                                  className={`text-xs cursor-help ${stats?.hasOutdoorData ? 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-700' : 'bg-gray-50 dark:bg-gray-800/20 opacity-50'}`}
                                 >
                                   <Cloud size={12} className="mr-1" />
                                   Extérieur
@@ -1045,7 +1043,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                               <TooltipTrigger asChild>
                                 <Badge 
                                   variant="outline" 
-                                  className={`text-xs ${stats?.dataStartDate ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-800/20 opacity-50'}`}
+                                  className={`text-xs cursor-help ${stats?.dataStartDate ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-800/20 opacity-50'}`}
                                 >
                                   <Calendar size={12} className="mr-1" />
                                   {formatPreciseDuration(stats?.dataStartDate || null, stats?.dataEndDate || null)}
@@ -1069,7 +1067,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                                 <TooltipTrigger asChild>
                                   <Badge 
                                     variant="outline" 
-                                    className={`text-xs ${
+                                    className={`text-xs cursor-help ${
                                       (stats.dataDelayDays || 0) > 7 
                                         ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' 
                                         : (stats.dataDelayDays || 0) > 1
@@ -1089,32 +1087,30 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                                 </TooltipContent>
                               </Tooltip>
                             )}
-                          </TooltipProvider>
+                          </div>
+
+                          {stats?.hasDataGaps && (
+                            <Alert className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 py-2">
+                              <AlertTriangle className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+                              <AlertDescription className="text-xs text-orange-800 dark:text-orange-200">
+                                Périodes de données manquantes détectées
+                              </AlertDescription>
+                            </Alert>
+                          )}
+
+                          {!stats?.dataStartDate && (
+                            <Alert className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 py-2">
+                              <AlertCircle className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
+                              <AlertDescription className="text-xs text-yellow-800 dark:text-yellow-200">
+                                Aucune donnée historique disponible
+                              </AlertDescription>
+                            </Alert>
+                          )}
                         </div>
+                      )}
+                    </div>
 
-                        {stats?.hasDataGaps && (
-                          <Alert className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 py-2">
-                            <AlertTriangle className="h-3 w-3 text-orange-600 dark:text-orange-400" />
-                            <AlertDescription className="text-xs text-orange-800 dark:text-orange-200">
-                              Périodes de données manquantes détectées
-                            </AlertDescription>
-                          </Alert>
-                        )}
-
-                        {!stats?.dataStartDate && (
-                          <Alert className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 py-2">
-                            <AlertCircle className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
-                            <AlertDescription className="text-xs text-yellow-800 dark:text-yellow-200">
-                              Aucune donnée historique disponible
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <TooltipProvider>
+                    <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -1135,89 +1131,89 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                           </p>
                         </TooltipContent>
                       </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </LiquidGlassCard>
-              </motion.div>
-            );
-          })}
-        </div>
-      )}
-
-      <Dialog open={showMapDialog} onOpenChange={setShowMapDialog}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Localisation de {selectedSpaceForMap?.name}</DialogTitle>
-            <DialogDescription>
-              Visualisez ou modifiez la position géographique de cet espace
-            </DialogDescription>
-          </DialogHeader>
-          
-          <MapPicker
-            initialLat={tempMapLat}
-            initialLng={tempMapLng}
-            onLocationSelect={(lat, lng) => {
-              setTempMapLat(lat);
-              setTempMapLng(lng);
-            }}
-          />
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowMapDialog(false)}>
-              Annuler
-            </Button>
-            <Button onClick={handleUpdateLocation} disabled={updatingLocation}>
-              {updatingLocation ? (
-                <>
-                  <Loader2 className="animate-spin mr-2" size={16} />
-                  Mise à jour...
-                </>
-              ) : (
-                'Enregistrer'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Renommer l'espace</DialogTitle>
-            <DialogDescription>
-              Modifier le nom de "{selectedSpaceForRename?.name}"
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="new-name">Nouveau nom</Label>
-              <Input
-                id="new-name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Entrez le nouveau nom"
-              />
-            </div>
+                    </div>
+                  </LiquidGlassCard>
+                </motion.div>
+              );
+            })}
           </div>
+        )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
-              Annuler
-            </Button>
-            <Button onClick={handleRename} disabled={renaming || !newName.trim()}>
-              {renaming ? (
-                <>
-                  <Loader2 className="animate-spin mr-2" size={16} />
-                  Renommage...
-                </>
-              ) : (
-                'Renommer'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        <Dialog open={showMapDialog} onOpenChange={setShowMapDialog}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Localisation de {selectedSpaceForMap?.name}</DialogTitle>
+              <DialogDescription>
+                Visualisez ou modifiez la position géographique de cet espace
+              </DialogDescription>
+            </DialogHeader>
+            
+            <MapPicker
+              initialLat={tempMapLat}
+              initialLng={tempMapLng}
+              onLocationSelect={(lat, lng) => {
+                setTempMapLat(lat);
+                setTempMapLng(lng);
+              }}
+            />
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowMapDialog(false)}>
+                Annuler
+              </Button>
+              <Button onClick={handleUpdateLocation} disabled={updatingLocation}>
+                {updatingLocation ? (
+                  <>
+                    <Loader2 className="animate-spin mr-2" size={16} />
+                    Mise à jour...
+                  </>
+                ) : (
+                  'Enregistrer'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Renommer l'espace</DialogTitle>
+              <DialogDescription>
+                Modifier le nom de "{selectedSpaceForRename?.name}"
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="new-name">Nouveau nom</Label>
+                <Input
+                  id="new-name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Entrez le nouveau nom"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
+                Annuler
+              </Button>
+              <Button onClick={handleRename} disabled={renaming || !newName.trim()}>
+                {renaming ? (
+                  <>
+                    <Loader2 className="animate-spin mr-2" size={16} />
+                    Renommage...
+                  </>
+                ) : (
+                  'Renommer'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TooltipProvider>
   );
 };
