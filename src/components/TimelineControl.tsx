@@ -17,7 +17,7 @@ interface DewPointDifference {
 
 const POINTS_BEFORE = 500;
 const POINTS_AFTER = 500;
-const PRELOAD_THRESHOLD = 100; // Charger 100 points avant la fin
+const PRELOAD_THRESHOLD = 333;
 const COLOR_ZONE_RADIUS = 0.15;
 
 export const TimelineControl = () => {
@@ -42,6 +42,7 @@ export const TimelineControl = () => {
   const [loopEnabled, setLoopEnabled] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const lastScrollLoadRef = useRef<number>(0);
+  const lastPlaybackLoadRef = useRef<number>(0);
 
   useEffect(() => {
     if (timeRange && rangeStart === null && rangeEnd === null) {
@@ -50,12 +51,10 @@ export const TimelineControl = () => {
     }
   }, [timeRange, rangeStart, rangeEnd]);
 
-  // Check if timestamp has loaded data
   const hasDataAtTimestamp = (timestamp: number): boolean => {
     return loadedRanges.some(r => r.start <= timestamp && r.end >= timestamp);
   };
 
-  // Get the furthest loaded timestamp in a direction
   const getFurthestLoadedTimestamp = (from: number, direction: 'forward' | 'backward'): number => {
     const relevantRanges = loadedRanges.filter(r => 
       direction === 'forward' ? r.start >= from : r.end <= from
@@ -70,7 +69,6 @@ export const TimelineControl = () => {
     }
   };
 
-  // Load data window
   const loadDewPointWindow = async (targetTimestamp: number) => {
     if (!currentSpace || !hasOutdoorData || !timeRange) return;
 
@@ -219,26 +217,31 @@ export const TimelineControl = () => {
     }
   };
 
-  // Initial load and preload on timestamp change
   useEffect(() => {
     if (!currentSpace || !hasOutdoorData || !timeRange || !rangeStart || !rangeEnd) return;
 
-    // Load current position
     loadDewPointWindow(currentTimestamp);
+  }, [currentSpace, hasOutdoorData, timeRange, sensors, rangeStart, rangeEnd]);
 
-    // Check if we need to preload ahead
+  useEffect(() => {
+    if (!isPlaying || !rangeStart || !rangeEnd || !currentSpace || !hasOutdoorData) return;
+
     const currentRange = loadedRanges.find(r => r.start <= currentTimestamp && r.end >= currentTimestamp);
     if (currentRange) {
-      const pointsToEnd = (currentRange.end - currentTimestamp) / (60 * 1000); // Assuming 1 minute intervals
+      const pointsToEnd = Math.floor((currentRange.end - currentTimestamp) / (60 * 1000));
       
       if (pointsToEnd < PRELOAD_THRESHOLD) {
-        const preloadTimestamp = currentRange.end + (POINTS_AFTER * 60 * 1000);
-        if (preloadTimestamp <= rangeEnd) {
-          loadDewPointWindow(preloadTimestamp);
+        const now = Date.now();
+        if (now - lastPlaybackLoadRef.current > 1000) {
+          lastPlaybackLoadRef.current = now;
+          const preloadTimestamp = currentRange.end + (PRELOAD_THRESHOLD * 60 * 1000);
+          if (preloadTimestamp <= rangeEnd) {
+            loadDewPointWindow(preloadTimestamp);
+          }
         }
       }
     }
-  }, [currentSpace, hasOutdoorData, timeRange, sensors, currentTimestamp, rangeStart, rangeEnd]);
+  }, [currentTimestamp, isPlaying, rangeStart, rangeEnd, loadedRanges, currentSpace, hasOutdoorData]);
 
   const { minDiff, maxDiff, diffRange } = useMemo(() => {
     if (dewPointDifferences.length === 0) {
@@ -253,7 +256,6 @@ export const TimelineControl = () => {
     return { minDiff: min, maxDiff: max, diffRange: range };
   }, [dewPointDifferences]);
 
-  // Playback with loop
   useEffect(() => {
     if (!isPlaying || !rangeStart || !rangeEnd) return;
 
@@ -261,7 +263,6 @@ export const TimelineControl = () => {
       setCurrentTimestamp((prev) => {
         const next = prev + (1000 * playbackSpeed);
         
-        // Check if we have data at next position
         if (!hasDataAtTimestamp(next)) {
           const furthest = getFurthestLoadedTimestamp(prev, 'forward');
           if (furthest > prev && furthest <= rangeEnd) {
@@ -284,7 +285,6 @@ export const TimelineControl = () => {
     return () => clearInterval(interval);
   }, [isPlaying, playbackSpeed, rangeStart, rangeEnd, setCurrentTimestamp, setPlaying, loopEnabled, hasDataAtTimestamp, getFurthestLoadedTimestamp]);
 
-  // Handle wheel event with data loading
   useEffect(() => {
     const timelineElement = timelineRef.current;
     if (!timelineElement || !timeRange || !rangeStart || !rangeEnd) return;
@@ -302,16 +302,13 @@ export const TimelineControl = () => {
 
       const newTimestamp = currentTimestamp + timeShift;
       
-      // Clamp to loaded data range
       let clampedTimestamp = newTimestamp;
       
       if (!hasDataAtTimestamp(newTimestamp)) {
         if (timeShift > 0) {
-          // Moving forward - clamp to furthest loaded
           const furthest = getFurthestLoadedTimestamp(currentTimestamp, 'forward');
           clampedTimestamp = Math.min(newTimestamp, furthest);
         } else {
-          // Moving backward - clamp to furthest loaded
           const furthest = getFurthestLoadedTimestamp(currentTimestamp, 'backward');
           clampedTimestamp = Math.max(newTimestamp, furthest);
         }
@@ -321,11 +318,18 @@ export const TimelineControl = () => {
       
       setCurrentTimestamp(clampedTimestamp);
       
-      // Trigger load if we haven't loaded recently
       const now = Date.now();
       if (now - lastScrollLoadRef.current > 500) {
         lastScrollLoadRef.current = now;
-        loadDewPointWindow(clampedTimestamp);
+        
+        const direction = timeShift > 0 ? 'forward' : 'backward';
+        const preloadTimestamp = direction === 'forward'
+          ? clampedTimestamp + (PRELOAD_THRESHOLD * 60 * 1000)
+          : clampedTimestamp - (PRELOAD_THRESHOLD * 60 * 1000);
+        
+        if (preloadTimestamp >= rangeStart && preloadTimestamp <= rangeEnd) {
+          loadDewPointWindow(preloadTimestamp);
+        }
       }
     };
 
@@ -369,15 +373,6 @@ export const TimelineControl = () => {
 
     let clampedTimestamp = Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1]));
     
-    // Clamp to loaded data
-    if (!hasDataAtTimestamp(clampedTimestamp)) {
-      const direction = clampedTimestamp > currentTimestamp ? 'forward' : 'backward';
-      const furthest = getFurthestLoadedTimestamp(currentTimestamp, direction);
-      clampedTimestamp = direction === 'forward' 
-        ? Math.min(clampedTimestamp, furthest)
-        : Math.max(clampedTimestamp, furthest);
-    }
-    
     setCurrentTimestamp(clampedTimestamp);
     loadDewPointWindow(clampedTimestamp);
   };
@@ -397,7 +392,6 @@ export const TimelineControl = () => {
     } else if (isDragging === 'current') {
       let clampedTimestamp = Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1]));
       
-      // Clamp to loaded data
       if (!hasDataAtTimestamp(clampedTimestamp)) {
         const direction = clampedTimestamp > currentTimestamp ? 'forward' : 'backward';
         const furthest = getFurthestLoadedTimestamp(currentTimestamp, direction);
@@ -545,6 +539,13 @@ export const TimelineControl = () => {
   const negativeFillPath = generateNegativeFillPath(dewPointDifferences);
   const zeroLineY = getZeroLineY();
   const hasNegativeValues = dewPointDifferences.some(d => d.difference < 0);
+
+  const rangeStartPos = getPosition(rangeStart);
+  const rangeEndPos = getPosition(rangeEnd);
+  const currentPos = getPosition(currentTimestamp);
+  
+  const colorZoneStart = Math.max(rangeStartPos, currentPos - (COLOR_ZONE_RADIUS * 100));
+  const colorZoneEnd = Math.min(rangeEndPos, currentPos + (COLOR_ZONE_RADIUS * 100));
 
   return (
     <LiquidGlassCard className="p-4">
@@ -829,9 +830,9 @@ export const TimelineControl = () => {
                   <mask id="colorZoneMask">
                     <rect x="0" y="0" width="100" height="100" fill="black" />
                     <rect 
-                      x={`${Math.max(0, getPosition(currentTimestamp) - (COLOR_ZONE_RADIUS * 100))}`}
+                      x={`${colorZoneStart}`}
                       y="0" 
-                      width={`${COLOR_ZONE_RADIUS * 200}`}
+                      width={`${colorZoneEnd - colorZoneStart}`}
                       height="100" 
                       fill="white"
                     />

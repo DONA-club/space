@@ -19,25 +19,25 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
     switch (selectedMetric) {
       case 'temperature':
         return {
-          label: 'Température',
+          label: 'TEMPÉRATURE',
           unit: '°C',
           colors: ['#3b82f6', '#06b6d4', '#10b981', '#fbbf24', '#f97316', '#ef4444'],
         };
       case 'humidity':
         return {
-          label: 'Humidité Relative',
+          label: 'HUMIDITÉ RELATIVE',
           unit: '%',
           colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#3b82f6'],
         };
       case 'absoluteHumidity':
         return {
-          label: 'Humidité Absolue',
+          label: 'HUMIDITÉ ABSOLUE',
           unit: 'g/m³',
           colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7'],
         };
       case 'dewPoint':
         return {
-          label: 'Point de Rosée',
+          label: 'POINT DE ROSÉE',
           unit: '°C',
           colors: ['#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4'],
         };
