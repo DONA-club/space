@@ -35,6 +35,7 @@ export const SensorPanel = () => {
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setHasOutdoorData = useAppStore((state) => state.setHasOutdoorData);
   const timeRange = useAppStore((state) => state.timeRange);
+  const outdoorData = useAppStore((state) => state.outdoorData);
   
   const [isExpanded, setIsExpanded] = useState(true);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
@@ -449,6 +450,53 @@ export const SensorPanel = () => {
     }
   };
 
+  const downloadOutdoorData = async () => {
+    if (!currentSpace) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('sensor_data')
+        .select('*')
+        .eq('space_id', currentSpace.id)
+        .eq('sensor_id', 0)
+        .order('timestamp', { ascending: true });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        showError('Aucune donnée disponible');
+        return;
+      }
+
+      const headers = ['timestamp', 'temperature', 'humidity', 'absolute_humidity', 'dew_point'];
+      const csvLines = [headers.join(',')];
+
+      data.forEach(row => {
+        csvLines.push([
+          row.timestamp,
+          row.temperature,
+          row.humidity,
+          row.absolute_humidity,
+          row.dew_point
+        ].join(','));
+      });
+
+      const csv = csvLines.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${outdoorSensorName}_${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      showSuccess('Données extérieures téléchargées');
+    } catch (error) {
+      console.error('Error downloading outdoor data:', error);
+      showError('Erreur lors du téléchargement');
+    }
+  };
+
   const deleteAllData = async (sensorId: number) => {
     if (!currentSpace) return;
 
@@ -658,6 +706,19 @@ export const SensorPanel = () => {
                         </div>
                       </div>
 
+                      {outdoorData && (
+                        <div className="grid grid-cols-2 gap-1 mb-1">
+                          <div className="flex items-center gap-1 text-[10px]">
+                            <Thermometer size={10} className="text-red-500" />
+                            <span>{outdoorData.temperature.toFixed(1)}°C</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px]">
+                            <Droplets size={10} className="text-blue-500" />
+                            <span>{outdoorData.humidity.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      )}
+
                       {outdoorLastDate && (
                         <Alert className={`mb-1 py-1 px-2 ${isDataOld(outdoorLastDate) ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'}`}>
                           <div className="flex items-center gap-1.5">
@@ -693,6 +754,18 @@ export const SensorPanel = () => {
                           >
                             <Upload size={10} className="mr-1" />
                             CSV
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 w-6 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadOutdoorData();
+                            }}
+                          >
+                            <Download size={10} />
                           </Button>
 
                           <Button
