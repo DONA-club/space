@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Button } from './ui/button';
@@ -23,53 +22,59 @@ interface MapPickerProps {
   onLocationSelect: (lat: number, lng: number) => void;
 }
 
-function LocationMarker({ position, onPositionChange }: { 
-  position: [number, number]; 
-  onPositionChange: (lat: number, lng: number) => void;
-}) {
-  const markerRef = useRef<L.Marker>(null);
-
-  useMapEvents({
-    click(e) {
-      onPositionChange(e.latlng.lat, e.latlng.lng);
-    },
-  });
-
-  useEffect(() => {
-    const marker = markerRef.current;
-    if (marker) {
-      marker.setLatLng(position);
-      
-      if (marker.dragging) {
-        marker.dragging.enable();
-      }
-      
-      const handleDragEnd = () => {
-        const pos = marker.getLatLng();
-        onPositionChange(pos.lat, pos.lng);
-      };
-      
-      marker.on('dragend', handleDragEnd);
-      
-      return () => {
-        marker.off('dragend', handleDragEnd);
-      };
-    }
-  }, [position, onPositionChange]);
-
-  return (
-    <Marker
-      ref={markerRef}
-      position={position}
-    />
-  );
-}
-
 export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocationSelect }: MapPickerProps) => {
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  
   const [position, setPosition] = useState<[number, number]>([initialLat, initialLng]);
-  const [mapKey, setMapKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    // Create map
+    const map = L.map(mapContainerRef.current).setView(position, 13);
+
+    // Add tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Create marker
+    const marker = L.marker(position, {
+      draggable: true
+    }).addTo(map);
+
+    // Handle marker drag
+    marker.on('dragend', () => {
+      const pos = marker.getLatLng();
+      handlePositionChange(pos.lat, pos.lng);
+    });
+
+    // Handle map click
+    map.on('click', (e) => {
+      handlePositionChange(e.latlng.lat, e.latlng.lng);
+    });
+
+    mapRef.current = map;
+    markerRef.current = marker;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+  }, []);
+
+  // Update marker position
+  useEffect(() => {
+    if (markerRef.current) {
+      markerRef.current.setLatLng(position);
+    }
+  }, [position]);
 
   const handlePositionChange = (lat: number, lng: number) => {
     setPosition([lat, lng]);
@@ -91,7 +96,11 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
         const newPosition: [number, number] = [parseFloat(lat), parseFloat(lon)];
         setPosition(newPosition);
         onLocationSelect(newPosition[0], newPosition[1]);
-        setMapKey(prev => prev + 1);
+        
+        // Pan map to new position
+        if (mapRef.current) {
+          mapRef.current.setView(newPosition, 13);
+        }
       }
     } catch (error) {
       console.error('Geocoding error:', error);
@@ -110,7 +119,11 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
           ];
           setPosition(newPosition);
           onLocationSelect(newPosition[0], newPosition[1]);
-          setMapKey(prev => prev + 1);
+          
+          // Pan map to new position
+          if (mapRef.current) {
+            mapRef.current.setView(newPosition, 13);
+          }
         },
         (error) => {
           console.error('Geolocation error:', error);
@@ -171,6 +184,9 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
               const lat = parseFloat(e.target.value);
               if (!isNaN(lat)) {
                 handlePositionChange(lat, position[1]);
+                if (mapRef.current) {
+                  mapRef.current.setView([lat, position[1]], mapRef.current.getZoom());
+                }
               }
             }}
             className="text-sm"
@@ -186,6 +202,9 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
               const lng = parseFloat(e.target.value);
               if (!isNaN(lng)) {
                 handlePositionChange(position[0], lng);
+                if (mapRef.current) {
+                  mapRef.current.setView([position[0], lng], mapRef.current.getZoom());
+                }
               }
             }}
             className="text-sm"
@@ -193,21 +212,10 @@ export const MapPicker = ({ initialLat = 48.8566, initialLng = 2.3522, onLocatio
         </div>
       </div>
 
-      <div className="relative h-96 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-700">
-        <MapContainer
-          key={mapKey}
-          {...{ center: position } as any}
-          zoom={13}
-          style={{ height: '100%', width: '100%' }}
-          scrollWheelZoom={true}
-        >
-          <TileLayer
-            {...{ attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' } as any}
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <LocationMarker position={position} onPositionChange={handlePositionChange} />
-        </MapContainer>
-      </div>
+      <div 
+        ref={mapContainerRef}
+        className="relative h-96 rounded-lg overflow-hidden border border-gray-300 dark:border-gray-700"
+      />
 
       <div className="text-xs text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
         <div className="flex items-start gap-2">
