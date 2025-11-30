@@ -42,6 +42,8 @@ export const SensorPanel = () => {
   const [sensorDataCounts, setSensorDataCounts] = useState<Map<number, number>>(new Map());
   const [lastDataDates, setLastDataDates] = useState<Map<number, Date>>(new Map());
   const [outdoorDataCount, setOutdoorDataCount] = useState(0);
+  const [outdoorSensorName, setOutdoorSensorName] = useState<string>('Extérieur');
+  const [outdoorLastDate, setOutdoorLastDate] = useState<Date | null>(null);
 
   useEffect(() => {
     if (currentSpace && mode === 'replay') {
@@ -94,15 +96,46 @@ export const SensorPanel = () => {
     if (!currentSpace) return;
 
     try {
-      const { count, error } = await supabase
+      const { count, error: countError } = await supabase
         .from('sensor_data')
         .select('*', { count: 'exact', head: true })
         .eq('space_id', currentSpace.id)
         .eq('sensor_id', 0);
 
-      if (error) throw error;
+      if (countError) throw countError;
       setOutdoorDataCount(count || 0);
       setHasOutdoorData((count || 0) > 0);
+
+      if (count && count > 0) {
+        const { data: nameData, error: nameError } = await supabase
+          .from('sensor_data')
+          .select('sensor_name')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', 0)
+          .limit(1)
+          .single();
+
+        if (nameError && nameError.code !== 'PGRST116') throw nameError;
+        
+        if (nameData && nameData.sensor_name) {
+          setOutdoorSensorName(nameData.sensor_name);
+        }
+
+        const { data: lastData, error: dateError } = await supabase
+          .from('sensor_data')
+          .select('timestamp')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', 0)
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (dateError && dateError.code !== 'PGRST116') throw dateError;
+        
+        if (lastData) {
+          setOutdoorLastDate(new Date(lastData.timestamp));
+        }
+      }
     } catch (error) {
       console.error('Error loading outdoor data info:', error);
     }
@@ -124,12 +157,29 @@ export const SensorPanel = () => {
       .toLowerCase();
   };
 
+  const detectOutdoorName = (filename: string): string => {
+    const normalized = normalizeName(filename);
+    
+    if (normalized.includes('balcon')) return 'Balcon';
+    if (normalized.includes('terrasse')) return 'Terrasse';
+    if (normalized.includes('jardin')) return 'Jardin';
+    if (normalized.includes('ville') || normalized.includes('city')) return 'Ville';
+    if (normalized.includes('outdoor') || normalized.includes('outside')) return 'Extérieur';
+    if (normalized.includes('exterieur')) return 'Extérieur';
+    
+    return 'Extérieur';
+  };
+
   const isOutdoorFile = (filename: string): boolean => {
     const normalized = normalizeName(filename);
     return normalized.includes('balcon') || 
+           normalized.includes('terrasse') ||
+           normalized.includes('jardin') ||
            normalized.includes('exterieur') || 
            normalized.includes('outdoor') ||
-           normalized.includes('outside');
+           normalized.includes('outside') ||
+           normalized.includes('ville') ||
+           normalized.includes('city');
   };
 
   const calculateSimilarity = (str1: string, str2: string): number => {
@@ -171,7 +221,8 @@ export const SensorPanel = () => {
         if (!file.name.endsWith('.csv')) continue;
 
         if (isOutdoorFile(file.name)) {
-          await handleOutdoorCSVUpload(file, false);
+          const detectedName = detectOutdoorName(file.name);
+          await handleOutdoorCSVUpload(file, false, detectedName);
           outdoorFileProcessed = true;
           matchedCount++;
           continue;
@@ -214,7 +265,7 @@ export const SensorPanel = () => {
     }
   };
 
-  const handleOutdoorCSVUpload = async (file: File, showToast: boolean = true) => {
+  const handleOutdoorCSVUpload = async (file: File, showToast: boolean = true, detectedName: string = 'Extérieur') => {
     if (!currentSpace) return;
 
     try {
@@ -243,7 +294,7 @@ export const SensorPanel = () => {
         newData.push({
           space_id: currentSpace.id,
           sensor_id: 0,
-          sensor_name: 'Extérieur',
+          sensor_name: detectedName,
           timestamp: timestamp.toISOString(),
           temperature: temp,
           humidity: hum,
@@ -428,7 +479,7 @@ export const SensorPanel = () => {
   const deleteOutdoorData = async () => {
     if (!currentSpace) return;
 
-    if (!confirm('Supprimer toutes les données extérieures ?')) {
+    if (!confirm(`Supprimer toutes les données de ${outdoorSensorName} ?`)) {
       return;
     }
 
@@ -441,7 +492,9 @@ export const SensorPanel = () => {
 
       if (error) throw error;
 
-      showSuccess('Données extérieures supprimées');
+      showSuccess('Données supprimées');
+      setOutdoorSensorName('Extérieur');
+      setOutdoorLastDate(null);
       loadOutdoorDataInfo();
     } catch (error) {
       console.error('Error deleting outdoor data:', error);
@@ -544,65 +597,118 @@ export const SensorPanel = () => {
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                {/* Outdoor Sensor Section */}
+                {/* Bulk Upload Button */}
                 {currentSpace && mode === 'replay' && (
-                  <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <CloudSun size={14} className="text-blue-500" />
-                        <h3 className="text-xs font-semibold">Extérieur</h3>
-                        {hasOutdoorData && (
-                          <Badge variant="outline" className="text-xs h-5">
+                  <div className="mb-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border-blue-300 dark:border-blue-700 h-8"
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.csv';
+                        input.multiple = true;
+                        input.onchange = (e) => {
+                          const files = (e.target as HTMLInputElement).files;
+                          if (files && files.length > 0) handleBulkCSVUpload(files);
+                        };
+                        input.click();
+                      }}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="animate-spin mr-2" size={14} />
+                          Chargement...
+                        </>
+                      ) : (
+                        <>
+                          <FolderUp size={14} className="mr-2" />
+                          Charger plusieurs CSV
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center">
+                      Matching intelligent (capteurs + extérieur)
+                    </p>
+                  </div>
+                )}
+
+                {/* Outdoor Sensor Box */}
+                {hasOutdoorData && (
+                  <div className="mb-3">
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="p-2 rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/20 cursor-pointer transition-all hover:border-blue-300 dark:hover:border-blue-600"
+                      onMouseEnter={() => handleSensorHover(0)}
+                      onMouseLeave={handleSensorLeave}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium truncate flex items-center gap-1.5">
+                          <CloudSun size={12} className="text-blue-600" />
+                          {outdoorSensorName}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[9px] h-4 px-1 bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700">
                             {outdoorDataCount.toLocaleString()}
                           </Badge>
-                        )}
+                        </div>
                       </div>
-                    </div>
 
-                    {hasOutdoorData ? (
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 h-7 text-[10px] bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
-                          disabled
-                        >
-                          <CloudSun size={10} className="mr-1" />
-                          Données chargées
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 w-7 p-0"
-                          onClick={deleteOutdoorData}
-                        >
-                          <Trash2 size={10} />
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full h-7 text-[10px]"
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = '.csv';
-                          input.onchange = (e) => {
-                            const file = (e.target as HTMLInputElement).files?.[0];
-                            if (file) handleOutdoorCSVUpload(file);
-                          };
-                          input.click();
-                        }}
-                        disabled={loading}
-                      >
-                        <Upload size={10} className="mr-1" />
-                        Charger données extérieures
-                      </Button>
-                    )}
-                    <p className="text-[9px] text-gray-500 dark:text-gray-400 mt-1 text-center">
-                      Optionnel • Fichier: balcon_data.csv ou exterieur_data.csv
-                    </p>
+                      {outdoorLastDate && (
+                        <Alert className={`mb-1 py-1 px-2 ${isDataOld(outdoorLastDate) ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'}`}>
+                          <div className="flex items-center gap-1.5">
+                            <Clock className={`h-3 w-3 flex-shrink-0 ${isDataOld(outdoorLastDate) ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`} />
+                            <AlertDescription className={`text-[10px] leading-tight ${isDataOld(outdoorLastDate) ? 'text-orange-800 dark:text-orange-200' : 'text-green-800 dark:text-green-200'}`}>
+                              Dernières données : {formatRelativeTime(outdoorLastDate)}
+                            </AlertDescription>
+                          </div>
+                        </Alert>
+                      )}
+
+                      {currentSpace && mode === 'replay' && (
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 h-6 text-[10px]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const input = document.createElement('input');
+                              input.type = 'file';
+                              input.accept = '.csv';
+                              input.onchange = (e) => {
+                                const file = (e.target as HTMLInputElement).files?.[0];
+                                if (file) {
+                                  const detectedName = detectOutdoorName(file.name);
+                                  handleOutdoorCSVUpload(file, true, detectedName);
+                                }
+                              };
+                              input.click();
+                            }}
+                            disabled={loading}
+                          >
+                            <Upload size={10} className="mr-1" />
+                            CSV
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 w-6 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteOutdoorData();
+                            }}
+                          >
+                            <Trash2 size={10} />
+                          </Button>
+                        </div>
+                      )}
+                    </motion.div>
                   </div>
                 )}
 
@@ -615,43 +721,6 @@ export const SensorPanel = () => {
                       {sensors.length}
                     </Badge>
                   </div>
-
-                  {currentSpace && mode === 'replay' && (
-                    <div className="mb-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border-blue-300 dark:border-blue-700 h-8"
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = '.csv';
-                          input.multiple = true;
-                          input.onchange = (e) => {
-                            const files = (e.target as HTMLInputElement).files;
-                            if (files && files.length > 0) handleBulkCSVUpload(files);
-                          };
-                          input.click();
-                        }}
-                        disabled={loading}
-                      >
-                        {loading ? (
-                          <>
-                            <Loader2 className="animate-spin mr-2" size={14} />
-                            Chargement...
-                          </>
-                        ) : (
-                          <>
-                            <FolderUp size={14} className="mr-2" />
-                            Charger plusieurs CSV
-                          </>
-                        )}
-                      </Button>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center">
-                        Matching intelligent (capteurs + extérieur)
-                      </p>
-                    </div>
-                  )}
 
                   {sensors.length === 0 ? (
                     <div className="text-center text-gray-500 dark:text-gray-400 py-4">

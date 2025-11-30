@@ -24,6 +24,7 @@ import { calculateSceneVolume } from "@/utils/volumeCalculations";
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<SceneRef | null>(null);
+  const pulseAnimationRef = useRef<number | null>(null);
   
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,7 +92,7 @@ export const Scene3DViewer = () => {
     dataReady
   });
 
-  // Handle sensor hover pulse effect
+  // Handle continuous sensor hover pulse effect
   useEffect(() => {
     const handleSensorHover = (event: CustomEvent) => {
       if (!sceneRef.current) return;
@@ -100,32 +101,26 @@ export const Scene3DViewer = () => {
       const meshes = sceneRef.current.sensorMeshes.get(sensorId);
       
       if (meshes) {
-        // Animate pulse effect
-        const startScale = 1;
-        const endScale = 1.3;
-        const duration = 500;
+        // Cancel any existing animation
+        if (pulseAnimationRef.current !== null) {
+          cancelAnimationFrame(pulseAnimationRef.current);
+        }
+
+        // Start continuous pulse animation
         const startTime = Date.now();
+        const pulseDuration = 1000; // 1 second per pulse
         
         const animate = () => {
-          const elapsed = Date.now() - startTime;
-          const progress = Math.min(elapsed / duration, 1);
+          const elapsed = (Date.now() - startTime) % pulseDuration;
+          const progress = elapsed / pulseDuration;
           
-          // Ease in-out
-          const eased = progress < 0.5 
-            ? 2 * progress * progress 
-            : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-          
-          const scale = startScale + (endScale - startScale) * Math.sin(eased * Math.PI);
+          // Smooth sine wave for continuous pulsing
+          const scale = 1 + 0.3 * Math.sin(progress * Math.PI * 2);
           
           meshes.sphere.scale.setScalar(scale);
           meshes.glow.scale.setScalar(scale * 1.5);
           
-          if (progress < 1) {
-            requestAnimationFrame(animate);
-          } else {
-            meshes.sphere.scale.setScalar(1);
-            meshes.glow.scale.setScalar(1);
-          }
+          pulseAnimationRef.current = requestAnimationFrame(animate);
         };
         
         animate();
@@ -135,6 +130,13 @@ export const Scene3DViewer = () => {
     const handleSensorLeave = () => {
       if (!sceneRef.current) return;
       
+      // Cancel animation
+      if (pulseAnimationRef.current !== null) {
+        cancelAnimationFrame(pulseAnimationRef.current);
+        pulseAnimationRef.current = null;
+      }
+      
+      // Reset all scales
       sceneRef.current.sensorMeshes.forEach((meshes) => {
         meshes.sphere.scale.setScalar(1);
         meshes.glow.scale.setScalar(1);
@@ -147,6 +149,10 @@ export const Scene3DViewer = () => {
     return () => {
       window.removeEventListener('sensorHover', handleSensorHover as EventListener);
       window.removeEventListener('sensorLeave', handleSensorLeave);
+      
+      if (pulseAnimationRef.current !== null) {
+        cancelAnimationFrame(pulseAnimationRef.current);
+      }
     };
   }, []);
 
