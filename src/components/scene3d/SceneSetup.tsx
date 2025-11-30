@@ -57,7 +57,7 @@ export const createControls = (camera: THREE.Camera, domElement: HTMLElement) =>
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
   controls.autoRotate = true;
-  controls.autoRotateSpeed = 0.75; // Reduced from 1.0 to 0.75 (25% slower)
+  controls.autoRotateSpeed = 0.75;
   controls.minDistance = 2;
   controls.maxDistance = 50;
   controls.maxPolarAngle = Math.PI / 1.5;

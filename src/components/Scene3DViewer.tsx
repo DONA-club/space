@@ -387,7 +387,6 @@ export const Scene3DViewer = () => {
   );
 };
 
-// Helper functions remain the same...
 const disposeInterpolationMesh = (mesh: THREE.Points | THREE.Group | THREE.Mesh) => {
   if (mesh instanceof THREE.Points || mesh instanceof THREE.Mesh) {
     mesh.geometry.dispose();
@@ -882,7 +881,8 @@ const positionCamera = (
   const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
   const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
   
-  const distance = Math.max(verticalFit, horizontalFit) * 1.5;
+  // Changed from 1.5 to 0.7 for closer zoom
+  const distance = Math.max(verticalFit, horizontalFit) * 0.7;
   
   camera.position.set(distance * 0.7, distance * 0.5, distance * 0.7);
   camera.lookAt(0, 0, 0);
