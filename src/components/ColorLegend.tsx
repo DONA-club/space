@@ -48,7 +48,6 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const metricInfo = getMetricInfo();
   const gradient = `linear-gradient(to right, ${metricInfo.colors.join(', ')})`;
 
-  // Calculate position of volumetric average on gradient bar
   const getAveragePosition = () => {
     if (volumetricAverage === null || volumetricAverage === undefined) return null;
     
@@ -57,7 +56,6 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
     return percentage;
   };
 
-  // Calculate exact color from gradient based on position
   const getAverageColor = () => {
     if (volumetricAverage === null || volumetricAverage === undefined) return '#ffffff';
     
@@ -75,7 +73,6 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
     const startColor = colors[startColorIndex];
     const endColor = colors[endColorIndex];
     
-    // Parse hex colors
     const parseHex = (hex: string) => {
       const r = parseInt(hex.slice(1, 3), 16);
       const g = parseInt(hex.slice(3, 5), 16);
@@ -86,7 +83,6 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
     const start = parseHex(startColor);
     const end = parseHex(endColor);
     
-    // Interpolate
     const r = Math.round(start.r + (end.r - start.r) * segmentProgress);
     const g = Math.round(start.g + (end.g - start.g) * segmentProgress);
     const b = Math.round(start.b + (end.b - start.b) * segmentProgress);
@@ -112,23 +108,20 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               {metricInfo.label}
             </div>
             
-            <div className="relative">
+            <div className="relative pt-4">
               <div className="relative h-3 rounded-full overflow-hidden" style={{ background: gradient }}>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
               </div>
               
-              {/* Volumetric average indicator - perfectly centered */}
+              {/* Volumetric average indicator - perfectly centered on bar */}
               {averagePosition !== null && (
-                <div className="relative group">
+                <div className="absolute top-0 left-0 right-0 group">
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    className="absolute top-0 -translate-y-1/2 -translate-x-1/2 cursor-help"
-                    style={{ 
-                      left: `${averagePosition}%`,
-                      top: '6px' // Half of the 12px (h-3) bar height
-                    }}
+                    className="absolute top-[10px] -translate-x-1/2 cursor-help"
+                    style={{ left: `${averagePosition}%` }}
                   >
                     <div 
                       className="w-3 h-3 rounded-full border-2 border-white shadow-lg relative"
@@ -141,15 +134,15 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                     </div>
                   </motion.div>
                   
-                  {/* Tooltip on hover - increased z-index */}
+                  {/* Tooltip on hover - positioned above with proper z-index */}
                   <div 
-                    className="absolute -top-14 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-2 py-1 rounded text-[10px] font-medium z-[9999]"
+                    className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-2 py-1 rounded text-[10px] font-medium z-[99999]"
                     style={{ 
                       left: `${averagePosition}%`,
                       transform: 'translateX(-50%)'
                     }}
                   >
-                    Moyenne volumique: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
+                    Moy. vol.: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
                     <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
                   </div>
                 </div>
