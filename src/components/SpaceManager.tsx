@@ -31,7 +31,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from './ui/dialog';
+import { MapPicker } from './MapPicker';
 
 interface Space {
   id: string;
@@ -69,14 +71,17 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
   const [newSpaceDescription, setNewSpaceDescription] = useState('');
-  const [newSpaceLatitude, setNewSpaceLatitude] = useState('');
-  const [newSpaceLongitude, setNewSpaceLongitude] = useState('');
+  const [newSpaceLatitude, setNewSpaceLatitude] = useState<number>(48.8566);
+  const [newSpaceLongitude, setNewSpaceLongitude] = useState<number>(2.3522);
   const [gltfFile, setGltfFile] = useState<File | null>(null);
   const [jsonFile, setJsonFile] = useState<File | null>(null);
   const [jsonValidation, setJsonValidation] = useState<{ valid: boolean; message: string; sensorCount?: number } | null>(null);
   const [spaceStats, setSpaceStats] = useState<Map<string, SpaceStats>>(new Map());
   const [showMapDialog, setShowMapDialog] = useState(false);
   const [selectedSpaceForMap, setSelectedSpaceForMap] = useState<Space | null>(null);
+  const [tempMapLat, setTempMapLat] = useState<number>(48.8566);
+  const [tempMapLng, setTempMapLng] = useState<number>(2.3522);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
 
   useEffect(() => {
     loadSpaces();
@@ -110,7 +115,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
     for (const space of spaces) {
       try {
-        // Count indoor sensors from JSON
         let indoorSensorCount = 0;
         if (space.json_file_path) {
           const { data: jsonData } = await supabase.storage
@@ -124,14 +128,12 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           }
         }
 
-        // Check outdoor data
         const { count: outdoorCount } = await supabase
           .from('sensor_data')
           .select('*', { count: 'exact', head: true })
           .eq('space_id', space.id)
           .eq('sensor_id', 0);
 
-        // Get data date range
         const { data: minData } = await supabase
           .from('sensor_data')
           .select('timestamp')
@@ -148,7 +150,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           .limit(1)
           .single();
 
-        // Calculate data delay
         let dataDelayDays: number | null = null;
         if (maxData) {
           const lastDataDate = new Date(maxData.timestamp);
@@ -157,8 +158,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           dataDelayDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
         }
 
-        // Check for data gaps (simplified - could be more sophisticated)
-        const hasDataGaps = false; // TODO: Implement gap detection
+        const hasDataGaps = false;
 
         statsMap.set(space.id, {
           indoorSensorCount,
@@ -166,7 +166,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           dataStartDate: minData ? new Date(minData.timestamp) : null,
           dataEndDate: maxData ? new Date(maxData.timestamp) : null,
           hasDataGaps,
-          isLiveConnected: false, // TODO: Implement live connection check
+          isLiveConnected: false,
           dataDelayDays,
         });
       } catch (error) {
@@ -262,19 +262,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
       return;
     }
 
-    if (!newSpaceLatitude || !newSpaceLongitude) {
-      showError('La localisation est requise');
-      return;
-    }
-
-    const lat = parseFloat(newSpaceLatitude);
-    const lng = parseFloat(newSpaceLongitude);
-
-    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      showError('Coordonnées GPS invalides');
-      return;
-    }
-
     setCreating(true);
 
     try {
@@ -305,8 +292,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           gltf_file_name: gltfFile.name,
           json_file_path: jsonPath,
           json_file_name: jsonFile.name,
-          latitude: lat,
-          longitude: lng,
+          latitude: newSpaceLatitude,
+          longitude: newSpaceLongitude,
         })
         .select()
         .single();
@@ -317,8 +304,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
       setShowCreateForm(false);
       setNewSpaceName('');
       setNewSpaceDescription('');
-      setNewSpaceLatitude('');
-      setNewSpaceLongitude('');
+      setNewSpaceLatitude(48.8566);
+      setNewSpaceLongitude(2.3522);
       setGltfFile(null);
       setJsonFile(null);
       setJsonValidation(null);
@@ -405,7 +392,36 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
   const openMapDialog = (space: Space) => {
     setSelectedSpaceForMap(space);
+    setTempMapLat(space.latitude || 48.8566);
+    setTempMapLng(space.longitude || 2.3522);
     setShowMapDialog(true);
+  };
+
+  const handleUpdateLocation = async () => {
+    if (!selectedSpaceForMap) return;
+
+    setUpdatingLocation(true);
+    try {
+      const { error } = await supabase
+        .from('spaces')
+        .update({
+          latitude: tempMapLat,
+          longitude: tempMapLng,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedSpaceForMap.id);
+
+      if (error) throw error;
+
+      showSuccess('Localisation mise à jour avec succès');
+      setShowMapDialog(false);
+      loadSpaces();
+    } catch (error) {
+      console.error('Error updating location:', error);
+      showError('Erreur lors de la mise à jour de la localisation');
+    } finally {
+      setUpdatingLocation(false);
+    }
   };
 
   if (loading) {
@@ -465,29 +481,16 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="space-latitude">Latitude *</Label>
-                    <Input
-                      id="space-latitude"
-                      type="number"
-                      step="any"
-                      value={newSpaceLatitude}
-                      onChange={(e) => setNewSpaceLatitude(e.target.value)}
-                      placeholder="Ex: 48.8566"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="space-longitude">Longitude *</Label>
-                    <Input
-                      id="space-longitude"
-                      type="number"
-                      step="any"
-                      value={newSpaceLongitude}
-                      onChange={(e) => setNewSpaceLongitude(e.target.value)}
-                      placeholder="Ex: 2.3522"
-                    />
-                  </div>
+                <div>
+                  <Label className="mb-2 block">Localisation *</Label>
+                  <MapPicker
+                    initialLat={newSpaceLatitude}
+                    initialLng={newSpaceLongitude}
+                    onLocationSelect={(lat, lng) => {
+                      setNewSpaceLatitude(lat);
+                      setNewSpaceLongitude(lng);
+                    }}
+                  />
                 </div>
 
                 <div>
@@ -575,7 +578,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                 <div className="flex gap-2">
                   <Button
                     onClick={createSpace}
-                    disabled={creating || !newSpaceName || !gltfFile || !jsonFile || !jsonValidation?.valid || !newSpaceLatitude || !newSpaceLongitude}
+                    disabled={creating || !newSpaceName || !gltfFile || !jsonFile || !jsonValidation?.valid}
                     className="flex-1"
                   >
                     {creating ? (
@@ -593,8 +596,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                       setShowCreateForm(false);
                       setNewSpaceName('');
                       setNewSpaceDescription('');
-                      setNewSpaceLatitude('');
-                      setNewSpaceLongitude('');
+                      setNewSpaceLatitude(48.8566);
+                      setNewSpaceLongitude(2.3522);
                       setGltfFile(null);
                       setJsonFile(null);
                       setJsonValidation(null);
@@ -630,7 +633,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                 exit={{ opacity: 0, scale: 0.9 }}
               >
                 <LiquidGlassCard className="p-5 hover:shadow-lg transition-shadow h-full flex flex-col">
-                  {/* Header */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-lg mb-1 truncate">{space.name}</h3>
@@ -686,10 +688,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                     </DropdownMenu>
                   </div>
 
-                  {/* Status Badges */}
                   <div className="flex flex-wrap gap-2 mb-3">
                     <TooltipProvider>
-                      {/* 3D Model Badge */}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Badge 
@@ -708,7 +708,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         </TooltipContent>
                       </Tooltip>
 
-                      {/* Indoor Sensors Badge */}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Badge 
@@ -729,7 +728,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                     </TooltipProvider>
                   </div>
 
-                  {/* System Status */}
                   <div className="space-y-2 mb-4 flex-1">
                     {stats?.isLiveConnected ? (
                       <div className="flex items-center gap-2 text-xs">
@@ -745,7 +743,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         
                         <div className="flex flex-wrap gap-2">
                           <TooltipProvider>
-                            {/* Outdoor Data Badge */}
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Badge 
@@ -766,7 +763,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                               </TooltipContent>
                             </Tooltip>
 
-                            {/* Data Period Badge */}
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Badge 
@@ -785,7 +781,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                               </TooltipContent>
                             </Tooltip>
 
-                            {/* Data Delay Badge */}
                             {stats?.dataDelayDays !== null && stats.dataDelayDays > 0 && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -814,7 +809,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                           </TooltipProvider>
                         </div>
 
-                        {/* Data Gaps Warning */}
                         {stats?.hasDataGaps && (
                           <Alert className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 py-2">
                             <AlertTriangle className="h-3 w-3 text-orange-600 dark:text-orange-400" />
@@ -836,7 +830,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                     )}
                   </div>
 
-                  {/* Action Buttons */}
                   <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
                     <TooltipProvider>
                       <Tooltip>
@@ -888,7 +881,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         </div>
       )}
 
-      {/* Map Dialog */}
       <Dialog open={showMapDialog} onOpenChange={setShowMapDialog}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
@@ -897,17 +889,31 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
               Visualisez ou modifiez la position géographique de cet espace
             </DialogDescription>
           </DialogHeader>
-          <div className="w-full h-96 bg-gray-200 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-            <div className="text-center text-gray-500 dark:text-gray-400">
-              <MapPin size={48} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Carte interactive à venir</p>
-              {selectedSpaceForMap?.latitude && selectedSpaceForMap?.longitude && (
-                <p className="text-xs mt-2">
-                  Position actuelle: {selectedSpaceForMap.latitude.toFixed(6)}, {selectedSpaceForMap.longitude.toFixed(6)}
-                </p>
+          
+          <MapPicker
+            initialLat={tempMapLat}
+            initialLng={tempMapLng}
+            onLocationSelect={(lat, lng) => {
+              setTempMapLat(lat);
+              setTempMapLng(lng);
+            }}
+          />
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMapDialog(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleUpdateLocation} disabled={updatingLocation}>
+              {updatingLocation ? (
+                <>
+                  <Loader2 className="animate-spin mr-2" size={16} />
+                  Mise à jour...
+                </>
+              ) : (
+                'Enregistrer'
               )}
-            </div>
-          </div>
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

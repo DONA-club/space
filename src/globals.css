@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import 'leaflet/dist/leaflet.css';
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -122,5 +124,10 @@
   
   [role="tooltip"] {
     z-index: 9999 !important;
+  }
+
+  /* Leaflet map fixes */
+  .leaflet-container {
+    font-family: inherit;
   }
 }
