@@ -36,7 +36,7 @@ export const AirVolumeInfoBadge = ({
               <Wind size={14} className="text-cyan-600 dark:text-cyan-400" strokeWidth={2} />
             </div>
             <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">
-              Vol. air
+              Volume d'air
             </span>
           </div>
           
@@ -54,7 +54,7 @@ export const AirVolumeInfoBadge = ({
               <div className="flex items-center gap-1">
                 <Scale size={10} className="text-purple-600 dark:text-purple-400" strokeWidth={2} />
                 <span className="text-[9px] font-medium text-gray-600 dark:text-gray-400">
-                  M. air:
+                  Masse air:
                 </span>
               </div>
               <span className="text-[11px] font-bold text-purple-700 dark:text-purple-400">
@@ -67,7 +67,7 @@ export const AirVolumeInfoBadge = ({
                 <div className="flex items-center gap-1">
                   <CloudRain size={10} className="text-blue-600 dark:text-blue-400" strokeWidth={2} />
                   <span className="text-[9px] font-medium text-gray-600 dark:text-gray-400">
-                    M. H₂O:
+                    Masse H₂O:
                   </span>
                 </div>
                 <span className="text-[11px] font-bold text-blue-700 dark:text-blue-400">
@@ -81,7 +81,7 @@ export const AirVolumeInfoBadge = ({
                 <div className="flex items-center gap-1">
                   <Thermometer size={10} className="text-red-600 dark:text-red-400" strokeWidth={2} />
                   <span className="text-[9px] font-medium text-gray-600 dark:text-gray-400">
-                    T° moy:
+                    T° moyenne:
                   </span>
                 </div>
                 <span className="text-[11px] font-bold text-red-700 dark:text-red-400">
@@ -95,7 +95,7 @@ export const AirVolumeInfoBadge = ({
                 <div className="flex items-center gap-1">
                   <Droplets size={10} className="text-blue-600 dark:text-blue-400" strokeWidth={2} />
                   <span className="text-[9px] font-medium text-gray-600 dark:text-gray-400">
-                    HR moy:
+                    HR moyenne:
                   </span>
                 </div>
                 <span className="text-[11px] font-bold text-blue-700 dark:text-blue-400">

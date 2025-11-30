@@ -19,29 +19,25 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
     switch (selectedMetric) {
       case 'temperature':
         return {
-          label: 'T°',
-          fullLabel: 'Température',
+          label: 'Température',
           unit: '°C',
           colors: ['#3b82f6', '#06b6d4', '#10b981', '#fbbf24', '#f97316', '#ef4444'],
         };
       case 'humidity':
         return {
-          label: 'HR',
-          fullLabel: 'Humidité Relative',
+          label: 'Humidité Relative',
           unit: '%',
           colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#3b82f6'],
         };
       case 'absoluteHumidity':
         return {
-          label: 'HA',
-          fullLabel: 'Humidité Absolue',
+          label: 'Humidité Absolue',
           unit: 'g/m³',
           colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7'],
         };
       case 'dewPoint':
         return {
-          label: 'PR',
-          fullLabel: 'Point de Rosée',
+          label: 'Point de Rosée',
           unit: '°C',
           colors: ['#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4'],
         };
@@ -110,15 +106,10 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
           
           <div className="relative px-3 py-2 space-y-2">
             {/* Header with metric label */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-center">
               <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">
                 {metricInfo.label}
               </span>
-              {volumetricAverage !== null && (
-                <span className="text-[9px] font-bold text-gray-800 dark:text-white">
-                  Moy: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
-                </span>
-              )}
             </div>
             
             {/* Gradient bar with cursor */}
@@ -127,14 +118,14 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
               </div>
               
-              {/* Volumetric average indicator */}
+              {/* Volumetric average indicator - raised by half its radius */}
               {averagePosition !== null && (
                 <div className="absolute top-0 left-0 right-0 group">
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    className="absolute top-[5px] -translate-x-1/2 cursor-help"
+                    className="absolute top-[3.75px] -translate-x-1/2 cursor-help"
                     style={{ left: `${averagePosition}%` }}
                   >
                     <div 
@@ -148,16 +139,18 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                     </div>
                   </motion.div>
                   
-                  {/* Tooltip on hover */}
+                  {/* Tooltip on hover - shows volumetric average */}
                   <div 
-                    className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-2 py-0.5 rounded text-[9px] font-medium z-[99999]"
+                    className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-2 py-1 rounded text-[9px] font-medium z-[99999]"
                     style={{ 
                       left: `${averagePosition}%`,
                       transform: 'translateX(-50%)'
                     }}
                   >
-                    {metricInfo.fullLabel}
-                    <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-gray-900 rotate-45"></div>
+                    <span style={{ color: averageColor }}>
+                      Moyenne volumique: {volumetricAverage.toFixed(selectedMetric === 'absoluteHumidity' ? 2 : 1)}{metricInfo.unit}
+                    </span>
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
                   </div>
                 </div>
               )}

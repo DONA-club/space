@@ -85,7 +85,7 @@ export const OutdoorBadge = ({
               {getMetricIcon()}
             </div>
             <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">
-              Ext.
+              Extérieur
             </span>
           </div>
 
@@ -101,7 +101,7 @@ export const OutdoorBadge = ({
           {meshingEnabled && volumetricAverage !== null && differenceText && (
             <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/30">
               <span className="text-[9px] font-medium text-gray-600 dark:text-gray-400">
-                Δ Int.
+                Δ Intérieur
               </span>
               <span className="text-[10px] font-bold text-gray-800 dark:text-white">
                 {differenceText}
