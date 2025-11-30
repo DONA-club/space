@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { showSuccess, showError } from '@/utils/toast';
-import { Loader2, Plus, Trash2, Download, Upload, FolderOpen, AlertCircle, Info, CheckCircle2, Radio, History, MoreVertical } from 'lucide-react';
+import { Loader2, Plus, Trash2, Upload, FolderOpen, AlertCircle, Info, CheckCircle2, MoreVertical, Eye, Box, Activity, Cloud, Calendar, MapPin, AlertTriangle, Radio } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
@@ -18,6 +18,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './ui/tooltip';
 
 interface Space {
   id: string;
@@ -36,6 +42,15 @@ interface SpaceManagerProps {
   onSpaceSelected: (space: Space) => void;
 }
 
+interface SpaceStats {
+  indoorSensorCount: number;
+  hasOutdoorData: boolean;
+  dataStartDate: Date | null;
+  dataEndDate: Date | null;
+  hasDataGaps: boolean;
+  isLiveConnected: boolean;
+}
+
 export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,10 +61,17 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [gltfFile, setGltfFile] = useState<File | null>(null);
   const [jsonFile, setJsonFile] = useState<File | null>(null);
   const [jsonValidation, setJsonValidation] = useState<{ valid: boolean; message: string; sensorCount?: number } | null>(null);
+  const [spaceStats, setSpaceStats] = useState<Map<string, SpaceStats>>(new Map());
 
   useEffect(() => {
     loadSpaces();
   }, []);
+
+  useEffect(() => {
+    if (spaces.length > 0) {
+      loadSpaceStats();
+    }
+  }, [spaces]);
 
   const loadSpaces = async () => {
     try {
@@ -68,6 +90,68 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     }
   };
 
+  const loadSpaceStats = async () => {
+    const statsMap = new Map<string, SpaceStats>();
+
+    for (const space of spaces) {
+      try {
+        // Count indoor sensors from JSON
+        let indoorSensorCount = 0;
+        if (space.json_file_path) {
+          const { data: jsonData } = await supabase.storage
+            .from('models')
+            .download(space.json_file_path);
+
+          if (jsonData) {
+            const text = await jsonData.text();
+            const json = JSON.parse(text.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3'));
+            indoorSensorCount = json.points?.length || 0;
+          }
+        }
+
+        // Check outdoor data
+        const { count: outdoorCount } = await supabase
+          .from('sensor_data')
+          .select('*', { count: 'exact', head: true })
+          .eq('space_id', space.id)
+          .eq('sensor_id', 0);
+
+        // Get data date range
+        const { data: minData } = await supabase
+          .from('sensor_data')
+          .select('timestamp')
+          .eq('space_id', space.id)
+          .order('timestamp', { ascending: true })
+          .limit(1)
+          .single();
+
+        const { data: maxData } = await supabase
+          .from('sensor_data')
+          .select('timestamp')
+          .eq('space_id', space.id)
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .single();
+
+        // Check for data gaps (simplified - could be more sophisticated)
+        const hasDataGaps = false; // TODO: Implement gap detection
+
+        statsMap.set(space.id, {
+          indoorSensorCount,
+          hasOutdoorData: (outdoorCount || 0) > 0,
+          dataStartDate: minData ? new Date(minData.timestamp) : null,
+          dataEndDate: maxData ? new Date(maxData.timestamp) : null,
+          hasDataGaps,
+          isLiveConnected: false, // TODO: Implement live connection check
+        });
+      } catch (error) {
+        console.error(`Error loading stats for space ${space.id}:`, error);
+      }
+    }
+
+    setSpaceStats(statsMap);
+  };
+
   const parseNumber = (value: any): number => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
@@ -79,12 +163,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const validateJsonFile = async (file: File) => {
     try {
       let text = await file.text();
-      
-      // Fix JSON: replace commas with dots in numeric values
       text = text.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
-      
-      console.log('Validating JSON:', text);
-      
       const data = JSON.parse(text);
 
       if (!data.points || !Array.isArray(data.points)) {
@@ -103,7 +182,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         return;
       }
 
-      // Validate each point
       const invalidPoints: string[] = [];
       data.points.forEach((point: any, index: number) => {
         const x = parseNumber(point.x);
@@ -165,7 +243,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non authentifié');
 
-      // Upload GLTF file
       const gltfPath = `${user.id}/${Date.now()}_${gltfFile.name}`;
       const { error: gltfError } = await supabase.storage
         .from('models')
@@ -173,7 +250,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
       if (gltfError) throw gltfError;
 
-      // Upload JSON file
       const jsonPath = `${user.id}/${Date.now()}_${jsonFile.name}`;
       const { error: jsonError } = await supabase.storage
         .from('models')
@@ -181,7 +257,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
       if (jsonError) throw jsonError;
 
-      // Create space record
       const { data, error } = await supabase
         .from('spaces')
         .insert({
@@ -220,7 +295,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     }
 
     try {
-      // Delete files from storage
       if (space.gltf_file_path) {
         await supabase.storage.from('models').remove([space.gltf_file_path]);
       }
@@ -228,7 +302,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         await supabase.storage.from('models').remove([space.json_file_path]);
       }
 
-      // Delete space record (sensor_data will be deleted automatically via CASCADE)
       const { error } = await supabase
         .from('spaces')
         .delete()
@@ -244,24 +317,18 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     }
   };
 
-  const downloadFile = async (path: string, fileName: string) => {
-    try {
-      const { data, error } = await supabase.storage
-        .from('models')
-        .download(path);
-
-      if (error) throw error;
-
-      const url = URL.createObjectURL(data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading file:', error);
-      showError('Erreur lors du téléchargement');
+  const formatDateRange = (start: Date | null, end: Date | null): string => {
+    if (!start || !end) return 'Aucune donnée';
+    
+    const diffMs = end.getTime() - start.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 1) {
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      return `${diffHours}h`;
     }
+    
+    return `${diffDays}j`;
   };
 
   if (loading) {
@@ -400,7 +467,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   ]
 }`}
                     </pre>
-                    <p className="mt-2">✓ Supporte les virgules comme séparateurs décimaux</p>
                   </div>
                 </div>
 
@@ -449,20 +515,23 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         </LiquidGlassCard>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {spaces.map((space) => (
-            <motion.div
-              key={space.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-            >
-              <LiquidGlassCard className="p-6 hover:shadow-lg transition-shadow">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg mb-1">{space.name}</h3>
+          {spaces.map((space) => {
+            const stats = spaceStats.get(space.id);
+            
+            return (
+              <motion.div
+                key={space.id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+              >
+                <LiquidGlassCard className="p-5 hover:shadow-lg transition-shadow h-full flex flex-col">
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-lg mb-1 truncate">{space.name}</h3>
                       {space.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
                           {space.description}
                         </p>
                       )}
@@ -470,7 +539,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                     
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
                           <MoreVertical size={16} />
                         </Button>
                       </DropdownMenuTrigger>
@@ -486,52 +555,158 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                     </DropdownMenu>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs">
-                      <Badge variant="outline">
-                        {space.gltf_file_name}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <Badge variant="outline">
-                        {space.json_file_name}
-                      </Badge>
-                    </div>
+                  {/* Status Badges */}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <TooltipProvider>
+                      {/* 3D Model Badge */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs ${space.gltf_file_name ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-800/20'}`}
+                          >
+                            <Box size={12} className="mr-1" />
+                            Modèle 3D
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">{space.gltf_file_name || 'Aucun modèle'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      {/* Indoor Sensors Badge */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs ${stats?.indoorSensorCount ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700' : 'bg-gray-50 dark:bg-gray-800/20'}`}
+                          >
+                            <Activity size={12} className="mr-1" />
+                            {stats?.indoorSensorCount || 0} capteurs
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">{space.json_file_name || 'Aucun fichier JSON'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
 
-                  {space.last_csv_date && (
-                    <Alert className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-                      <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      <AlertDescription className="text-xs text-blue-800 dark:text-blue-200">
-                        Dernières données : {new Date(space.last_csv_date).toLocaleDateString('fr-FR')}
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                  {/* System Status */}
+                  <div className="space-y-2 mb-4 flex-1">
+                    {stats?.isLiveConnected ? (
+                      <div className="flex items-center gap-2 text-xs">
+                        <Radio size={12} className="text-green-500 animate-pulse" />
+                        <span className="text-green-600 dark:text-green-400 font-medium">Système connecté (Live)</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <Radio size={12} className="text-gray-400" />
+                          <span>Hors ligne - Données historiques</span>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2">
+                          <TooltipProvider>
+                            {/* Outdoor Data Badge */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs ${stats?.hasOutdoorData ? 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-700' : 'bg-gray-50 dark:bg-gray-800/20 opacity-50'}`}
+                                >
+                                  <Cloud size={12} className="mr-1" />
+                                  Extérieur
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">{stats?.hasOutdoorData ? 'Données extérieures disponibles' : 'Aucune donnée extérieure'}</p>
+                              </TooltipContent>
+                            </Tooltip>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 border-purple-300 dark:border-purple-700"
-                      onClick={() => onSpaceSelected(space)}
-                    >
-                      <History size={14} className="mr-2" />
-                      Replay
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 hover:from-green-500/20 hover:to-emerald-500/20 border-green-300 dark:border-green-700"
-                      onClick={() => onSpaceSelected(space)}
-                    >
-                      <Radio size={14} className="mr-2" />
-                      Live
-                    </Button>
+                            {/* Data Period Badge */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs ${stats?.dataStartDate ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-800/20 opacity-50'}`}
+                                >
+                                  <Calendar size={12} className="mr-1" />
+                                  {formatDateRange(stats?.dataStartDate || null, stats?.dataEndDate || null)}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">
+                                  {stats?.dataStartDate && stats?.dataEndDate
+                                    ? `${stats.dataStartDate.toLocaleDateString('fr-FR')} → ${stats.dataEndDate.toLocaleDateString('fr-FR')}`
+                                    : 'Aucune donnée historique'}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+
+                        {/* Data Gaps Warning */}
+                        {stats?.hasDataGaps && (
+                          <Alert className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 py-2">
+                            <AlertTriangle className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+                            <AlertDescription className="text-xs text-orange-800 dark:text-orange-200">
+                              Périodes de données manquantes détectées
+                            </AlertDescription>
+                          </Alert>
+                        )}
+
+                        {!stats?.dataStartDate && (
+                          <Alert className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 py-2">
+                            <AlertCircle className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
+                            <AlertDescription className="text-xs text-yellow-800 dark:text-yellow-200">
+                              Aucune donnée historique disponible
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              </LiquidGlassCard>
-            </motion.div>
-          ))}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
+                            onClick={() => onSpaceSelected(space)}
+                          >
+                            <Eye size={16} className="mr-2" />
+                            Observer
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Entrer dans la visualisation 3D</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-10 p-0"
+                          >
+                            <MapPin size={16} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Localisation sur la carte</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </LiquidGlassCard>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>
