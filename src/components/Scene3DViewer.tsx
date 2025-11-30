@@ -8,6 +8,7 @@ import { AlertCircle } from "lucide-react";
 import { interpolateIDW, RBFInterpolator, type Point3D } from "@/utils/interpolation";
 import { ColorLegend } from "./ColorLegend";
 import { AirVolumeInfoBadge } from "./scene3d/AirVolumeInfoBadge";
+import { OutdoorBadge } from "./scene3d/OutdoorBadge";
 import { useSensorData } from "@/hooks/useSensorData";
 import { useSceneBackground } from "@/hooks/useSceneBackground";
 import { useSensorMeshUpdates } from "@/hooks/useSensorMeshUpdates";
@@ -39,6 +40,7 @@ export const Scene3DViewer = () => {
   const [waterMass, setWaterMass] = useState<number | null>(null);
   const [averageTemperature, setAverageTemperature] = useState<number | null>(null);
   const [averageHumidity, setAverageHumidity] = useState<number | null>(null);
+  const [currentOutdoorData, setCurrentOutdoorData] = useState<any>(null);
   
   const gltfModel = useAppStore((state) => state.gltfModel);
   const sensors = useAppStore((state) => state.sensors);
@@ -79,6 +81,7 @@ export const Scene3DViewer = () => {
     if (outdoorData.length > 0) {
       const closestData = findClosestDataPoint(outdoorData, currentTimestamp);
       setOutdoorData(closestData);
+      setCurrentOutdoorData(closestData);
     }
   }, [currentTimestamp, dataReady, hasOutdoorData, setOutdoorData, sensors, sensorData, outdoorData]);
 
@@ -394,6 +397,17 @@ export const Scene3DViewer = () => {
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
+      <OutdoorBadge
+        currentOutdoorData={currentOutdoorData}
+        indoorAverage={indoorAverage}
+        selectedMetric={selectedMetric}
+        interpolationRange={interpolationRange}
+        hasOutdoorData={hasOutdoorData}
+        dataReady={dataReady}
+        volumetricAverage={volumetricAverage}
+        meshingEnabled={meshingEnabled}
+      />
+      
       <AirVolumeInfoBadge
         airVolume={exactAirVolume}
         airMass={airMass}

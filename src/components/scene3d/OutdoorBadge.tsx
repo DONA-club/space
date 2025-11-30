@@ -1,3 +1,5 @@
+"use client";
+
 import { Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
 import { SensorDataPoint, MetricType } from '@/types/sensor.types';
 import { getColorFromValue } from '@/utils/colorUtils';
