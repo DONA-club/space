@@ -863,15 +863,22 @@ const positionCamera = (
 ) => {
   const fov = camera.fov * (Math.PI / 180);
   const aspectRatio = width / height;
+  
+  // Calculate distance to fit model perfectly in viewport
+  // Use the smaller of vertical or horizontal fit to ensure full visibility
   const verticalFit = boundingSphere.radius / Math.tan(fov / 2);
   const horizontalFit = boundingSphere.radius / Math.tan(fov / 2) / aspectRatio;
-  const distance = Math.max(verticalFit, horizontalFit) * 1.5;
   
-  camera.position.set(distance, distance * 0.75, distance);
+  // Use 1.15x multiplier for slight padding (reduced from 1.5x)
+  const distance = Math.max(verticalFit, horizontalFit) * 1.15;
+  
+  // Position camera at optimal distance
+  camera.position.set(distance * 0.7, distance * 0.5, distance * 0.7);
   camera.lookAt(0, 0, 0);
+  
   controls.target.set(0, 0, 0);
-  controls.minDistance = boundingSphere.radius * 1.2;
-  controls.maxDistance = boundingSphere.radius * 5;
+  controls.minDistance = boundingSphere.radius * 0.8;
+  controls.maxDistance = boundingSphere.radius * 4;
   controls.update();
 };
 
