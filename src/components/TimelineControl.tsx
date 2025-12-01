@@ -40,6 +40,7 @@ export const TimelineControl = () => {
   const [playbackSpeed, setPlaybackSpeed] = useState(60);
   const [rangeStart, setRangeStart] = useState<number | null>(null);
   const [rangeEnd, setRangeEnd] = useState<number | null>(null);
+  const [liveTimelineEnd, setLiveTimelineEnd] = useState<number>(Date.now());
   const [isDragging, setIsDragging] = useState<'start' | 'end' | 'current' | null>(null);
   const [dewPointDifferences, setDewPointDifferences] = useState<DewPointDifference[]>([]);
   const [loadedRanges, setLoadedRanges] = useState<Array<{start: number, end: number}>>([]);
@@ -50,12 +51,23 @@ export const TimelineControl = () => {
   const lastScrollLoadRef = useRef<number>(0);
   const lastPlaybackLoadRef = useRef<number>(0);
 
+  // Update live timeline end every second
+  useEffect(() => {
+    if (mode !== 'live') return;
+
+    const interval = setInterval(() => {
+      setLiveTimelineEnd(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [mode]);
+
   useEffect(() => {
     if (timeRange && rangeStart === null && rangeEnd === null) {
       setRangeStart(timeRange[0]);
       setRangeEnd(timeRange[1]);
       
-      // In live mode, move cursor to end
+      // In live mode, move cursor to end of historical data
       if (mode === 'live') {
         setCurrentTimestamp(timeRange[1]);
       }
@@ -370,7 +382,7 @@ export const TimelineControl = () => {
   };
 
   const handleMouseDown = (type: 'start' | 'end' | 'current') => (e: React.MouseEvent) => {
-    if (mode === 'live') return; // Disable dragging in live mode
+    if (mode === 'live') return;
     e.preventDefault();
     setIsDragging(type);
   };
@@ -381,6 +393,7 @@ export const TimelineControl = () => {
     const rect = timelineRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
     const percentage = x / rect.width;
+    
     const newTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) * percentage;
 
     let clampedTimestamp = Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1]));
@@ -434,6 +447,8 @@ export const TimelineControl = () => {
   const getDayMarkers = () => {
     if (!timeRange) return [];
     
+    const effectiveEnd = mode === 'live' ? liveTimelineEnd : timeRange[1];
+    
     const markers: number[] = [];
     const startDate = new Date(timeRange[0]);
     startDate.setHours(0, 0, 0, 0);
@@ -441,7 +456,7 @@ export const TimelineControl = () => {
     let currentDate = new Date(startDate);
     currentDate.setDate(currentDate.getDate() + 1);
     
-    while (currentDate.getTime() <= timeRange[1]) {
+    while (currentDate.getTime() <= effectiveEnd) {
       markers.push(currentDate.getTime());
       currentDate.setDate(currentDate.getDate() + 1);
     }
@@ -451,7 +466,11 @@ export const TimelineControl = () => {
 
   const getPosition = (timestamp: number) => {
     if (!timeRange) return 0;
-    return ((timestamp - timeRange[0]) / (timeRange[1] - timeRange[0])) * 100;
+    
+    const effectiveEnd = mode === 'live' ? liveTimelineEnd : timeRange[1];
+    const effectiveRange = effectiveEnd - timeRange[0];
+    
+    return ((timestamp - timeRange[0]) / effectiveRange) * 100;
   };
 
   const getColorForDifference = (difference: number): string => {
@@ -590,6 +609,8 @@ export const TimelineControl = () => {
 
   const isLiveMode = mode === 'live';
   const cursorColor = isLiveMode ? (liveSystemConnected ? 'from-red-400 to-red-500' : 'from-gray-400 to-gray-500') : 'from-yellow-400 to-orange-500';
+  
+  const effectiveTimelineEnd = isLiveMode ? liveTimelineEnd : timeRange[1];
 
   return (
     <LiquidGlassCard className="p-4">
@@ -839,7 +860,7 @@ export const TimelineControl = () => {
             <span className={`font-medium ${isLiveMode ? (liveSystemConnected ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400') : 'text-blue-600 dark:text-blue-400'}`}>
               {formatTime(currentTimestamp)}
             </span>
-            <span>{formatTime(rangeEnd)}</span>
+            <span>{formatTime(effectiveTimelineEnd)}</span>
           </div>
 
           <div 
@@ -1010,7 +1031,7 @@ export const TimelineControl = () => {
             )}
           </div>
           <span>
-            Durée: {((rangeEnd - rangeStart) / (1000 * 60 * 60)).toFixed(1)}h
+            Durée: {((effectiveTimelineEnd - timeRange[0]) / (1000 * 60 * 60)).toFixed(1)}h
           </span>
         </div>
       </div>
