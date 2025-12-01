@@ -21,7 +21,6 @@ const POINTS_AFTER = 500;
 const PRELOAD_THRESHOLD = 333;
 const COLOR_ZONE_RADIUS = 15;
 
-// Generate unique ID for this component instance
 let instanceCounter = 0;
 
 export const TimelineControl = () => {
@@ -56,7 +55,6 @@ export const TimelineControl = () => {
   const hasInitializedCursorRef = useRef<boolean>(false);
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Create unique IDs for this component instance
   const [componentId] = useState(() => {
     instanceCounter++;
     return `timeline-${instanceCounter}`;
@@ -65,7 +63,6 @@ export const TimelineControl = () => {
   const gradientId = `curveGradient-${componentId}`;
   const maskId = `colorZoneMask-${componentId}`;
 
-  // Clamp cursor to range bounds when range changes
   useEffect(() => {
     if (mode === 'live' || !rangeStart || !rangeEnd) return;
 
@@ -78,7 +75,6 @@ export const TimelineControl = () => {
     }
   }, [rangeStart, rangeEnd, currentTimestamp, mode, setCurrentTimestamp]);
 
-  // Update live timeline end every second
   useEffect(() => {
     if (mode !== 'live') return;
 
@@ -566,7 +562,8 @@ export const TimelineControl = () => {
 
     let path = `M ${coords[0].x},${coords[0].y}`;
 
-    const tension = 0.7;
+    // Increased tension for smoother curves (was 0.7, now 0.4 for more smoothness)
+    const tension = 0.4;
 
     for (let i = 0; i < coords.length - 1; i++) {
       const p0 = coords[Math.max(i - 1, 0)];
@@ -574,6 +571,7 @@ export const TimelineControl = () => {
       const p2 = coords[i + 1];
       const p3 = coords[Math.min(i + 2, coords.length - 1)];
 
+      // Catmull-Rom to Bezier conversion with tension control
       const cp1x = p1.x + (p2.x - p0.x) / 6 * tension;
       const cp1y = p1.y + (p2.y - p0.y) / 6 * tension;
       const cp2x = p2.x - (p3.x - p1.x) / 6 * tension;
@@ -659,23 +657,6 @@ export const TimelineControl = () => {
   
   const colorZoneStart = Math.max(rangeStartPos, currentPos - COLOR_ZONE_RADIUS);
   const colorZoneEnd = Math.min(rangeEndPos, currentPos + COLOR_ZONE_RADIUS);
-
-  console.log('🎨 Colored Curve Debug:', {
-    componentId,
-    gradientId,
-    maskId,
-    mode,
-    hasOutdoorData,
-    dewPointDifferencesCount: dewPointDifferences.length,
-    currentTimestamp: new Date(currentTimestamp).toISOString(),
-    currentPos: currentPos.toFixed(2) + '%',
-    colorZoneStart: colorZoneStart.toFixed(2) + '%',
-    colorZoneEnd: colorZoneEnd.toFixed(2) + '%',
-    colorZoneWidth: (colorZoneEnd - colorZoneStart).toFixed(2) + '%',
-    rangeStartPos: rangeStartPos.toFixed(2) + '%',
-    rangeEndPos: rangeEndPos.toFixed(2) + '%',
-    smoothPathLength: smoothPath.length,
-  });
 
   const isLiveMode = mode === 'live';
   const cursorColor = isLiveMode ? (liveSystemConnected ? 'from-red-400 to-red-500' : 'from-gray-400 to-gray-500') : 'from-yellow-400 to-orange-500';
@@ -938,7 +919,6 @@ export const TimelineControl = () => {
             className={`relative h-12 sm:h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={handleTimelineClick}
           >
-            {/* Layer 1: Negative fill (z-index: 1) */}
             {hasOutdoorData && hasNegativeValues && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-[1]"
@@ -953,7 +933,6 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Layer 2: Zero line (z-index: 2) */}
             {hasOutdoorData && hasNegativeValues && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-[2]"
@@ -973,7 +952,6 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Layer 3: Gray background curve (z-index: 3) */}
             {hasOutdoorData && dewPointDifferences.length > 0 && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-[3]"
@@ -992,7 +970,6 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Layer 4: Colored curve with mask (z-index: 50) - MUCH HIGHER */}
             {hasOutdoorData && dewPointDifferences.length > 0 && mode === 'replay' && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-50"
@@ -1037,7 +1014,6 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Layer 5: Day markers (z-index: 5) */}
             {dayMarkers.map((marker, idx) => {
               const pos = getPosition(marker);
               return (
@@ -1054,7 +1030,6 @@ export const TimelineControl = () => {
               );
             })}
 
-            {/* Layer 6: Range highlight (z-index: 6) */}
             <div
               className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm pointer-events-none z-[6]"
               style={{
@@ -1063,7 +1038,6 @@ export const TimelineControl = () => {
               }}
             />
 
-            {/* Layer 7: Range handles (z-index: 10) */}
             {!isLiveMode && (
               <>
                 <div
@@ -1086,7 +1060,6 @@ export const TimelineControl = () => {
               </>
             )}
 
-            {/* Layer 8: Current cursor (z-index: 100) - HIGHEST */}
             <div
               className={`absolute top-0 bottom-0 w-0.5 bg-gradient-to-b ${cursorColor} ${isLiveMode ? 'cursor-not-allowed' : 'cursor-ew-resize'} shadow-lg z-[100] ${isRecording ? 'animate-pulse' : ''}`}
               style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px', opacity: isLiveMode && !liveSystemConnected ? 0.5 : 1 }}
