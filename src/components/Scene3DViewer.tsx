@@ -1003,18 +1003,7 @@ const createVolumeMesh = (
     emissiveIntensity: isDarkMode ? 0.2 : 0,
   });
   
-  // Create wireframe for better visibility with stronger contrast
-  const wireframeGeometry = new THREE.EdgesGeometry(geometry);
-  const wireframeMaterial = new THREE.LineBasicMaterial({
-    color: isDarkMode ? 0xffffff : 0x333333,
-    opacity: isDarkMode ? 0.3 : 0.2,
-    transparent: true
-  });
-  const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
-  
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.add(wireframe);
-  
   return mesh;
 };
 
