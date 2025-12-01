@@ -113,16 +113,19 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                     <TabsList className="bg-white/50 dark:bg-black/50">
                       <TabsTrigger 
                         value="replay" 
-                        className={`flex items-center gap-2 ${mode === 'live' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
+                        className={`flex items-center gap-2 ${mode === 'replay' ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}
                       >
                         <History size={16} />
                         Replay
                       </TabsTrigger>
-                      <TabsTrigger value="live" className="flex items-center gap-2">
+                      <TabsTrigger 
+                        value="live" 
+                        className={`flex items-center gap-2 ${mode === 'live' ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}
+                      >
                         <Radio size={16} />
                         Live
-                        {wsConnected && (
-                          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        {wsConnected && mode === 'live' && (
+                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                         )}
                       </TabsTrigger>
                     </TabsList>
