@@ -21,6 +21,9 @@ const POINTS_AFTER = 500;
 const PRELOAD_THRESHOLD = 333;
 const COLOR_ZONE_RADIUS = 15;
 
+// Generate unique ID for this component instance
+let instanceCounter = 0;
+
 export const TimelineControl = () => {
   const mode = useAppStore((state) => state.mode);
   const isPlaying = useAppStore((state) => state.isPlaying);
@@ -52,6 +55,15 @@ export const TimelineControl = () => {
   const lastPlaybackLoadRef = useRef<number>(0);
   const hasInitializedCursorRef = useRef<boolean>(false);
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Create unique IDs for this component instance
+  const [componentId] = useState(() => {
+    instanceCounter++;
+    return `timeline-${instanceCounter}`;
+  });
+  
+  const gradientId = `curveGradient-${componentId}`;
+  const maskId = `colorZoneMask-${componentId}`;
 
   // Clamp cursor to range bounds when range changes
   useEffect(() => {
@@ -649,6 +661,9 @@ export const TimelineControl = () => {
   const colorZoneEnd = Math.min(rangeEndPos, currentPos + COLOR_ZONE_RADIUS);
 
   console.log('🎨 Colored Curve Debug:', {
+    componentId,
+    gradientId,
+    maskId,
     mode,
     hasOutdoorData,
     dewPointDifferencesCount: dewPointDifferences.length,
@@ -660,7 +675,6 @@ export const TimelineControl = () => {
     rangeStartPos: rangeStartPos.toFixed(2) + '%',
     rangeEndPos: rangeEndPos.toFixed(2) + '%',
     smoothPathLength: smoothPath.length,
-    smoothPathPreview: smoothPath.substring(0, 50) + '...',
   });
 
   const isLiveMode = mode === 'live';
@@ -978,15 +992,15 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Layer 4: Colored curve with mask (z-index: 4) - HIGHEST PRIORITY */}
+            {/* Layer 4: Colored curve with mask (z-index: 50) - MUCH HIGHER */}
             {hasOutdoorData && dewPointDifferences.length > 0 && mode === 'replay' && (
               <svg
-                className="absolute inset-0 w-full h-full pointer-events-none z-[4]"
+                className="absolute inset-0 w-full h-full pointer-events-none z-50"
                 preserveAspectRatio="none"
                 viewBox="0 0 100 100"
               >
                 <defs>
-                  <linearGradient id="curveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
                     {dewPointDifferences.map((point, idx) => {
                       const position = getPosition(point.timestamp);
                       const color = getColorForDifference(point.difference);
@@ -999,7 +1013,7 @@ export const TimelineControl = () => {
                       );
                     })}
                   </linearGradient>
-                  <mask id="colorZoneMask">
+                  <mask id={maskId}>
                     <rect x="0" y="0" width="100" height="100" fill="black" />
                     <rect 
                       x={colorZoneStart}
@@ -1013,12 +1027,12 @@ export const TimelineControl = () => {
                 <path
                   d={smoothPath}
                   fill="none"
-                  stroke="url(#curveGradient)"
+                  stroke={`url(#${gradientId})`}
                   strokeWidth="3"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
-                  mask="url(#colorZoneMask)"
+                  mask={`url(#${maskId})`}
                 />
               </svg>
             )}
@@ -1072,9 +1086,9 @@ export const TimelineControl = () => {
               </>
             )}
 
-            {/* Layer 8: Current cursor (z-index: 20) - HIGHEST */}
+            {/* Layer 8: Current cursor (z-index: 100) - HIGHEST */}
             <div
-              className={`absolute top-0 bottom-0 w-0.5 bg-gradient-to-b ${cursorColor} ${isLiveMode ? 'cursor-not-allowed' : 'cursor-ew-resize'} shadow-lg z-20 ${isRecording ? 'animate-pulse' : ''}`}
+              className={`absolute top-0 bottom-0 w-0.5 bg-gradient-to-b ${cursorColor} ${isLiveMode ? 'cursor-not-allowed' : 'cursor-ew-resize'} shadow-lg z-[100] ${isRecording ? 'animate-pulse' : ''}`}
               style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px', opacity: isLiveMode && !liveSystemConnected ? 0.5 : 1 }}
               onMouseDown={!isLiveMode ? handleMouseDown('current') : undefined}
               onClick={(e) => e.stopPropagation()}
