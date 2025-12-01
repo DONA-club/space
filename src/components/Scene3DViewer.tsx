@@ -13,7 +13,7 @@ import { useSensorData } from "@/hooks/useSensorData";
 import { useSceneBackground } from "@/hooks/useSceneBackground";
 import { useSensorMeshUpdates } from "@/hooks/useSensorMeshUpdates";
 import { getColorFromValueSaturated, createCircleTexture } from "@/utils/colorUtils";
-import { findClosestDataPoint, calculateIndoorAverage } from "@/utils/sensorUtils";
+import { findClosestDataPoint, calculateIndoorAverage, getDataRange } from "@/utils/sensorUtils";
 import { getMetricValue } from "@/utils/metricUtils";
 import { createSensorSpheres } from "./scene3d/SensorSpheres";
 import { createScene, createCamera, createRenderer, setupLights, createControls } from "./scene3d/SceneSetup";
@@ -84,6 +84,21 @@ export const Scene3DViewer = () => {
       setCurrentOutdoorData(closestData);
     }
   }, [currentTimestamp, dataReady, hasOutdoorData, setOutdoorData, sensors, sensorData, outdoorData]);
+
+  // Update interpolation range even when meshing is disabled
+  useEffect(() => {
+    if (!dataReady || sensorData.size === 0) {
+      setInterpolationRange(null);
+      return;
+    }
+
+    const metricKey = selectedMetric === 'temperature' ? 'temperature' :
+                      selectedMetric === 'humidity' ? 'humidity' :
+                      selectedMetric === 'absoluteHumidity' ? 'absoluteHumidity' : 'dewPoint';
+
+    const range = getDataRange(sensorData, sensors, currentTimestamp, metricKey);
+    setInterpolationRange(range);
+  }, [dataReady, sensorData, sensors, currentTimestamp, selectedMetric, setInterpolationRange]);
 
   useSensorMeshUpdates({
     sensorMeshes: sceneRef.current?.sensorMeshes || null,
@@ -183,13 +198,30 @@ export const Scene3DViewer = () => {
   }, [sensorOffset, sensors, modelLoaded]);
 
   useEffect(() => {
-    if (!sceneRef.current || !dataReady || !meshingEnabled || !modelBounds || !originalModelBounds || sensorData.size === 0 || exactAirVolume === null) {
+    if (!sceneRef.current || !dataReady || !modelBounds || !originalModelBounds || sensorData.size === 0 || exactAirVolume === null) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
         disposeInterpolationMesh(sceneRef.current.interpolationMesh);
         sceneRef.current.interpolationMesh = null;
       }
-      setInterpolationRange(null);
+      
+      // Don't reset interpolation range here anymore - it's handled separately
+      setVolumetricAverage(null);
+      setInterpolationPointCount(0);
+      setAirMass(null);
+      setWaterMass(null);
+      setAverageTemperature(null);
+      setAverageHumidity(null);
+      return;
+    }
+
+    // Only create interpolation mesh if meshing is enabled
+    if (!meshingEnabled) {
+      if (sceneRef.current?.interpolationMesh) {
+        sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
+        disposeInterpolationMesh(sceneRef.current.interpolationMesh);
+        sceneRef.current.interpolationMesh = null;
+      }
       setVolumetricAverage(null);
       setInterpolationPointCount(0);
       setAirMass(null);
@@ -220,8 +252,6 @@ export const Scene3DViewer = () => {
     const average = calculateWeightedAverage(gridValues);
     setVolumetricAverage(average);
     setInterpolationPointCount(gridValues.length);
-
-    setInterpolationRange({ min: minValue, max: maxValue });
 
     const { mass, waterMass: calculatedWaterMass, avgTemp, avgHumidity } = calculateAirProperties(
       gridValues,
@@ -271,7 +301,6 @@ export const Scene3DViewer = () => {
     visualizationType,
     sensors,
     modelLoaded,
-    setInterpolationRange,
     sensorData,
     sensorOffset
   ]);
