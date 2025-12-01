@@ -2,6 +2,7 @@
 
 import { useAppStore } from '@/store/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTheme } from '@/components/theme-provider';
 
 interface ColorLegendProps {
   volumetricAverage?: number | null;
@@ -12,6 +13,9 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const dataReady = useAppStore((state) => state.dataReady);
   const selectedMetric = useAppStore((state) => state.selectedMetric);
   const interpolationRange = useAppStore((state) => state.interpolationRange);
+
+  const { theme } = useTheme();
+  const isDarkMode = theme === 'dark' || (theme === 'system' && typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   if (!dataReady || !interpolationRange) return null;
 
@@ -44,7 +48,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
     }
   };
 
-  const metricInfo = getMetricInfo();
+  const metricInfo = getMetricInfo()!;
   const gradient = `linear-gradient(to right, ${metricInfo.colors.join(', ')})`;
 
   const getAveragePosition = () => {
@@ -112,8 +116,10 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
             <span 
               className="text-[10px] sm:text-xs font-semibold tracking-wide"
               style={{
-                textShadow: '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
-                color: 'rgba(0, 0, 0, 0.4)'
+                textShadow: isDarkMode
+                  ? '0 1px 1px rgba(255,255,255,0.06), 0 -1px 0 rgba(0,0,0,0.5)'
+                  : '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
+                color: isDarkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0, 0, 0, 0.5)'
               }}
             >
               {metricInfo.label}
@@ -126,7 +132,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               className="h-2 sm:h-3 rounded-full shadow-inner" 
               style={{ 
                 background: gradient,
-                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.2)'
+                boxShadow: isDarkMode ? 'inset 0 2px 4px rgba(255,255,255,0.1)' : 'inset 0 2px 4px rgba(0, 0, 0, 0.2)'
               }}
             ></div>
             
@@ -162,8 +168,10 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               className="absolute left-0 -translate-x-1/2"
               style={{
                 color: minColor,
-                textShadow: '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
-                filter: 'brightness(0.9) opacity(0.8)'
+                textShadow: isDarkMode
+                  ? '0 1px 2px rgba(255,255,255,0.18)'
+                  : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
+                filter: isDarkMode ? 'brightness(1.15) opacity(0.95)' : 'brightness(0.9) opacity(0.8)'
               }}
             >
               {interpolationRange.min.toFixed(decimals)}{metricInfo.unit}
@@ -180,8 +188,10 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                 style={{
                   left: `${averagePosition}%`,
                   color: averageColor,
-                  textShadow: '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
-                  filter: 'brightness(0.9) opacity(0.8)'
+                  textShadow: isDarkMode
+                    ? '0 1px 2px rgba(255,255,255,0.18)'
+                    : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
+                  filter: isDarkMode ? 'brightness(1.2) opacity(0.95)' : 'brightness(0.9) opacity(0.8)'
                 }}
               >
                 {volumetricAverage!.toFixed(decimals)}{metricInfo.unit}
@@ -192,8 +202,10 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               className="absolute right-0 translate-x-1/2"
               style={{
                 color: maxColor,
-                textShadow: '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
-                filter: 'brightness(0.9) opacity(0.8)'
+                textShadow: isDarkMode
+                  ? '0 1px 2px rgba(255,255,255,0.18)'
+                  : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
+                filter: isDarkMode ? 'brightness(1.15) opacity(0.95)' : 'brightness(0.9) opacity(0.8)'
               }}
             >
               {interpolationRange.max.toFixed(decimals)}{metricInfo.unit}

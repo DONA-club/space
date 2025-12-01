@@ -1,6 +1,7 @@
 "use client";
 
 import { Scale, Thermometer, Droplets, CloudRain } from 'lucide-react';
+import { useTheme } from '@/components/theme-provider';
 
 interface AirVolumeInfoBadgeProps {
   airVolume: number | null;
@@ -21,25 +22,37 @@ export const AirVolumeInfoBadge = ({
   meshingEnabled,
   dataReady
 }: AirVolumeInfoBadgeProps) => {
+  const { theme } = useTheme();
+  const isDarkMode = theme === 'dark' || (theme === 'system' && typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
   if (!meshingEnabled || !dataReady || airVolume === null || airMass === null) {
     return null;
   }
 
   const textStyle = {
-    textShadow: '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
-    color: 'rgba(0, 0, 0, 0.4)'
-  };
+    textShadow: isDarkMode
+      ? '0 1px 1px rgba(255, 255, 255, 0.06), 0 -1px 0 rgba(0, 0, 0, 0.5)'
+      : '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
+    color: isDarkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.4)'
+  } as const;
 
   const valueStyle = {
-    textShadow: '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.25)',
-    color: 'rgba(0, 0, 0, 0.5)'
-  };
+    textShadow: isDarkMode
+      ? '0 1px 1px rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.08)'
+      : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.25)',
+    color: isDarkMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.5)'
+  } as const;
+
+  const iconStyle = {
+    filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.15))',
+    color: isDarkMode ? 'rgba(255,255,255,0.6)' : undefined
+  } as const;
 
   return (
     <div className="absolute bottom-4 right-4 z-10">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <Scale size={11} className="opacity-40" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.15))' }} />
+          <Scale size={11} className="opacity-40" style={iconStyle} />
           <span className="text-[10px] font-medium" style={textStyle}>
             Volume:
           </span>
@@ -49,7 +62,7 @@ export const AirVolumeInfoBadge = ({
         </div>
         
         <div className="flex items-center gap-2">
-          <Scale size={11} className="opacity-40" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.15))' }} />
+          <Scale size={11} className="opacity-40" style={iconStyle} />
           <span className="text-[10px] font-medium" style={textStyle}>
             Masse air:
           </span>
@@ -60,7 +73,7 @@ export const AirVolumeInfoBadge = ({
         
         {waterMass !== null && (
           <div className="flex items-center gap-2">
-            <CloudRain size={11} className="opacity-40" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.15))' }} />
+            <CloudRain size={11} className="opacity-40" style={iconStyle} />
             <span className="text-[10px] font-medium" style={textStyle}>
               Masse H₂O:
             </span>
@@ -72,7 +85,7 @@ export const AirVolumeInfoBadge = ({
         
         {averageTemperature !== null && (
           <div className="flex items-center gap-2">
-            <Thermometer size={11} className="opacity-40" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.15))' }} />
+            <Thermometer size={11} className="opacity-40" style={iconStyle} />
             <span className="text-[10px] font-medium" style={textStyle}>
               T° moyenne:
             </span>
@@ -84,7 +97,7 @@ export const AirVolumeInfoBadge = ({
         
         {averageHumidity !== null && (
           <div className="flex items-center gap-2">
-            <Droplets size={11} className="opacity-40" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.15))' }} />
+            <Droplets size={11} className="opacity-40" style={iconStyle} />
             <span className="text-[10px] font-medium" style={textStyle}>
               HR moyenne:
             </span>
