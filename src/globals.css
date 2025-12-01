@@ -130,4 +130,14 @@
   .leaflet-container {
     font-family: inherit;
   }
+
+  /* Hide scrollbars but keep scroll functionality */
+  * {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  *::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
 }
