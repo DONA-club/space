@@ -13,7 +13,6 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const selectedMetric = useAppStore((state) => state.selectedMetric);
   const interpolationRange = useAppStore((state) => state.interpolationRange);
 
-  // Show legend if data is ready and we have an interpolation range
   if (!dataReady || !interpolationRange) return null;
 
   const getMetricInfo = () => {
@@ -93,7 +92,6 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const averagePosition = getAveragePosition();
   const averageColor = getAverageColor();
 
-  // Couleurs pour min et max
   const minColor = metricInfo.colors[0];
   const maxColor = metricInfo.colors[metricInfo.colors.length - 1];
 
@@ -106,13 +104,13 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.3 }}
-        className="absolute top-4 left-0 right-0 z-10 flex justify-center"
+        className="absolute top-2 sm:top-4 left-0 right-0 z-10 flex justify-center px-2"
       >
-        <div className="space-y-2 flex flex-col items-center">
-          {/* Metric label - engraved */}
+        <div className="space-y-1 sm:space-y-2 flex flex-col items-center">
+          {/* Metric label */}
           <div className="flex items-center justify-center">
             <span 
-              className="text-xs font-semibold tracking-wide"
+              className="text-[10px] sm:text-xs font-semibold tracking-wide"
               style={{
                 textShadow: '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
                 color: 'rgba(0, 0, 0, 0.4)'
@@ -122,17 +120,17 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
             </span>
           </div>
           
-          {/* Gradient bar - fixed width 200px */}
-          <div className="relative w-[200px]">
+          {/* Gradient bar - responsive width */}
+          <div className="relative w-[150px] sm:w-[200px]">
             <div 
-              className="h-3 rounded-full shadow-inner" 
+              className="h-2 sm:h-3 rounded-full shadow-inner" 
               style={{ 
                 background: gradient,
                 boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.2)'
               }}
             ></div>
             
-            {/* Volumetric average indicator - only show when meshing is enabled */}
+            {/* Volumetric average indicator */}
             {meshingEnabled && averagePosition !== null && (
               <motion.div
                 initial={{ scale: 0 }}
@@ -146,7 +144,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                 }}
               >
                 <div 
-                  className="w-3 h-3 rounded-full border-2 border-white shadow-lg relative"
+                  className="w-2 sm:w-3 h-2 sm:h-3 rounded-full border-2 border-white shadow-lg relative"
                   style={{ backgroundColor: averageColor }}
                 >
                   <div 
@@ -158,8 +156,8 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
             )}
           </div>
           
-          {/* Min/Max/Average values - engraved and colored, perfectly centered on gradient edges */}
-          <div className="relative w-[200px] flex items-center justify-between text-[11px] font-bold">
+          {/* Min/Max/Average values */}
+          <div className="relative w-[150px] sm:w-[200px] flex items-center justify-between text-[9px] sm:text-[11px] font-bold">
             <span 
               className="absolute left-0 -translate-x-1/2"
               style={{
@@ -171,7 +169,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               {interpolationRange.min.toFixed(decimals)}{metricInfo.unit}
             </span>
             
-            {/* Average value - only show when meshing is enabled */}
+            {/* Average value */}
             {meshingEnabled && averagePosition !== null && (
               <motion.span
                 initial={{ opacity: 0, scale: 0 }}

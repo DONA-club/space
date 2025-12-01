@@ -7,7 +7,7 @@ import { Scene3DViewer } from './Scene3DViewer';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Radio, History, LogOut, ArrowLeft } from 'lucide-react';
+import { Radio, History, LogOut, ArrowLeft, Menu, X } from 'lucide-react';
 import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
 import { FileUploadPanel } from './FileUploadPanel';
@@ -30,6 +30,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   
   const [spaceAddress, setSpaceAddress] = useState<string>('');
   const [loadingAddress, setLoadingAddress] = useState(false);
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
 
   useEffect(() => {
     if (currentSpace?.latitude && currentSpace?.longitude) {
@@ -65,86 +66,98 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   const showFileUpload = !gltfModel || sensors.length === 0;
 
   return (
-    <div className="h-screen overflow-hidden p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 flex flex-col">
-      <div className="max-w-7xl mx-auto w-full flex flex-col h-full gap-4">
+    <div className="h-screen overflow-hidden p-2 sm:p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 flex flex-col">
+      <div className="max-w-7xl mx-auto w-full flex flex-col h-full gap-2 sm:gap-4">
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex-shrink-0"
         >
-          <LiquidGlassCard className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+          <LiquidGlassCard className="p-2 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={onBackToSpaces}
-                  className="hover:bg-white/50 dark:hover:bg-black/50"
+                  className="hover:bg-white/50 dark:hover:bg-black/50 h-8 px-2 sm:px-3"
                 >
-                  <ArrowLeft size={16} className="mr-2" />
-                  <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-semibold">
+                  <ArrowLeft size={16} className="sm:mr-2" />
+                  <span className="hidden sm:inline bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-semibold">
                     Space
                   </span>
                 </Button>
                 
-                <div className="border-l border-gray-300 dark:border-gray-600 h-8"></div>
+                <div className="hidden sm:block border-l border-gray-300 dark:border-gray-600 h-8"></div>
                 
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent truncate">
                     {currentSpace?.name || 'Space'}
                   </h1>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 truncate">
                     {loadingAddress ? (
-                      'Chargement de la localisation...'
+                      'Chargement...'
                     ) : spaceAddress ? (
-                      spaceAddress
+                      <span className="hidden sm:inline">{spaceAddress}</span>
                     ) : currentSpace?.description ? (
                       currentSpace.description
                     ) : (
-                      `${sensors.length} capteur${sensors.length > 1 ? 's' : ''} configuré${sensors.length > 1 ? 's' : ''}`
+                      `${sensors.length} capteur${sensors.length > 1 ? 's' : ''}`
                     )}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 {!showFileUpload && (
-                  <Tabs value={mode} onValueChange={(v) => setMode(v as 'live' | 'replay')}>
-                    <TabsList className="bg-white/50 dark:bg-black/50">
-                      <TabsTrigger 
-                        value="replay" 
-                        className={`flex items-center gap-2 ${
-                          mode === 'replay' 
-                            ? 'text-green-600 dark:text-green-400 data-[state=active]:text-green-600 dark:data-[state=active]:text-green-400' 
-                            : 'text-gray-400 dark:text-gray-500 data-[state=inactive]:text-gray-400 dark:data-[state=inactive]:text-gray-500'
-                        }`}
-                      >
-                        <History size={16} />
-                        Replay
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="live" 
-                        className={`flex items-center gap-2 ${
-                          mode === 'live' 
-                            ? 'text-red-600 dark:text-red-400 data-[state=active]:text-red-600 dark:data-[state=active]:text-red-400' 
-                            : 'text-gray-400 dark:text-gray-500 data-[state=inactive]:text-gray-400 dark:data-[state=inactive]:text-gray-500'
-                        }`}
-                      >
-                        <Radio size={16} />
-                        Live
-                        {wsConnected && mode === 'live' && (
-                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                        )}
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                  <>
+                    <Tabs value={mode} onValueChange={(v) => setMode(v as 'live' | 'replay')} className="hidden sm:block">
+                      <TabsList className="bg-white/50 dark:bg-black/50">
+                        <TabsTrigger 
+                          value="replay" 
+                          className={`flex items-center gap-2 ${
+                            mode === 'replay' 
+                              ? 'text-green-600 dark:text-green-400 data-[state=active]:text-green-600 dark:data-[state=active]:text-green-400' 
+                              : 'text-gray-400 dark:text-gray-500 data-[state=inactive]:text-gray-400 dark:data-[state=inactive]:text-gray-500'
+                          }`}
+                        >
+                          <History size={16} />
+                          <span className="hidden md:inline">Replay</span>
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="live" 
+                          className={`flex items-center gap-2 ${
+                            mode === 'live' 
+                              ? 'text-red-600 dark:text-red-400 data-[state=active]:text-red-600 dark:data-[state=active]:text-red-400' 
+                              : 'text-gray-400 dark:text-gray-500 data-[state=inactive]:text-gray-400 dark:data-[state=inactive]:text-gray-500'
+                          }`}
+                        >
+                          <Radio size={16} />
+                          <span className="hidden md:inline">Live</span>
+                          {wsConnected && mode === 'live' && (
+                            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                          )}
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowMobilePanel(!showMobilePanel)}
+                      className="sm:hidden h-8 w-8 p-0"
+                    >
+                      {showMobilePanel ? <X size={16} /> : <Menu size={16} />}
+                    </Button>
+                  </>
                 )}
                 
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleLogout}
-                  className="bg-white/50 dark:bg-black/50"
+                  className="bg-white/50 dark:bg-black/50 h-8 w-8 p-0"
                 >
                   <LogOut size={16} />
                 </Button>
@@ -157,13 +170,57 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="max-w-2xl mx-auto flex-1 overflow-y-auto"
+            className="max-w-2xl mx-auto flex-1 overflow-y-auto w-full"
           >
             <FileUploadPanel />
           </motion.div>
         ) : (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
+            {/* Mobile: Stacked layout */}
+            <div className="flex-1 min-h-0 flex flex-col lg:hidden gap-2">
+              {/* 3D Scene */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+                className={`${showMobilePanel ? 'h-1/3' : 'flex-1'} min-h-[200px] transition-all duration-300`}
+              >
+                <LiquidGlassCard className="p-2 h-full">
+                  <div className="relative w-full h-full">
+                    <Scene3DViewer />
+                  </div>
+                </LiquidGlassCard>
+              </motion.div>
+
+              {/* Mobile Panel */}
+              {showMobilePanel && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex-1 overflow-y-auto"
+                >
+                  <SensorPanel />
+                </motion.div>
+              )}
+
+              {/* Timeline - always visible on mobile */}
+              {mode === 'replay' && (
+                <div className="flex-shrink-0 space-y-2">
+                  <DataControlPanel />
+                  {dataReady && <TimelineControl />}
+                </div>
+              )}
+
+              {mode === 'live' && (
+                <div className="flex-shrink-0">
+                  <TimelineControl />
+                </div>
+              )}
+            </div>
+
+            {/* Desktop/Tablet: Side-by-side layout */}
+            <div className="hidden lg:grid lg:grid-cols-3 gap-4 flex-1 min-h-0">
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -187,30 +244,31 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
               </motion.div>
             </div>
 
-            {mode === 'replay' && (
-              <div className="flex-shrink-0 space-y-4">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  <DataControlPanel />
-                </motion.div>
-                
-                {dataReady && (
+            {/* Desktop Timeline */}
+            <div className="hidden lg:block flex-shrink-0 space-y-4">
+              {mode === 'replay' && (
+                <>
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
+                    transition={{ delay: 0.3 }}
                   >
-                    <TimelineControl />
+                    <DataControlPanel />
                   </motion.div>
-                )}
-              </div>
-            )}
+                  
+                  {dataReady && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 }}
+                    >
+                      <TimelineControl />
+                    </motion.div>
+                  )}
+                </>
+              )}
 
-            {mode === 'live' && (
-              <div className="flex-shrink-0">
+              {mode === 'live' && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -218,8 +276,8 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                 >
                   <TimelineControl />
                 </motion.div>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
       </div>
