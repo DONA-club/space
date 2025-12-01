@@ -74,7 +74,8 @@ export const Scene3DViewer = () => {
     selectedMetric,
     interpolationRange,
     hasOutdoorData,
-    dataReady
+    dataReady,
+    isDarkMode
   });
 
   useEffect(() => {
@@ -750,8 +751,8 @@ const createVisualizationMesh = (
   
   const pointSize = avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR;
 
-  // Adjust opacity based on theme
-  const opacity = isDarkMode ? 0.85 : 0.65;
+  // Adjust opacity and blending based on theme for better visibility
+  const opacity = isDarkMode ? 0.95 : 0.75;
 
   const material = new THREE.PointsMaterial({
     size: pointSize,
@@ -759,7 +760,7 @@ const createVisualizationMesh = (
     transparent: true,
     opacity: opacity,
     sizeAttenuation: true,
-    blending: THREE.NormalBlending,
+    blending: isDarkMode ? THREE.AdditiveBlending : THREE.NormalBlending,
     depthWrite: false,
     map: createCircleTexture(),
   });
@@ -931,22 +932,24 @@ const createVolumeMesh = (
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   
-  // Adjust opacity based on theme
-  const opacity = isDarkMode ? 0.85 : 0.65;
+  // Adjust opacity and material properties based on theme for better visibility
+  const opacity = isDarkMode ? 0.9 : 0.7;
   
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
     transparent: true,
     opacity: opacity,
     side: THREE.DoubleSide,
+    emissive: isDarkMode ? new THREE.Color(0x111111) : new THREE.Color(0x000000),
+    emissiveIntensity: isDarkMode ? 0.2 : 0,
   });
   
-  // Create wireframe for better visibility
+  // Create wireframe for better visibility with stronger contrast
   const wireframeGeometry = new THREE.EdgesGeometry(geometry);
-  const wireframeMaterial = new THREE.LineBasicMaterial({ 
-    color: isDarkMode ? 0xffffff : 0x000000, 
-    opacity: isDarkMode ? 0.15 : 0.1,
-    transparent: true 
+  const wireframeMaterial = new THREE.LineBasicMaterial({
+    color: isDarkMode ? 0xffffff : 0x333333,
+    opacity: isDarkMode ? 0.3 : 0.2,
+    transparent: true
   });
   const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
   
