@@ -21,11 +21,13 @@ import { SceneRef, ModelBounds } from "@/types/scene.types";
 import { INTERPOLATION_OFFSET, INTERPOLATION_DEFAULTS, VISUALIZATION_DEFAULTS } from "@/constants/interpolation";
 import { calculateAirDensity, calculateWaterMass } from "@/utils/airCalculations";
 import { calculateSceneVolume } from "@/utils/volumeCalculations";
+import { useTheme } from "@/components/theme-provider";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<SceneRef | null>(null);
   const pulseAnimationRef = useRef<number | null>(null);
+  const { theme } = useTheme();
   
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +63,9 @@ export const Scene3DViewer = () => {
   const sensorOffset = useAppStore((state) => state.sensorOffset);
 
   const { sensorData, outdoorData } = useSensorData(currentSpace, sensors, hasOutdoorData, currentTimestamp);
+
+  // Determine if we're in dark mode
+  const isDarkMode = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useSceneBackground({
     scene: sceneRef.current?.scene || null,
@@ -205,7 +210,6 @@ export const Scene3DViewer = () => {
         sceneRef.current.interpolationMesh = null;
       }
       
-      // Don't reset interpolation range here anymore - it's handled separately
       setVolumetricAverage(null);
       setInterpolationPointCount(0);
       setAirMass(null);
@@ -281,7 +285,8 @@ export const Scene3DViewer = () => {
       selectedMetric,
       visualizationType,
       modelBounds,
-      meshResolution
+      meshResolution,
+      isDarkMode
     );
     
     scene.add(newMesh);
@@ -302,7 +307,8 @@ export const Scene3DViewer = () => {
     sensors,
     modelLoaded,
     sensorData,
-    sensorOffset
+    sensorOffset,
+    isDarkMode
   ]);
 
   useLayoutEffect(() => {
@@ -481,7 +487,7 @@ export const Scene3DViewer = () => {
   );
 };
 
-// Helper functions remain the same...
+// Helper functions...
 const disposeInterpolationMesh = (mesh: THREE.Points | THREE.Group | THREE.Mesh) => {
   if (mesh instanceof THREE.Points || mesh instanceof THREE.Mesh) {
     mesh.geometry.dispose();
@@ -716,7 +722,8 @@ const createVisualizationMesh = (
   selectedMetric: string,
   visualizationType: string,
   modelBounds: ModelBounds,
-  meshResolution: number
+  meshResolution: number,
+  isDarkMode: boolean
 ): THREE.Points | THREE.Group | THREE.Mesh => {
   const positions: number[] = [];
   const colors: number[] = [];
@@ -738,16 +745,19 @@ const createVisualizationMesh = (
   } else if (visualizationType === 'isosurface') {
     return createIsosurfaces(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution);
   } else if (visualizationType === 'mesh') {
-    return createVolumeMesh(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution);
+    return createVolumeMesh(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution, isDarkMode);
   }
   
   const pointSize = avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR;
+
+  // Adjust opacity based on theme
+  const opacity = isDarkMode ? 0.85 : 0.65;
 
   const material = new THREE.PointsMaterial({
     size: pointSize,
     vertexColors: true,
     transparent: true,
-    opacity: INTERPOLATION_DEFAULTS.POINT_OPACITY,
+    opacity: opacity,
     sizeAttenuation: true,
     blending: THREE.NormalBlending,
     depthWrite: false,
@@ -858,7 +868,8 @@ const createVolumeMesh = (
   maxValue: number,
   selectedMetric: string,
   modelBounds: ModelBounds,
-  meshResolution: number
+  meshResolution: number,
+  isDarkMode: boolean
 ): THREE.Mesh => {
   const positions: number[] = [];
   const colors: number[] = [];
@@ -920,14 +931,29 @@ const createVolumeMesh = (
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   
+  // Adjust opacity based on theme
+  const opacity = isDarkMode ? 0.85 : 0.65;
+  
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: 0.7,
+    opacity: opacity,
     side: THREE.DoubleSide,
   });
   
-  return new THREE.Mesh(geometry, material);
+  // Create wireframe for better visibility
+  const wireframeGeometry = new THREE.EdgesGeometry(geometry);
+  const wireframeMaterial = new THREE.LineBasicMaterial({ 
+    color: isDarkMode ? 0xffffff : 0x000000, 
+    opacity: isDarkMode ? 0.15 : 0.1,
+    transparent: true 
+  });
+  const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+  
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.add(wireframe);
+  
+  return mesh;
 };
 
 const processLoadedModel = (gltf: any, scene: THREE.Scene) => {
