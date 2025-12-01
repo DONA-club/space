@@ -50,6 +50,7 @@ export const TimelineControl = () => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const lastScrollLoadRef = useRef<number>(0);
   const lastPlaybackLoadRef = useRef<number>(0);
+  const hasInitializedCursorRef = useRef<boolean>(false);
 
   // Update live timeline end every second
   useEffect(() => {
@@ -67,12 +68,21 @@ export const TimelineControl = () => {
       setRangeStart(timeRange[0]);
       setRangeEnd(timeRange[1]);
       
-      // In live mode, move cursor to end of historical data
-      if (mode === 'live') {
-        setCurrentTimestamp(timeRange[1]);
+      // Position cursor at center when switching to replay mode
+      if (mode === 'replay' && !hasInitializedCursorRef.current) {
+        const centerTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) / 2;
+        setCurrentTimestamp(centerTimestamp);
+        hasInitializedCursorRef.current = true;
       }
     }
   }, [timeRange, rangeStart, rangeEnd, mode, setCurrentTimestamp]);
+
+  // Reset initialization flag when switching modes
+  useEffect(() => {
+    if (mode === 'live') {
+      hasInitializedCursorRef.current = false;
+    }
+  }, [mode]);
 
   const hasDataAtTimestamp = (timestamp: number): boolean => {
     return loadedRanges.some(r => r.start <= timestamp && r.end >= timestamp);
