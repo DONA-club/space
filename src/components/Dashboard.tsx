@@ -113,14 +113,22 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                     <TabsList className="bg-white/50 dark:bg-black/50">
                       <TabsTrigger 
                         value="replay" 
-                        className={`flex items-center gap-2 ${mode === 'replay' ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}
+                        className={`flex items-center gap-2 ${
+                          mode === 'replay' 
+                            ? 'text-green-600 dark:text-green-400 data-[state=active]:text-green-600 dark:data-[state=active]:text-green-400' 
+                            : 'text-gray-400 dark:text-gray-500 data-[state=inactive]:text-gray-400 dark:data-[state=inactive]:text-gray-500'
+                        }`}
                       >
                         <History size={16} />
                         Replay
                       </TabsTrigger>
                       <TabsTrigger 
                         value="live" 
-                        className={`flex items-center gap-2 ${mode === 'live' ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}
+                        className={`flex items-center gap-2 ${
+                          mode === 'live' 
+                            ? 'text-red-600 dark:text-red-400 data-[state=active]:text-red-600 dark:data-[state=active]:text-red-400' 
+                            : 'text-gray-400 dark:text-gray-500 data-[state=inactive]:text-gray-400 dark:data-[state=inactive]:text-gray-500'
+                        }`}
                       >
                         <Radio size={16} />
                         Live
