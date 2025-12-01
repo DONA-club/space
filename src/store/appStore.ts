@@ -83,8 +83,10 @@ interface AppState {
   visualizationType: VisualizationType;
   interpolationRange: { min: number; max: number } | null;
   
-  // WebSocket
+  // WebSocket & Live
   wsConnected: boolean;
+  isRecording: boolean;
+  liveSystemConnected: boolean;
   
   // Actions
   setAuth: (user: any | null) => void;
@@ -112,6 +114,8 @@ interface AppState {
   setVisualizationType: (type: VisualizationType) => void;
   setInterpolationRange: (range: { min: number; max: number } | null) => void;
   setWsConnected: (connected: boolean) => void;
+  setRecording: (recording: boolean) => void;
+  setLiveSystemConnected: (connected: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -138,6 +142,8 @@ export const useAppStore = create<AppState>((set) => ({
   visualizationType: 'points',
   interpolationRange: null,
   wsConnected: false,
+  isRecording: false,
+  liveSystemConnected: false,
   
   setAuth: (user) => set({ 
     isAuthenticated: !!user, 
@@ -151,7 +157,9 @@ export const useAppStore = create<AppState>((set) => ({
     sensors: [],
     dataReady: false,
     outdoorData: null,
-    hasOutdoorData: false
+    hasOutdoorData: false,
+    isRecording: false,
+    liveSystemConnected: false
   }),
   setCurrentSpace: (space) => set({ currentSpace: space }),
   setMode: (mode) => set({ mode }),
@@ -186,4 +194,6 @@ export const useAppStore = create<AppState>((set) => ({
   setVisualizationType: (type) => set({ visualizationType: type }),
   setInterpolationRange: (range) => set({ interpolationRange: range }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
+  setRecording: (recording) => set({ isRecording: recording }),
+  setLiveSystemConnected: (connected) => set({ liveSystemConnected: connected }),
 }));

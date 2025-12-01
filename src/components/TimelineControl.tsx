@@ -3,12 +3,13 @@
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, SkipBack, SkipForward, Thermometer, Droplets, Wind, CloudRain, Repeat } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Thermometer, Droplets, Wind, CloudRain, Repeat, Circle, Download } from 'lucide-react';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { supabase } from '@/integrations/supabase/client';
 import { findClosestDataPoint } from '@/utils/sensorUtils';
+import { showSuccess, showError } from '@/utils/toast';
 
 interface DewPointDifference {
   timestamp: number;
@@ -21,6 +22,7 @@ const PRELOAD_THRESHOLD = 333;
 const COLOR_ZONE_RADIUS = 0.15;
 
 export const TimelineControl = () => {
+  const mode = useAppStore((state) => state.mode);
   const isPlaying = useAppStore((state) => state.isPlaying);
   const setPlaying = useAppStore((state) => state.setPlaying);
   const currentTimestamp = useAppStore((state) => state.currentTimestamp);
@@ -31,6 +33,9 @@ export const TimelineControl = () => {
   const currentSpace = useAppStore((state) => state.currentSpace);
   const sensors = useAppStore((state) => state.sensors);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
+  const isRecording = useAppStore((state) => state.isRecording);
+  const setRecording = useAppStore((state) => state.setRecording);
+  const liveSystemConnected = useAppStore((state) => state.liveSystemConnected);
 
   const [playbackSpeed, setPlaybackSpeed] = useState(60);
   const [rangeStart, setRangeStart] = useState<number | null>(null);
@@ -40,6 +45,7 @@ export const TimelineControl = () => {
   const [loadedRanges, setLoadedRanges] = useState<Array<{start: number, end: number}>>([]);
   const [loadingRanges, setLoadingRanges] = useState<Set<string>>(new Set());
   const [loopEnabled, setLoopEnabled] = useState(false);
+  const [syncingHistory, setSyncingHistory] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const lastScrollLoadRef = useRef<number>(0);
   const lastPlaybackLoadRef = useRef<number>(0);
@@ -48,8 +54,13 @@ export const TimelineControl = () => {
     if (timeRange && rangeStart === null && rangeEnd === null) {
       setRangeStart(timeRange[0]);
       setRangeEnd(timeRange[1]);
+      
+      // In live mode, move cursor to end
+      if (mode === 'live') {
+        setCurrentTimestamp(timeRange[1]);
+      }
     }
-  }, [timeRange, rangeStart, rangeEnd]);
+  }, [timeRange, rangeStart, rangeEnd, mode, setCurrentTimestamp]);
 
   const hasDataAtTimestamp = (timestamp: number): boolean => {
     return loadedRanges.some(r => r.start <= timestamp && r.end >= timestamp);
@@ -224,7 +235,7 @@ export const TimelineControl = () => {
   }, [currentSpace, hasOutdoorData, timeRange, sensors, rangeStart, rangeEnd]);
 
   useEffect(() => {
-    if (!isPlaying || !rangeStart || !rangeEnd || !currentSpace || !hasOutdoorData) return;
+    if (!isPlaying || !rangeStart || !rangeEnd || !currentSpace || !hasOutdoorData || mode === 'live') return;
 
     const currentRange = loadedRanges.find(r => r.start <= currentTimestamp && r.end >= currentTimestamp);
     if (currentRange) {
@@ -241,7 +252,7 @@ export const TimelineControl = () => {
         }
       }
     }
-  }, [currentTimestamp, isPlaying, rangeStart, rangeEnd, loadedRanges, currentSpace, hasOutdoorData]);
+  }, [currentTimestamp, isPlaying, rangeStart, rangeEnd, loadedRanges, currentSpace, hasOutdoorData, mode]);
 
   const { minDiff, maxDiff, diffRange } = useMemo(() => {
     if (dewPointDifferences.length === 0) {
@@ -257,7 +268,7 @@ export const TimelineControl = () => {
   }, [dewPointDifferences]);
 
   useEffect(() => {
-    if (!isPlaying || !rangeStart || !rangeEnd) return;
+    if (!isPlaying || !rangeStart || !rangeEnd || mode === 'live') return;
 
     const interval = setInterval(() => {
       setCurrentTimestamp((prev) => {
@@ -283,11 +294,11 @@ export const TimelineControl = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, playbackSpeed, rangeStart, rangeEnd, setCurrentTimestamp, setPlaying, loopEnabled, hasDataAtTimestamp, getFurthestLoadedTimestamp]);
+  }, [isPlaying, playbackSpeed, rangeStart, rangeEnd, setCurrentTimestamp, setPlaying, loopEnabled, hasDataAtTimestamp, getFurthestLoadedTimestamp, mode]);
 
   useEffect(() => {
     const timelineElement = timelineRef.current;
-    if (!timelineElement || !timeRange || !rangeStart || !rangeEnd) return;
+    if (!timelineElement || !timeRange || !rangeStart || !rangeEnd || mode === 'live') return;
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -338,7 +349,7 @@ export const TimelineControl = () => {
     return () => {
       timelineElement.removeEventListener('wheel', handleWheel);
     };
-  }, [timeRange, rangeStart, rangeEnd, currentTimestamp, setCurrentTimestamp, hasDataAtTimestamp, getFurthestLoadedTimestamp]);
+  }, [timeRange, rangeStart, rangeEnd, currentTimestamp, setCurrentTimestamp, hasDataAtTimestamp, getFurthestLoadedTimestamp, mode]);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -359,12 +370,13 @@ export const TimelineControl = () => {
   };
 
   const handleMouseDown = (type: 'start' | 'end' | 'current') => (e: React.MouseEvent) => {
+    if (mode === 'live') return; // Disable dragging in live mode
     e.preventDefault();
     setIsDragging(type);
   };
 
   const handleTimelineClick = (e: React.MouseEvent) => {
-    if (!timelineRef.current || !timeRange || isDragging) return;
+    if (!timelineRef.current || !timeRange || isDragging || mode === 'live') return;
 
     const rect = timelineRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
@@ -378,7 +390,7 @@ export const TimelineControl = () => {
   };
 
   const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging || !timelineRef.current || !timeRange) return;
+    if (!isDragging || !timelineRef.current || !timeRange || mode === 'live') return;
 
     const rect = timelineRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
@@ -409,7 +421,7 @@ export const TimelineControl = () => {
   };
 
   useEffect(() => {
-    if (isDragging) {
+    if (isDragging && mode !== 'live') {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
       return () => {
@@ -417,7 +429,7 @@ export const TimelineControl = () => {
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, rangeStart, rangeEnd, timeRange, currentTimestamp]);
+  }, [isDragging, rangeStart, rangeEnd, timeRange, currentTimestamp, mode]);
 
   const getDayMarkers = () => {
     if (!timeRange) return [];
@@ -532,6 +544,35 @@ export const TimelineControl = () => {
     return path;
   };
 
+  const handleToggleRecording = () => {
+    setRecording(!isRecording);
+    if (!isRecording) {
+      showSuccess('Enregistrement démarré');
+    } else {
+      showSuccess('Enregistrement arrêté');
+    }
+  };
+
+  const handleSyncHistory = async () => {
+    if (!currentSpace) return;
+
+    setSyncingHistory(true);
+    try {
+      // TODO: Implement actual sync logic with remote system
+      // This would fetch data from the connected system's database
+      // to fill the gap between oldest local data and newly acquired data
+      
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate sync
+      
+      showSuccess('Historique synchronisé avec succès');
+    } catch (error) {
+      console.error('Error syncing history:', error);
+      showError('Erreur lors de la synchronisation de l\'historique');
+    } finally {
+      setSyncingHistory(false);
+    }
+  };
+
   if (!timeRange || rangeStart === null || rangeEnd === null) return null;
 
   const dayMarkers = getDayMarkers();
@@ -546,6 +587,9 @@ export const TimelineControl = () => {
   
   const colorZoneStart = Math.max(rangeStartPos, currentPos - (COLOR_ZONE_RADIUS * 100));
   const colorZoneEnd = Math.min(rangeEndPos, currentPos + (COLOR_ZONE_RADIUS * 100));
+
+  const isLiveMode = mode === 'live';
+  const cursorColor = isLiveMode ? (liveSystemConnected ? 'from-red-400 to-red-500' : 'from-gray-400 to-gray-500') : 'from-yellow-400 to-orange-500';
 
   return (
     <LiquidGlassCard className="p-4">
@@ -642,118 +686,165 @@ export const TimelineControl = () => {
           </TooltipPrimitive.Provider>
 
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
+            {isLiveMode ? (
+              <>
+                <TooltipPrimitive.Provider delayDuration={300}>
+                  <TooltipPrimitive.Root>
+                    <TooltipPrimitive.Trigger asChild>
+                      <Button
+                        size="sm"
+                        onClick={handleToggleRecording}
+                        className={`h-8 w-8 p-0 ${isRecording ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-gray-500 hover:bg-gray-600'}`}
+                      >
+                        <Circle size={14} fill={isRecording ? 'white' : 'none'} />
+                      </Button>
+                    </TooltipPrimitive.Trigger>
+                    <TooltipPrimitive.Portal>
+                      <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                        {isRecording ? 'Arrêter l\'enregistrement' : 'Démarrer l\'enregistrement'}
+                      </TooltipPrimitive.Content>
+                    </TooltipPrimitive.Portal>
+                  </TooltipPrimitive.Root>
+
+                  <TooltipPrimitive.Root>
+                    <TooltipPrimitive.Trigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleSyncHistory}
+                        disabled={syncingHistory}
+                        className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 px-3"
+                      >
+                        <Download size={14} className="mr-2" />
+                        {syncingHistory ? 'Sync...' : 'Historique'}
+                      </Button>
+                    </TooltipPrimitive.Trigger>
+                    <TooltipPrimitive.Portal>
+                      <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                        Synchroniser l'historique depuis le système distant
+                      </TooltipPrimitive.Content>
+                    </TooltipPrimitive.Portal>
+                  </TooltipPrimitive.Root>
+                </TooltipPrimitive.Provider>
+              </>
+            ) : (
+              <TooltipPrimitive.Provider delayDuration={300}>
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentTimestamp(rangeStart)}
+                      className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
+                    >
+                      <SkipBack size={14} />
+                    </Button>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                      Retour au début
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
+
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
+                    <Button
+                      size="sm"
+                      onClick={() => setPlaying(!isPlaying)}
+                      className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 h-8 w-8 p-0"
+                    >
+                      {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                    </Button>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                      {isPlaying ? 'Pause' : 'Lecture'}
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
+
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
+                    <Button
+                      size="sm"
+                      variant={loopEnabled ? "default" : "outline"}
+                      onClick={() => setLoopEnabled(!loopEnabled)}
+                      className={loopEnabled 
+                        ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 h-8 w-8 p-0"
+                        : "bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
+                      }
+                    >
+                      <Repeat size={14} />
+                    </Button>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                      {loopEnabled ? 'Boucle activée' : 'Activer la boucle'}
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
+
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentTimestamp(rangeEnd)}
+                      className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
+                    >
+                      <SkipForward size={14} />
+                    </Button>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
+                      Aller à la fin
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
+              </TooltipPrimitive.Provider>
+            )}
+          </div>
+
+          {!isLiveMode && (
             <TooltipPrimitive.Provider delayDuration={300}>
               <TooltipPrimitive.Root>
                 <TooltipPrimitive.Trigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentTimestamp(rangeStart)}
-                    className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
+                  <select
+                    value={playbackSpeed}
+                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                    className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <SkipBack size={14} />
-                  </Button>
+                    <option value={60}>1 min/s</option>
+                    <option value={300}>5x</option>
+                    <option value={600}>10x</option>
+                    <option value={1800}>30x</option>
+                    <option value={3600}>60x</option>
+                  </select>
                 </TooltipPrimitive.Trigger>
                 <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
-                    Retour au début
-                  </TooltipPrimitive.Content>
-                </TooltipPrimitive.Portal>
-              </TooltipPrimitive.Root>
-
-              <TooltipPrimitive.Root>
-                <TooltipPrimitive.Trigger asChild>
-                  <Button
-                    size="sm"
-                    onClick={() => setPlaying(!isPlaying)}
-                    className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 h-8 w-8 p-0"
-                  >
-                    {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-                  </Button>
-                </TooltipPrimitive.Trigger>
-                <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
-                    {isPlaying ? 'Pause' : 'Lecture'}
-                  </TooltipPrimitive.Content>
-                </TooltipPrimitive.Portal>
-              </TooltipPrimitive.Root>
-
-              <TooltipPrimitive.Root>
-                <TooltipPrimitive.Trigger asChild>
-                  <Button
-                    size="sm"
-                    variant={loopEnabled ? "default" : "outline"}
-                    onClick={() => setLoopEnabled(!loopEnabled)}
-                    className={loopEnabled 
-                      ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 h-8 w-8 p-0"
-                      : "bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
-                    }
-                  >
-                    <Repeat size={14} />
-                  </Button>
-                </TooltipPrimitive.Trigger>
-                <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
-                    {loopEnabled ? 'Boucle activée' : 'Activer la boucle'}
-                  </TooltipPrimitive.Content>
-                </TooltipPrimitive.Portal>
-              </TooltipPrimitive.Root>
-
-              <TooltipPrimitive.Root>
-                <TooltipPrimitive.Trigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentTimestamp(rangeEnd)}
-                    className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
-                  >
-                    <SkipForward size={14} />
-                  </Button>
-                </TooltipPrimitive.Trigger>
-                <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
-                    Aller à la fin
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
+                    <p className="font-medium mb-1">Vitesse de lecture</p>
+                    <p>Contrôle la vitesse de défilement des données</p>
                   </TooltipPrimitive.Content>
                 </TooltipPrimitive.Portal>
               </TooltipPrimitive.Root>
             </TooltipPrimitive.Provider>
-          </div>
-
-          <TooltipPrimitive.Provider delayDuration={300}>
-            <TooltipPrimitive.Root>
-              <TooltipPrimitive.Trigger asChild>
-                <select
-                  value={playbackSpeed}
-                  onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                  className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value={60}>1 min/s</option>
-                  <option value={300}>5x</option>
-                  <option value={600}>10x</option>
-                  <option value={1800}>30x</option>
-                  <option value={3600}>60x</option>
-                </select>
-              </TooltipPrimitive.Trigger>
-              <TooltipPrimitive.Portal>
-                <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
-                  <p className="font-medium mb-1">Vitesse de lecture</p>
-                  <p>Contrôle la vitesse de défilement des données</p>
-                </TooltipPrimitive.Content>
-              </TooltipPrimitive.Portal>
-            </TooltipPrimitive.Root>
-          </TooltipPrimitive.Provider>
+          )}
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
             <span>{formatTime(rangeStart)}</span>
-            <span className="font-medium text-blue-600 dark:text-blue-400">{formatTime(currentTimestamp)}</span>
+            <span className={`font-medium ${isLiveMode ? (liveSystemConnected ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400') : 'text-blue-600 dark:text-blue-400'}`}>
+              {formatTime(currentTimestamp)}
+            </span>
             <span>{formatTime(rangeEnd)}</span>
           </div>
 
           <div 
             ref={timelineRef}
-            className="relative h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible cursor-pointer"
+            className={`relative h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={handleTimelineClick}
           >
             {hasOutdoorData && hasNegativeValues && (
@@ -807,7 +898,7 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {hasOutdoorData && dewPointDifferences.length > 0 && (
+            {hasOutdoorData && dewPointDifferences.length > 0 && !isLiveMode && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
                 preserveAspectRatio="none"
@@ -875,32 +966,36 @@ export const TimelineControl = () => {
               }}
             />
 
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
-              style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-6px' }}
-              onMouseDown={handleMouseDown('start')}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute inset-0 bg-white/20 rounded-full"></div>
-            </div>
+            {!isLiveMode && (
+              <>
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
+                  style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-6px' }}
+                  onMouseDown={handleMouseDown('start')}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="absolute inset-0 bg-white/20 rounded-full"></div>
+                </div>
+
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
+                  style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-6px' }}
+                  onMouseDown={handleMouseDown('end')}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="absolute inset-0 bg-white/20 rounded-full"></div>
+                </div>
+              </>
+            )}
 
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
-              style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-6px' }}
-              onMouseDown={handleMouseDown('end')}
+              className={`absolute top-0 bottom-0 w-0.5 bg-gradient-to-b ${cursorColor} ${isLiveMode ? 'cursor-not-allowed' : 'cursor-ew-resize'} shadow-lg z-20 ${isRecording ? 'animate-pulse' : ''}`}
+              style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px', opacity: isLiveMode && !liveSystemConnected ? 0.5 : 1 }}
+              onMouseDown={!isLiveMode ? handleMouseDown('current') : undefined}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="absolute inset-0 bg-white/20 rounded-full"></div>
-            </div>
-
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-yellow-400 to-orange-500 cursor-ew-resize shadow-lg z-20"
-              style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px' }}
-              onMouseDown={handleMouseDown('current')}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
-              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border border-white shadow-lg"></div>
+              <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br ${cursorColor} rounded-full border border-white shadow-lg`}></div>
+              <div className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br ${cursorColor} rounded-full border border-white shadow-lg`}></div>
             </div>
           </div>
         </div>

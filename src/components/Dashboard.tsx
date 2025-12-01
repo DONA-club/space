@@ -111,7 +111,10 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                 {!showFileUpload && (
                   <Tabs value={mode} onValueChange={(v) => setMode(v as 'live' | 'replay')}>
                     <TabsList className="bg-white/50 dark:bg-black/50">
-                      <TabsTrigger value="replay" className="flex items-center gap-2">
+                      <TabsTrigger 
+                        value="replay" 
+                        className={`flex items-center gap-2 ${mode === 'live' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
+                      >
                         <History size={16} />
                         Replay
                       </TabsTrigger>
@@ -192,6 +195,18 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                     <TimelineControl />
                   </motion.div>
                 )}
+              </div>
+            )}
+
+            {mode === 'live' && (
+              <div className="flex-shrink-0">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <TimelineControl />
+                </motion.div>
               </div>
             )}
           </>
