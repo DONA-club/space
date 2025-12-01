@@ -287,6 +287,7 @@ export const TimelineControl = () => {
     return { minDiff: min, maxDiff: max, diffRange: range };
   }, [dewPointDifferences]);
 
+  // Playback loop with reactive speed
   useEffect(() => {
     if (!isPlaying || !rangeStart || !rangeEnd || mode === 'live') return;
 
@@ -937,7 +938,7 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {hasOutdoorData && dewPointDifferences.length > 0 && !isLiveMode && (
+            {hasOutdoorData && dewPointDifferences.length > 0 && mode === 'replay' && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
                 preserveAspectRatio="none"
