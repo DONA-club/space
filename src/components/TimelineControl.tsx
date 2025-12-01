@@ -68,19 +68,36 @@ export const TimelineControl = () => {
       setRangeStart(timeRange[0]);
       setRangeEnd(timeRange[1]);
       
-      if (mode === 'replay' && !hasInitializedCursorRef.current) {
-        const centerTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) / 2;
-        setCurrentTimestamp(centerTimestamp);
+      // Position cursor based on mode
+      if (!hasInitializedCursorRef.current) {
+        if (mode === 'live') {
+          // In live mode, position at the latest data (end of range)
+          setCurrentTimestamp(timeRange[1]);
+        } else {
+          // In replay mode, position at center
+          const centerTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) / 2;
+          setCurrentTimestamp(centerTimestamp);
+        }
         hasInitializedCursorRef.current = true;
       }
     }
   }, [timeRange, rangeStart, rangeEnd, mode, setCurrentTimestamp]);
 
+  // Reset initialization flag when switching modes
   useEffect(() => {
-    if (mode === 'live') {
-      hasInitializedCursorRef.current = false;
-    }
+    hasInitializedCursorRef.current = false;
   }, [mode]);
+
+  // In live mode, continuously update cursor to latest timestamp
+  useEffect(() => {
+    if (mode !== 'live' || !timeRange) return;
+
+    const interval = setInterval(() => {
+      setCurrentTimestamp(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [mode, timeRange, setCurrentTimestamp]);
 
   const hasDataAtTimestamp = (timestamp: number): boolean => {
     return loadedRanges.some(r => r.start <= timestamp && r.end >= timestamp);
@@ -597,7 +614,11 @@ export const TimelineControl = () => {
 
     setSyncingHistory(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // TODO: Implement actual sync logic with remote system
+      // This would fetch data from the connected system's database
+      // to fill the gap between oldest local data and newly acquired data
+      
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate sync
       
       showSuccess('Historique synchronisé avec succès');
     } catch (error) {
@@ -629,27 +650,27 @@ export const TimelineControl = () => {
   const effectiveTimelineEnd = isLiveMode ? liveTimelineEnd : timeRange[1];
 
   return (
-    <LiquidGlassCard className="p-2 sm:p-4">
-      <div className="space-y-2 sm:space-y-4">
-        <div className="relative flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-4">
+    <LiquidGlassCard className="p-4">
+      <div className="space-y-4">
+        <div className="relative flex items-center justify-between gap-4">
           <TooltipPrimitive.Provider delayDuration={300}>
-            <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)} className="w-full sm:w-auto">
-              <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 sm:h-9 p-1 gap-1 w-full sm:w-auto grid grid-cols-4">
+            <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)}>
+              <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-9 p-1 gap-1">
                 <TooltipPrimitive.Root>
                   <TooltipPrimitive.Trigger asChild>
                     <TabsTrigger 
                       value="temperature" 
-                      className="relative flex items-center justify-center gap-1 sm:gap-1.5 h-6 sm:h-7 px-2 sm:px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
+                      className="relative flex items-center gap-1.5 h-7 px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                     >
                       {selectedMetric === 'temperature' && (
                         <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-md"></div>
                       )}
-                      <Thermometer size={12} className={selectedMetric === 'temperature' ? 'text-red-600 relative z-10' : 'text-red-500 relative z-10'} />
-                      <span className={`text-[10px] sm:text-xs font-medium relative z-10 ${selectedMetric === 'temperature' ? 'text-red-700 dark:text-red-500' : ''}`}>T°</span>
+                      <Thermometer size={14} className={selectedMetric === 'temperature' ? 'text-red-600 relative z-10' : 'text-red-500 relative z-10'} />
+                      <span className={`text-xs font-medium relative z-10 ${selectedMetric === 'temperature' ? 'text-red-700 dark:text-red-500' : ''}`}>T°</span>
                     </TabsTrigger>
                   </TooltipPrimitive.Trigger>
                   <TooltipPrimitive.Portal>
-                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
                       <p className="font-medium mb-1">Température (°C)</p>
                       <p className="text-gray-300">Mesure la chaleur de l'air ambiant</p>
                     </TooltipPrimitive.Content>
@@ -660,17 +681,17 @@ export const TimelineControl = () => {
                   <TooltipPrimitive.Trigger asChild>
                     <TabsTrigger 
                       value="humidity" 
-                      className="relative flex items-center justify-center gap-1 sm:gap-1.5 h-6 sm:h-7 px-2 sm:px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
+                      className="relative flex items-center gap-1.5 h-7 px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                     >
                       {selectedMetric === 'humidity' && (
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-blue-600/20 rounded-md"></div>
                       )}
-                      <Droplets size={12} className={selectedMetric === 'humidity' ? 'text-blue-600 relative z-10' : 'text-blue-500 relative z-10'} />
-                      <span className={`text-[10px] sm:text-xs font-medium relative z-10 ${selectedMetric === 'humidity' ? 'text-blue-700 dark:text-blue-500' : ''}`}>HR</span>
+                      <Droplets size={14} className={selectedMetric === 'humidity' ? 'text-blue-600 relative z-10' : 'text-blue-500 relative z-10'} />
+                      <span className={`text-xs font-medium relative z-10 ${selectedMetric === 'humidity' ? 'text-blue-700 dark:text-blue-500' : ''}`}>HR</span>
                     </TabsTrigger>
                   </TooltipPrimitive.Trigger>
                   <TooltipPrimitive.Portal>
-                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
                       <p className="font-medium mb-1">Humidité Relative (%)</p>
                       <p className="text-gray-300">Pourcentage de vapeur d'eau dans l'air</p>
                     </TooltipPrimitive.Content>
@@ -681,17 +702,17 @@ export const TimelineControl = () => {
                   <TooltipPrimitive.Trigger asChild>
                     <TabsTrigger 
                       value="absoluteHumidity" 
-                      className="relative flex items-center justify-center gap-1 sm:gap-1.5 h-6 sm:h-7 px-2 sm:px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
+                      className="relative flex items-center gap-1.5 h-7 px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                     >
                       {selectedMetric === 'absoluteHumidity' && (
                         <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 rounded-md"></div>
                       )}
-                      <Wind size={12} className={selectedMetric === 'absoluteHumidity' ? 'text-cyan-600 relative z-10' : 'text-cyan-500 relative z-10'} />
-                      <span className={`text-[10px] sm:text-xs font-medium relative z-10 ${selectedMetric === 'absoluteHumidity' ? 'text-cyan-700 dark:text-cyan-500' : ''}`}>HA</span>
+                      <Wind size={14} className={selectedMetric === 'absoluteHumidity' ? 'text-cyan-600 relative z-10' : 'text-cyan-500 relative z-10'} />
+                      <span className={`text-xs font-medium relative z-10 ${selectedMetric === 'absoluteHumidity' ? 'text-cyan-700 dark:text-cyan-500' : ''}`}>HA</span>
                     </TabsTrigger>
                   </TooltipPrimitive.Trigger>
                   <TooltipPrimitive.Portal>
-                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
                       <p className="font-medium mb-1">Humidité Absolue (g/m³)</p>
                       <p className="text-gray-300">Quantité réelle d'eau dans l'air</p>
                     </TooltipPrimitive.Content>
@@ -702,17 +723,17 @@ export const TimelineControl = () => {
                   <TooltipPrimitive.Trigger asChild>
                     <TabsTrigger 
                       value="dewPoint" 
-                      className="relative flex items-center justify-center gap-1 sm:gap-1.5 h-6 sm:h-7 px-2 sm:px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
+                      className="relative flex items-center gap-1.5 h-7 px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
                     >
                       {selectedMetric === 'dewPoint' && (
                         <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-purple-600/20 rounded-md"></div>
                       )}
-                      <CloudRain size={12} className={selectedMetric === 'dewPoint' ? 'text-purple-600 relative z-10' : 'text-purple-500 relative z-10'} />
-                      <span className={`text-[10px] sm:text-xs font-medium relative z-10 ${selectedMetric === 'dewPoint' ? 'text-purple-700 dark:text-purple-500' : ''}`}>PR</span>
+                      <CloudRain size={14} className={selectedMetric === 'dewPoint' ? 'text-purple-600 relative z-10' : 'text-purple-500 relative z-10'} />
+                      <span className={`text-xs font-medium relative z-10 ${selectedMetric === 'dewPoint' ? 'text-purple-700 dark:text-purple-500' : ''}`}>PR</span>
                     </TabsTrigger>
                   </TooltipPrimitive.Trigger>
                   <TooltipPrimitive.Portal>
-                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
                       <p className="font-medium mb-1">Point de Rosée (°C)</p>
                       <p className="text-gray-300">Température de condensation</p>
                     </TooltipPrimitive.Content>
@@ -722,7 +743,7 @@ export const TimelineControl = () => {
             </Tabs>
           </TooltipPrimitive.Provider>
 
-          <div className="flex items-center justify-center gap-1 sm:gap-2">
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
             {isLiveMode ? (
               <>
                 <TooltipPrimitive.Provider delayDuration={300}>
@@ -731,13 +752,13 @@ export const TimelineControl = () => {
                       <Button
                         size="sm"
                         onClick={handleToggleRecording}
-                        className={`h-7 sm:h-8 w-7 sm:w-8 p-0 ${isRecording ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-gray-500 hover:bg-gray-600'}`}
+                        className={`h-8 w-8 p-0 ${isRecording ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-gray-500 hover:bg-gray-600'}`}
                       >
-                        <Circle size={12} fill={isRecording ? 'white' : 'none'} />
+                        <Circle size={14} fill={isRecording ? 'white' : 'none'} />
                       </Button>
                     </TooltipPrimitive.Trigger>
                     <TooltipPrimitive.Portal>
-                      <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs hidden sm:block">
+                      <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
                         {isRecording ? 'Arrêter l\'enregistrement' : 'Démarrer l\'enregistrement'}
                       </TooltipPrimitive.Content>
                     </TooltipPrimitive.Portal>
@@ -750,14 +771,14 @@ export const TimelineControl = () => {
                         variant="outline"
                         onClick={handleSyncHistory}
                         disabled={syncingHistory}
-                        className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-7 sm:h-8 px-2 sm:px-3 text-xs"
+                        className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 px-3"
                       >
-                        <Download size={12} className="sm:mr-2" />
-                        <span className="hidden sm:inline">{syncingHistory ? 'Sync...' : 'Historique'}</span>
+                        <Download size={14} className="mr-2" />
+                        {syncingHistory ? 'Sync...' : 'Historique'}
                       </Button>
                     </TooltipPrimitive.Trigger>
                     <TooltipPrimitive.Portal>
-                      <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs hidden sm:block">
+                      <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
                         Synchroniser l'historique depuis le système distant
                       </TooltipPrimitive.Content>
                     </TooltipPrimitive.Portal>
@@ -772,13 +793,13 @@ export const TimelineControl = () => {
                       size="sm"
                       variant="outline"
                       onClick={handleSkipToStart}
-                      className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-7 sm:h-8 w-7 sm:w-8 p-0"
+                      className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
                     >
-                      <SkipBack size={12} />
+                      <SkipBack size={14} />
                     </Button>
                   </TooltipPrimitive.Trigger>
                   <TooltipPrimitive.Portal>
-                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs hidden sm:block">
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
                       Retour au début
                     </TooltipPrimitive.Content>
                   </TooltipPrimitive.Portal>
@@ -789,13 +810,13 @@ export const TimelineControl = () => {
                     <Button
                       size="sm"
                       onClick={() => setPlaying(!isPlaying)}
-                      className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 h-7 sm:h-8 w-7 sm:w-8 p-0"
+                      className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 h-8 w-8 p-0"
                     >
-                      {isPlaying ? <Pause size={12} /> : <Play size={12} />}
+                      {isPlaying ? <Pause size={14} /> : <Play size={14} />}
                     </Button>
                   </TooltipPrimitive.Trigger>
                   <TooltipPrimitive.Portal>
-                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs hidden sm:block">
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
                       {isPlaying ? 'Pause' : 'Lecture'}
                     </TooltipPrimitive.Content>
                   </TooltipPrimitive.Portal>
@@ -808,15 +829,15 @@ export const TimelineControl = () => {
                       variant={loopEnabled ? "default" : "outline"}
                       onClick={() => setLoopEnabled(!loopEnabled)}
                       className={loopEnabled 
-                        ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 h-7 sm:h-8 w-7 sm:w-8 p-0"
-                        : "bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-7 sm:h-8 w-7 sm:w-8 p-0"
+                        ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 h-8 w-8 p-0"
+                        : "bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
                       }
                     >
-                      <Repeat size={12} />
+                      <Repeat size={14} />
                     </Button>
                   </TooltipPrimitive.Trigger>
                   <TooltipPrimitive.Portal>
-                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs hidden sm:block">
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
                       {loopEnabled ? 'Boucle activée' : 'Activer la boucle'}
                     </TooltipPrimitive.Content>
                   </TooltipPrimitive.Portal>
@@ -828,13 +849,13 @@ export const TimelineControl = () => {
                       size="sm"
                       variant="outline"
                       onClick={handleSkipToEnd}
-                      className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-7 sm:h-8 w-7 sm:w-8 p-0"
+                      className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
                     >
-                      <SkipForward size={12} />
+                      <SkipForward size={14} />
                     </Button>
                   </TooltipPrimitive.Trigger>
                   <TooltipPrimitive.Portal>
-                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs hidden sm:block">
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs">
                       Aller à la fin
                     </TooltipPrimitive.Content>
                   </TooltipPrimitive.Portal>
@@ -850,7 +871,7 @@ export const TimelineControl = () => {
                   <select
                     value={playbackSpeed}
                     onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                    className="text-[10px] sm:text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value={60}>1 min/s</option>
                     <option value={300}>5x</option>
@@ -860,7 +881,7 @@ export const TimelineControl = () => {
                   </select>
                 </TooltipPrimitive.Trigger>
                 <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs">
                     <p className="font-medium mb-1">Vitesse de lecture</p>
                     <p>Contrôle la vitesse de défilement des données</p>
                   </TooltipPrimitive.Content>
@@ -871,17 +892,17 @@ export const TimelineControl = () => {
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-600 dark:text-gray-400">
-            <span className="truncate">{formatTime(rangeStart)}</span>
-            <span className={`font-medium truncate px-2 ${isLiveMode ? (liveSystemConnected ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400') : 'text-blue-600 dark:text-blue-400'}`}>
+          <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+            <span>{formatTime(rangeStart)}</span>
+            <span className={`font-medium ${isLiveMode ? (liveSystemConnected ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400') : 'text-blue-600 dark:text-blue-400'}`}>
               {formatTime(currentTimestamp)}
             </span>
-            <span className="truncate">{formatTime(effectiveTimelineEnd)}</span>
+            <span>{formatTime(effectiveTimelineEnd)}</span>
           </div>
 
           <div 
             ref={timelineRef}
-            className={`relative h-12 sm:h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            className={`relative h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={handleTimelineClick}
           >
             {hasOutdoorData && hasNegativeValues && (
@@ -988,7 +1009,7 @@ export const TimelineControl = () => {
                   style={{ left: `${pos}%` }}
                 >
                   <div className="w-px h-full bg-gray-400/50"></div>
-                  <span className="absolute -bottom-4 sm:-bottom-5 text-[8px] sm:text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  <span className="absolute -bottom-5 text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
                     {formatDate(marker)}
                   </span>
                 </div>
@@ -1006,8 +1027,8 @@ export const TimelineControl = () => {
             {!isLiveMode && (
               <>
                 <div
-                  className="absolute top-1/2 -translate-y-1/2 w-2 sm:w-3 h-5 sm:h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
-                  style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-4px' }}
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
+                  style={{ left: `${getPosition(rangeStart)}%`, marginLeft: '-6px' }}
                   onMouseDown={handleMouseDown('start')}
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -1015,8 +1036,8 @@ export const TimelineControl = () => {
                 </div>
 
                 <div
-                  className="absolute top-1/2 -translate-y-1/2 w-2 sm:w-3 h-5 sm:h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
-                  style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-4px' }}
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-6 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full cursor-ew-resize shadow-lg hover:scale-110 transition-transform border-2 border-white/50 z-10"
+                  style={{ left: `${getPosition(rangeEnd)}%`, marginLeft: '-6px' }}
                   onMouseDown={handleMouseDown('end')}
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -1031,22 +1052,22 @@ export const TimelineControl = () => {
               onMouseDown={!isLiveMode ? handleMouseDown('current') : undefined}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className={`absolute -top-1 sm:-top-1.5 left-1/2 -translate-x-1/2 w-1.5 sm:w-2 h-1.5 sm:h-2 bg-gradient-to-br ${cursorColor} rounded-full border border-white shadow-lg`}></div>
-              <div className={`absolute -bottom-1 sm:-bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 sm:w-2 h-1.5 sm:h-2 bg-gradient-to-br ${cursorColor} rounded-full border border-white shadow-lg`}></div>
+              <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br ${cursorColor} rounded-full border border-white shadow-lg`}></div>
+              <div className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-gradient-to-br ${cursorColor} rounded-full border border-white shadow-lg`}></div>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 gap-1 sm:gap-0">
-          <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-3">
             {hasOutdoorData && dewPointDifferences.length > 0 && (
-              <div className="flex items-center gap-1 sm:gap-1.5">
-                <div className="w-6 sm:w-8 h-1.5 sm:h-2 bg-gradient-to-r from-blue-500 to-green-500 rounded-full"></div>
-                <span className="whitespace-nowrap">ΔPR: {minDiff.toFixed(1)}°C → {maxDiff.toFixed(1)}°C</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-8 h-2 bg-gradient-to-r from-blue-500 to-green-500 rounded-full"></div>
+                <span>ΔPR: {minDiff.toFixed(1)}°C → {maxDiff.toFixed(1)}°C</span>
               </div>
             )}
           </div>
-          <span className="whitespace-nowrap">
+          <span>
             Durée: {((effectiveTimelineEnd - timeRange[0]) / (1000 * 60 * 60)).toFixed(1)}h
           </span>
         </div>
