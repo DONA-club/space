@@ -74,14 +74,17 @@ export const TimelineControl = () => {
           // In live mode, position at the latest data (end of range)
           setCurrentTimestamp(timeRange[1]);
         } else {
-          // In replay mode, position at center
-          const centerTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) / 2;
-          setCurrentTimestamp(centerTimestamp);
+          // In replay mode, position at start and load data
+          setCurrentTimestamp(timeRange[0]);
+          // Load data window at start position
+          if (hasOutdoorData && currentSpace) {
+            loadDewPointWindow(timeRange[0]);
+          }
         }
         hasInitializedCursorRef.current = true;
       }
     }
-  }, [timeRange, rangeStart, rangeEnd, mode, setCurrentTimestamp]);
+  }, [timeRange, rangeStart, rangeEnd, mode, setCurrentTimestamp, hasOutdoorData, currentSpace]);
 
   // Reset initialization flag when switching modes
   useEffect(() => {
@@ -956,7 +959,7 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {hasOutdoorData && dewPointDifferences.length > 0 && !isLiveMode && (
+            {hasOutdoorData && dewPointDifferences.length > 0 && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
                 preserveAspectRatio="none"
