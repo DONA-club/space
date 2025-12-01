@@ -53,6 +53,19 @@ export const TimelineControl = () => {
   const hasInitializedCursorRef = useRef<boolean>(false);
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Clamp cursor to range bounds when range changes
+  useEffect(() => {
+    if (mode === 'live' || !rangeStart || !rangeEnd) return;
+
+    if (currentTimestamp < rangeStart) {
+      console.log('🔒 Cursor clamped to range start:', rangeStart);
+      setCurrentTimestamp(rangeStart);
+    } else if (currentTimestamp > rangeEnd) {
+      console.log('🔒 Cursor clamped to range end:', rangeEnd);
+      setCurrentTimestamp(rangeEnd);
+    }
+  }, [rangeStart, rangeEnd, currentTimestamp, mode, setCurrentTimestamp]);
+
   // Update live timeline end every second
   useEffect(() => {
     if (mode !== 'live') return;
@@ -445,9 +458,11 @@ export const TimelineControl = () => {
     const newTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) * percentage;
 
     if (isDragging === 'start') {
-      setRangeStart(Math.min(newTimestamp, rangeEnd || timeRange[1]));
+      const newStart = Math.min(newTimestamp, rangeEnd || timeRange[1]);
+      setRangeStart(newStart);
     } else if (isDragging === 'end') {
-      setRangeEnd(Math.max(newTimestamp, rangeStart || timeRange[0]));
+      const newEnd = Math.max(newTimestamp, rangeStart || timeRange[0]);
+      setRangeEnd(newEnd);
     } else if (isDragging === 'current') {
       let clampedTimestamp = Math.max(rangeStart || timeRange[0], Math.min(newTimestamp, rangeEnd || timeRange[1]));
       
@@ -636,6 +651,18 @@ export const TimelineControl = () => {
   
   const colorZoneStart = Math.max(rangeStartPos, currentPos - (COLOR_ZONE_RADIUS * 100));
   const colorZoneEnd = Math.min(rangeEndPos, currentPos + (COLOR_ZONE_RADIUS * 100));
+
+  // Debug logs for colored curve
+  console.log('🎨 Colored Curve Debug:', {
+    mode,
+    hasOutdoorData,
+    dewPointDifferencesCount: dewPointDifferences.length,
+    currentPos,
+    colorZoneStart,
+    colorZoneEnd,
+    colorZoneWidth: colorZoneEnd - colorZoneStart,
+    smoothPath: smoothPath.substring(0, 50) + '...',
+  });
 
   const isLiveMode = mode === 'live';
   const cursorColor = isLiveMode ? (liveSystemConnected ? 'from-red-400 to-red-500' : 'from-gray-400 to-gray-500') : 'from-yellow-400 to-orange-500';
