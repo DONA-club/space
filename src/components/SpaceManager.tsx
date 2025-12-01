@@ -66,6 +66,12 @@ interface SpaceStats {
   lastDataDate: Date | null;
 }
 
+const SPACE_NAME_EXAMPLES = ['Salon', 'Chambre', 'Appartement', 'Maison', 'Immeuble'];
+
+const getRandomSpaceExample = () => {
+  return SPACE_NAME_EXAMPLES[Math.floor(Math.random() * SPACE_NAME_EXAMPLES.length)];
+};
+
 export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,6 +95,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [newName, setNewName] = useState('');
   const [renaming, setRenaming] = useState(false);
   const [spaceAddresses, setSpaceAddresses] = useState<Map<string, string>>(new Map());
+  const [spaceNamePlaceholder] = useState(getRandomSpaceExample());
 
   useEffect(() => {
     loadSpaces();
@@ -696,7 +703,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
               Space
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Créez et gérez vos espaces instrumentés
+              Visualisation environnementale 3D
             </p>
           </div>
           <Button onClick={() => setShowCreateForm(!showCreateForm)}>
@@ -722,7 +729,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                       id="space-name"
                       value={newSpaceName}
                       onChange={(e) => setNewSpaceName(e.target.value)}
-                      placeholder="Ex: Salon Vesta"
+                      placeholder={`Ex: ${spaceNamePlaceholder}`}
                     />
                   </div>
 
