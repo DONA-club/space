@@ -412,6 +412,18 @@ export const TimelineControl = () => {
     loadDewPointWindow(clampedTimestamp);
   };
 
+  const handleSkipToStart = () => {
+    if (!rangeStart) return;
+    setCurrentTimestamp(rangeStart);
+    loadDewPointWindow(rangeStart);
+  };
+
+  const handleSkipToEnd = () => {
+    if (!rangeEnd) return;
+    setCurrentTimestamp(rangeEnd);
+    loadDewPointWindow(rangeEnd);
+  };
+
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging || !timelineRef.current || !timeRange || mode === 'live') return;
 
@@ -765,7 +777,7 @@ export const TimelineControl = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentTimestamp(rangeStart)}
+                      onClick={handleSkipToStart}
                       className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
                     >
                       <SkipBack size={14} />
@@ -821,7 +833,7 @@ export const TimelineControl = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentTimestamp(rangeEnd)}
+                      onClick={handleSkipToEnd}
                       className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-8 w-8 p-0"
                     >
                       <SkipForward size={14} />
