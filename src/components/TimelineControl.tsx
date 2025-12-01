@@ -51,6 +51,7 @@ export const TimelineControl = () => {
   const lastScrollLoadRef = useRef<number>(0);
   const lastPlaybackLoadRef = useRef<number>(0);
   const hasInitializedCursorRef = useRef<boolean>(false);
+  const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update live timeline end every second
   useEffect(() => {
@@ -287,11 +288,18 @@ export const TimelineControl = () => {
     return { minDiff: min, maxDiff: max, diffRange: range };
   }, [dewPointDifferences]);
 
-  // Playback loop with reactive speed
+  // Playback loop with reactive speed - clear and recreate interval when speed changes
   useEffect(() => {
+    // Clear existing interval
+    if (playbackIntervalRef.current) {
+      clearInterval(playbackIntervalRef.current);
+      playbackIntervalRef.current = null;
+    }
+
     if (!isPlaying || !rangeStart || !rangeEnd || mode === 'live') return;
 
-    const interval = setInterval(() => {
+    // Create new interval with current speed
+    playbackIntervalRef.current = setInterval(() => {
       setCurrentTimestamp((prev) => {
         const next = prev + (1000 * playbackSpeed);
         
@@ -314,8 +322,13 @@ export const TimelineControl = () => {
       });
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [isPlaying, playbackSpeed, rangeStart, rangeEnd, setCurrentTimestamp, setPlaying, loopEnabled, hasDataAtTimestamp, getFurthestLoadedTimestamp, mode]);
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+        playbackIntervalRef.current = null;
+      }
+    };
+  }, [isPlaying, playbackSpeed, rangeStart, rangeEnd, setCurrentTimestamp, setPlaying, loopEnabled, mode]);
 
   useEffect(() => {
     const timelineElement = timelineRef.current;
@@ -920,6 +933,7 @@ export const TimelineControl = () => {
               </svg>
             )}
 
+            {/* Gray background curve - always visible */}
             {hasOutdoorData && dewPointDifferences.length > 0 && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
@@ -938,7 +952,7 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Colored curve - ALWAYS show in replay mode, not just when there are negative values */}
+            {/* Colored curve with mask - only in replay mode */}
             {hasOutdoorData && dewPointDifferences.length > 0 && mode === 'replay' && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
@@ -962,9 +976,9 @@ export const TimelineControl = () => {
                   <mask id="colorZoneMask">
                     <rect x="0" y="0" width="100" height="100" fill="black" />
                     <rect 
-                      x={`${colorZoneStart}`}
+                      x={colorZoneStart}
                       y="0" 
-                      width={`${colorZoneEnd - colorZoneStart}`}
+                      width={colorZoneEnd - colorZoneStart}
                       height="100" 
                       fill="white"
                     />
