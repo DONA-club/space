@@ -3,6 +3,7 @@
 import { useAppStore } from '@/store/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/components/theme-provider';
+import { useSmoothedValue } from '@/hooks/useSmoothedValue';
 
 interface ColorLegendProps {
   volumetricAverage?: number | null;
@@ -51,50 +52,55 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const metricInfo = getMetricInfo()!;
   const gradient = `linear-gradient(to right, ${metricInfo.colors.join(', ')})`;
 
-  const getAveragePosition = () => {
-    if (!meshingEnabled || volumetricAverage === null || volumetricAverage === undefined) return null;
-    
-    const normalized = (volumetricAverage - interpolationRange.min) / (interpolationRange.max - interpolationRange.min);
+  // Lissage visuel uniquement pour l'affichage (pas de coût côté calculs)
+  const smoothedAverage = useSmoothedValue(volumetricAverage ?? null, {
+    stiffness: 200,
+    damping: 28,
+    enabled: true,
+  });
+
+  const getPositionFromValue = (avg: number | null) => {
+    if (!meshingEnabled || avg === null || avg === undefined) return null;
+    const normalized = (avg - interpolationRange.min) / (interpolationRange.max - interpolationRange.min);
     const percentage = Math.max(0, Math.min(100, normalized * 100));
     return percentage;
   };
 
-  const getAverageColor = () => {
-    if (!meshingEnabled || volumetricAverage === null || volumetricAverage === undefined) return '#ffffff';
-    
-    const normalized = (volumetricAverage - interpolationRange.min) / (interpolationRange.max - interpolationRange.min);
+  const getColorFromValue = (avg: number | null) => {
+    if (!meshingEnabled || avg === null || avg === undefined) return '#ffffff';
+    const normalized = (avg - interpolationRange.min) / (interpolationRange.max - interpolationRange.min);
     const clampedNormalized = Math.max(0, Math.min(1, normalized));
-    
+
     const colors = metricInfo.colors;
     const segmentSize = 1 / (colors.length - 1);
     const segmentIndex = Math.floor(clampedNormalized / segmentSize);
     const segmentProgress = (clampedNormalized % segmentSize) / segmentSize;
-    
+
     const startColorIndex = Math.min(segmentIndex, colors.length - 2);
     const endColorIndex = startColorIndex + 1;
-    
+
     const startColor = colors[startColorIndex];
     const endColor = colors[endColorIndex];
-    
+
     const parseHex = (hex: string) => {
       const r = parseInt(hex.slice(1, 3), 16);
       const g = parseInt(hex.slice(3, 5), 16);
       const b = parseInt(hex.slice(5, 7), 16);
       return { r, g, b };
     };
-    
+
     const start = parseHex(startColor);
     const end = parseHex(endColor);
-    
+
     const r = Math.round(start.r + (end.r - start.r) * segmentProgress);
     const g = Math.round(start.g + (end.g - start.g) * segmentProgress);
     const b = Math.round(start.b + (end.b - start.b) * segmentProgress);
-    
+
     return `rgb(${r}, ${g}, ${b})`;
   };
 
-  const averagePosition = getAveragePosition();
-  const averageColor = getAverageColor();
+  const averagePosition = getPositionFromValue(smoothedAverage ?? null);
+  const averageColor = getColorFromValue(smoothedAverage ?? null);
 
   const minColor = metricInfo.colors[0];
   const maxColor = metricInfo.colors[metricInfo.colors.length - 1];
@@ -136,7 +142,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               }}
             ></div>
             
-            {/* Volumetric average indicator */}
+            {/* Volumetric average indicator (adouci) */}
             {meshingEnabled && averagePosition !== null && (
               <motion.div
                 initial={{ scale: 0 }}
@@ -177,8 +183,8 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               {interpolationRange.min.toFixed(decimals)}{metricInfo.unit}
             </span>
             
-            {/* Average value */}
-            {meshingEnabled && averagePosition !== null && (
+            {/* Average value (adoucie) */}
+            {meshingEnabled && averagePosition !== null && smoothedAverage !== null && smoothedAverage !== undefined && (
               <motion.span
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -194,7 +200,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                   filter: isDarkMode ? 'brightness(1.2) opacity(0.95)' : 'brightness(0.9) opacity(0.8)'
                 }}
               >
-                {volumetricAverage!.toFixed(decimals)}{metricInfo.unit}
+                {smoothedAverage.toFixed(decimals)}{metricInfo.unit}
               </motion.span>
             )}
             
