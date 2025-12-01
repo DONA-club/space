@@ -81,6 +81,7 @@ interface AppState {
   idwPower: number;
   meshResolution: number;
   visualizationType: VisualizationType;
+  smoothingWindowSec: number;
   interpolationRange: { min: number; max: number } | null;
   
   // WebSocket & Live
@@ -112,6 +113,7 @@ interface AppState {
   setIdwPower: (power: number) => void;
   setMeshResolution: (resolution: number) => void;
   setVisualizationType: (type: VisualizationType) => void;
+  setSmoothingWindowSec: (sec: number) => void;
   setInterpolationRange: (range: { min: number; max: number } | null) => void;
   setWsConnected: (connected: boolean) => void;
   setRecording: (recording: boolean) => void;
@@ -140,6 +142,7 @@ export const useAppStore = create<AppState>((set) => ({
   idwPower: 2,
   meshResolution: 40,
   visualizationType: 'points',
+  smoothingWindowSec: 3,
   interpolationRange: null,
   wsConnected: false,
   isRecording: false,
@@ -192,6 +195,7 @@ export const useAppStore = create<AppState>((set) => ({
   setIdwPower: (power) => set({ idwPower: power }),
   setMeshResolution: (resolution) => set({ meshResolution: resolution }),
   setVisualizationType: (type) => set({ visualizationType: type }),
+  setSmoothingWindowSec: (sec) => set({ smoothingWindowSec: sec }),
   setInterpolationRange: (range) => set({ interpolationRange: range }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
   setRecording: (recording) => set({ isRecording: recording }),

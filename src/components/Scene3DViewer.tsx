@@ -13,7 +13,7 @@ import { useSensorData } from "@/hooks/useSensorData";
 import { useSceneBackground } from "@/hooks/useSceneBackground";
 import { useSensorMeshUpdates } from "@/hooks/useSensorMeshUpdates";
 import { getColorFromValueSaturated, createCircleTexture } from "@/utils/colorUtils";
-import { findClosestDataPoint, calculateIndoorAverage, getDataRange } from "@/utils/sensorUtils";
+import { findClosestDataPoint, calculateIndoorAverage, getDataRange, getAverageDataPointInWindow } from "@/utils/sensorUtils";
 import { getMetricValue } from "@/utils/metricUtils";
 import { createSensorSpheres } from "./scene3d/SensorSpheres";
 import { createScene, createCamera, createRenderer, setupLights, createControls } from "./scene3d/SceneSetup";
@@ -61,6 +61,7 @@ export const Scene3DViewer = () => {
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setOutdoorData = useAppStore((state) => state.setOutdoorData);
   const sensorOffset = useAppStore((state) => state.sensorOffset);
+  const smoothingWindowSec = useAppStore((state) => state.smoothingWindowSec);
 
   const { sensorData, outdoorData } = useSensorData(currentSpace, sensors, hasOutdoorData, currentTimestamp);
 
@@ -81,15 +82,15 @@ export const Scene3DViewer = () => {
   useEffect(() => {
     if (!dataReady || sensorData.size === 0) return;
 
-    const average = calculateIndoorAverage(sensorData, sensors, currentTimestamp);
+    const average = calculateIndoorAverage(sensorData, sensors, currentTimestamp, smoothingWindowSec * 1000);
     setIndoorAverage(average);
 
     if (outdoorData.length > 0) {
-      const closestData = findClosestDataPoint(outdoorData, currentTimestamp);
-      setOutdoorData(closestData);
-      setCurrentOutdoorData(closestData);
+      const averagedOutdoor = getAverageDataPointInWindow(outdoorData, currentTimestamp, smoothingWindowSec * 1000);
+      setOutdoorData(averagedOutdoor);
+      setCurrentOutdoorData(averagedOutdoor);
     }
-  }, [currentTimestamp, dataReady, hasOutdoorData, setOutdoorData, sensors, sensorData, outdoorData]);
+  }, [currentTimestamp, dataReady, hasOutdoorData, setOutdoorData, sensors, sensorData, outdoorData, smoothingWindowSec]);
 
   // Update interpolation range even when meshing is disabled
   useEffect(() => {
@@ -102,9 +103,9 @@ export const Scene3DViewer = () => {
                       selectedMetric === 'humidity' ? 'humidity' :
                       selectedMetric === 'absoluteHumidity' ? 'absoluteHumidity' : 'dewPoint';
 
-    const range = getDataRange(sensorData, sensors, currentTimestamp, metricKey);
+    const range = getDataRange(sensorData, sensors, currentTimestamp, metricKey, smoothingWindowSec * 1000);
     setInterpolationRange(range);
-  }, [dataReady, sensorData, sensors, currentTimestamp, selectedMetric, setInterpolationRange]);
+  }, [dataReady, sensorData, sensors, currentTimestamp, selectedMetric, setInterpolationRange, smoothingWindowSec]);
 
   useSensorMeshUpdates({
     sensorMeshes: sceneRef.current?.sensorMeshes || null,
@@ -113,7 +114,8 @@ export const Scene3DViewer = () => {
     currentTimestamp,
     selectedMetric,
     interpolationRange,
-    dataReady
+    dataReady,
+    smoothingWindowSec
   });
 
   // Handle continuous sensor hover pulse effect
@@ -304,7 +306,7 @@ export const Scene3DViewer = () => {
 
     const modelPosition = modelGroup?.position || new THREE.Vector3(0, 0, 0);
 
-    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter, modelPosition, sensorOffset);
+    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter, modelPosition, sensorOffset, smoothingWindowSec * 1000);
     if (points.length === 0) return;
 
     const { min: minValue, max: maxValue } = getValueRange(points);
@@ -330,6 +332,7 @@ export const Scene3DViewer = () => {
       originalCenter,
       modelPosition,
       sensorOffset,
+      smoothingWindowSec * 1000,
       exactAirVolume
     );
     
@@ -578,7 +581,8 @@ const buildInterpolationPoints = (
   modelScale: number,
   originalCenter: THREE.Vector3 | null,
   modelPosition: THREE.Vector3,
-  manualOffset: { x: number; y: number; z: number }
+  manualOffset: { x: number; y: number; z: number },
+  smoothingWindowMs: number
 ): Point3D[] => {
   const points: Point3D[] = [];
   
@@ -586,8 +590,8 @@ const buildInterpolationPoints = (
     if (!sensorData.has(sensor.id)) return;
     
     const data = sensorData.get(sensor.id)!;
-    const closestData = findClosestDataPoint(data, currentTimestamp);
-    const value = getMetricValue(closestData, selectedMetric as any);
+    const averaged = getAverageDataPointInWindow(data, currentTimestamp, smoothingWindowMs);
+    const value = getMetricValue(averaged, selectedMetric as any);
     
     const xCentered = sensor.position[0] - (originalCenter?.x || 0);
     const yCentered = sensor.position[1] - (originalCenter?.y || 0);
@@ -690,6 +694,7 @@ const calculateAirProperties = (
   originalCenter: THREE.Vector3 | null,
   modelPosition: THREE.Vector3,
   sensorOffset: { x: number; y: number; z: number },
+  smoothingWindowMs: number,
   exactVolume: number
 ): { mass: number; waterMass: number; avgTemp: number; avgHumidity: number } => {
   const tempPoints: Point3D[] = [];
@@ -699,7 +704,7 @@ const calculateAirProperties = (
     if (!sensorData.has(sensor.id)) return;
     
     const data = sensorData.get(sensor.id)!;
-    const closestData = findClosestDataPoint(data, currentTimestamp);
+    const closestData = getAverageDataPointInWindow(data, currentTimestamp, smoothingWindowMs);
     
     const xCentered = sensor.position[0] - (originalCenter?.x || 0);
     const yCentered = sensor.position[1] - (originalCenter?.y || 0);

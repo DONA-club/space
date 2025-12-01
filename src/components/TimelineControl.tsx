@@ -38,6 +38,8 @@ export const TimelineControl = () => {
   const isRecording = useAppStore((state) => state.isRecording);
   const setRecording = useAppStore((state) => state.setRecording);
   const liveSystemConnected = useAppStore((state) => state.liveSystemConnected);
+  const smoothingWindowSec = useAppStore((state) => state.smoothingWindowSec);
+  const setSmoothingWindowSec = useAppStore((state) => state.setSmoothingWindowSec);
 
   const [playbackSpeed, setPlaybackSpeed] = useState(60);
   const [rangeStart, setRangeStart] = useState<number | null>(null);
@@ -879,29 +881,52 @@ export const TimelineControl = () => {
           </div>
 
           {!isLiveMode && (
-            <TooltipPrimitive.Provider delayDuration={300}>
-              <TooltipPrimitive.Root>
-                <TooltipPrimitive.Trigger asChild>
-                  <select
-                    value={playbackSpeed}
-                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                    className="text-[10px] sm:text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value={60}>1 min/s</option>
-                    <option value={300}>5x</option>
-                    <option value={600}>10x</option>
-                    <option value={1800}>30x</option>
-                    <option value={3600}>60x</option>
-                  </select>
-                </TooltipPrimitive.Trigger>
-                <TooltipPrimitive.Portal>
-                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
-                    <p className="font-medium mb-1">Vitesse de lecture</p>
-                    <p>Contrôle la vitesse de défilement des données</p>
-                  </TooltipPrimitive.Content>
-                </TooltipPrimitive.Portal>
-              </TooltipPrimitive.Root>
-            </TooltipPrimitive.Provider>
+            <div className="flex items-center gap-2">
+              <TooltipPrimitive.Provider delayDuration={300}>
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
+                    <select
+                      value={playbackSpeed}
+                      onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                      className="text-[10px] sm:text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={60}>1 min/s</option>
+                      <option value={300}>5x</option>
+                      <option value={600}>10x</option>
+                      <option value={1800}>30x</option>
+                      <option value={3600}>60x</option>
+                    </select>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
+                      <p className="font-medium mb-1">Vitesse de lecture</p>
+                      <p>Contrôle la vitesse de défilement des données</p>
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
+              </TooltipPrimitive.Provider>
+
+              <TooltipPrimitive.Provider delayDuration={300}>
+                <TooltipPrimitive.Root>
+                  <TooltipPrimitive.Trigger asChild>
+                    <select
+                      value={smoothingWindowSec}
+                      onChange={(e) => setSmoothingWindowSec(Number(e.target.value))}
+                      className="text-[10px] sm:text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={3}>Lissage 3s</option>
+                      <option value={60}>Lissage 1 min</option>
+                    </select>
+                  </TooltipPrimitive.Trigger>
+                  <TooltipPrimitive.Portal>
+                    <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
+                      <p className="font-medium mb-1">Fenêtre de lissage</p>
+                      <p>Moyenne les mesures dans une fenêtre autour du curseur pour stabiliser l’affichage</p>
+                    </TooltipPrimitive.Content>
+                  </TooltipPrimitive.Portal>
+                </TooltipPrimitive.Root>
+              </TooltipPrimitive.Provider>
+            </div>
           )}
         </div>
 

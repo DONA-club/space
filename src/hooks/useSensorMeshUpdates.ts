@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Sensor, SensorDataPoint, MetricType } from '@/types/sensor.types';
 import { SensorMeshes } from '@/types/scene.types';
 import { getColorFromValue } from '@/utils/colorUtils';
-import { findClosestDataPoint } from '@/utils/sensorUtils';
+import { findClosestDataPoint, getAverageDataPointInWindow } from '@/utils/sensorUtils';
 import { getMetricValue, formatMetricValue } from '@/utils/metricUtils';
 
 interface UseSensorMeshUpdatesProps {
@@ -14,6 +14,7 @@ interface UseSensorMeshUpdatesProps {
   selectedMetric: MetricType;
   interpolationRange: { min: number; max: number } | null;
   dataReady: boolean;
+  smoothingWindowSec: number;
 }
 
 export const useSensorMeshUpdates = ({
@@ -23,7 +24,8 @@ export const useSensorMeshUpdates = ({
   currentTimestamp,
   selectedMetric,
   interpolationRange,
-  dataReady
+  dataReady,
+  smoothingWindowSec
 }: UseSensorMeshUpdatesProps) => {
   // Update colors
   useEffect(() => {
@@ -34,8 +36,8 @@ export const useSensorMeshUpdates = ({
       if (!meshes || !sensorData.has(sensor.id)) return;
 
       const data = sensorData.get(sensor.id)!;
-      const closestData = findClosestDataPoint(data, currentTimestamp);
-      const value = getMetricValue(closestData, selectedMetric);
+      const averaged = getAverageDataPointInWindow(data, currentTimestamp, smoothingWindowSec * 1000);
+      const value = getMetricValue(averaged, selectedMetric);
 
       const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
       const emissiveColor = new THREE.Color(color).multiplyScalar(0.5);
@@ -44,7 +46,7 @@ export const useSensorMeshUpdates = ({
       (meshes.sphere.material as THREE.MeshStandardMaterial).emissive.setHex(emissiveColor.getHex());
       (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(color);
     });
-  }, [sensorMeshes, sensors, sensorData, currentTimestamp, selectedMetric, interpolationRange, dataReady]);
+  }, [sensorMeshes, sensors, sensorData, currentTimestamp, selectedMetric, interpolationRange, dataReady, smoothingWindowSec]);
 
   // Update labels
   useEffect(() => {
@@ -56,8 +58,8 @@ export const useSensorMeshUpdates = ({
 
       if (dataReady && sensorData.has(sensor.id)) {
         const data = sensorData.get(sensor.id)!;
-        const closestData = findClosestDataPoint(data, currentTimestamp);
-        const value = getMetricValue(closestData, selectedMetric);
+        const averaged = getAverageDataPointInWindow(data, currentTimestamp, smoothingWindowSec * 1000);
+        const value = getMetricValue(averaged, selectedMetric);
         
         const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
         const formatted = formatMetricValue(value, selectedMetric, decimals);
@@ -65,7 +67,7 @@ export const useSensorMeshUpdates = ({
         updateSpriteLabel(meshes.sprite, formatted);
       }
     });
-  }, [sensorMeshes, sensors, sensorData, currentTimestamp, selectedMetric, dataReady]);
+  }, [sensorMeshes, sensors, sensorData, currentTimestamp, selectedMetric, dataReady, smoothingWindowSec]);
 };
 
 const updateSpriteLabel = (sprite: THREE.Sprite, text: string) => {
