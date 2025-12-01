@@ -13,7 +13,8 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const selectedMetric = useAppStore((state) => state.selectedMetric);
   const interpolationRange = useAppStore((state) => state.interpolationRange);
 
-  if (!meshingEnabled || !dataReady || !interpolationRange) return null;
+  // Show legend if data is ready and we have an interpolation range
+  if (!dataReady || !interpolationRange) return null;
 
   const getMetricInfo = () => {
     switch (selectedMetric) {
@@ -48,7 +49,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const gradient = `linear-gradient(to right, ${metricInfo.colors.join(', ')})`;
 
   const getAveragePosition = () => {
-    if (volumetricAverage === null || volumetricAverage === undefined) return null;
+    if (!meshingEnabled || volumetricAverage === null || volumetricAverage === undefined) return null;
     
     const normalized = (volumetricAverage - interpolationRange.min) / (interpolationRange.max - interpolationRange.min);
     const percentage = Math.max(0, Math.min(100, normalized * 100));
@@ -56,7 +57,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   };
 
   const getAverageColor = () => {
-    if (volumetricAverage === null || volumetricAverage === undefined) return '#ffffff';
+    if (!meshingEnabled || volumetricAverage === null || volumetricAverage === undefined) return '#ffffff';
     
     const normalized = (volumetricAverage - interpolationRange.min) / (interpolationRange.max - interpolationRange.min);
     const clampedNormalized = Math.max(0, Math.min(1, normalized));
@@ -131,11 +132,12 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               }}
             ></div>
             
-            {/* Volumetric average indicator */}
-            {averagePosition !== null && (
+            {/* Volumetric average indicator - only show when meshing is enabled */}
+            {meshingEnabled && averagePosition !== null && (
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
                 className="absolute -translate-x-1/2"
                 style={{ 
@@ -169,8 +171,13 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
               {interpolationRange.min.toFixed(decimals)}{metricInfo.unit}
             </span>
             
-            {averagePosition !== null && (
-              <span 
+            {/* Average value - only show when meshing is enabled */}
+            {meshingEnabled && averagePosition !== null && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
                 className="absolute -translate-x-1/2"
                 style={{
                   left: `${averagePosition}%`,
@@ -179,8 +186,8 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
                   filter: 'brightness(0.9) opacity(0.8)'
                 }}
               >
-                {volumetricAverage.toFixed(decimals)}{metricInfo.unit}
-              </span>
+                {volumetricAverage!.toFixed(decimals)}{metricInfo.unit}
+              </motion.span>
             )}
             
             <span 
