@@ -179,7 +179,66 @@ export const Scene3DViewer = () => {
       }
     };
   }, []);
+  
+  // Appliquer le thème au modèle GLTF: contours et ajustements des matériaux
+  useEffect(() => {
+    if (!sceneRef.current || !modelLoaded || !sceneRef.current.modelGroup) return;
+    const group = sceneRef.current.modelGroup;
 
+    // Retirer d'anciens overlays de contours s'ils existent
+    group.traverse((child: any) => {
+      if ((child as any).isLineSegments && child.userData?.__edgeOverlay) {
+        if ((child as any).geometry) (child as any).geometry.dispose();
+        if ((child as any).material) {
+          if (Array.isArray((child as any).material)) {
+            (child as any).material.forEach((m: any) => m.dispose());
+          } else {
+            (child as any).material.dispose();
+          }
+        }
+        child.parent?.remove(child);
+      }
+    });
+
+    // Ajuster les matériaux et ajouter des contours
+    group.traverse((obj: any) => {
+      if ((obj as any).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        const mat = mesh.material as any;
+
+        const adjustMaterial = (m: any) => {
+          if ('emissive' in m) {
+            m.emissive = new THREE.Color(isDarkMode ? 0x111111 : 0x000000);
+            if ('emissiveIntensity' in m) m.emissiveIntensity = isDarkMode ? 0.22 : 0.0;
+          }
+          if ('color' in m) {
+            // Plus clair en sombre, plus sombre en clair pour le contraste des gravures et détails
+            m.color = new THREE.Color(isDarkMode ? 0xdadada : 0x6b7280);
+          }
+          if ('metalness' in m) m.metalness = 0.1;
+          if ('roughness' in m) m.roughness = isDarkMode ? 0.7 : 0.9;
+        };
+
+        if (Array.isArray(mat)) {
+          mat.forEach(adjustMaterial);
+        } else {
+          adjustMaterial(mat);
+        }
+
+        // Contours (edges) pour souligner les inscriptions et détails du modèle
+        const edgesGeom = new THREE.EdgesGeometry(mesh.geometry);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: isDarkMode ? 0xffffff : 0x374151, // blanc en sombre, gris foncé en clair
+          transparent: true,
+          opacity: isDarkMode ? 0.25 : 0.5, // contours plus marqués en mode clair
+        });
+        const edges = new THREE.LineSegments(edgesGeom, lineMat);
+        edges.userData.__edgeOverlay = true;
+        mesh.add(edges);
+      }
+    });
+  }, [isDarkMode, modelLoaded]);
+  
   useEffect(() => {
     if (!sceneRef.current || !modelLoaded) return;
 
