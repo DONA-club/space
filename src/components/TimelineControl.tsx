@@ -68,9 +68,9 @@ export const TimelineControl = () => {
       setRangeStart(timeRange[0]);
       setRangeEnd(timeRange[1]);
       
+      // Initialize cursor at START of timeline, not center
       if (mode === 'replay' && !hasInitializedCursorRef.current) {
-        const centerTimestamp = timeRange[0] + (timeRange[1] - timeRange[0]) / 2;
-        setCurrentTimestamp(centerTimestamp);
+        setCurrentTimestamp(timeRange[0]);
         hasInitializedCursorRef.current = true;
       }
     }
@@ -252,7 +252,7 @@ export const TimelineControl = () => {
     if (!currentSpace || !hasOutdoorData || !timeRange || !rangeStart || !rangeEnd) return;
 
     loadDewPointWindow(currentTimestamp);
-  }, [currentSpace, hasOutdoorData, timeRange, sensors, rangeStart, rangeEnd]);
+  }, [currentSpace, hasOutdoorData, timeRange, sensors, rangeStart, rangeEnd, currentTimestamp]);
 
   useEffect(() => {
     if (!isPlaying || !rangeStart || !rangeEnd || !currentSpace || !hasOutdoorData || mode === 'live') return;
@@ -938,6 +938,7 @@ export const TimelineControl = () => {
               </svg>
             )}
 
+            {/* Colored curve - ALWAYS show in replay mode, not just when there are negative values */}
             {hasOutdoorData && dewPointDifferences.length > 0 && mode === 'replay' && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
