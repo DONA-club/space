@@ -808,10 +808,11 @@ const createVisualizationMesh = (
     return createVolumeMesh(gridValues, minValue, maxValue, selectedMetric, modelBounds, meshResolution, isDarkMode);
   }
   
-  const pointSize = avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR;
+  const basePointSize = avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR;
+  const pointSize = isDarkMode ? basePointSize * 0.85 : basePointSize;
 
-  // Adjust opacity and blending based on theme for better visibility
-  const opacity = isDarkMode ? 0.95 : 0.75;
+  // Dark mode: use normal blending and lower opacity to avoid "whitening" by overlap
+  const opacity = isDarkMode ? 0.68 : 0.75;
 
   const material = new THREE.PointsMaterial({
     size: pointSize,
@@ -819,8 +820,10 @@ const createVisualizationMesh = (
     transparent: true,
     opacity: opacity,
     sizeAttenuation: true,
-    blending: isDarkMode ? THREE.AdditiveBlending : THREE.NormalBlending,
+    blending: isDarkMode ? THREE.NormalBlending : THREE.NormalBlending,
+    depthTest: true,
     depthWrite: false,
+    dithering: true,
     map: createCircleTexture(),
   });
 
