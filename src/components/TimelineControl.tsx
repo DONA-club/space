@@ -19,7 +19,7 @@ interface DewPointDifference {
 const POINTS_BEFORE = 500;
 const POINTS_AFTER = 500;
 const PRELOAD_THRESHOLD = 333;
-const COLOR_ZONE_RADIUS = 15; // Changed to percentage directly
+const COLOR_ZONE_RADIUS = 15;
 
 export const TimelineControl = () => {
   const mode = useAppStore((state) => state.mode);
@@ -82,7 +82,6 @@ export const TimelineControl = () => {
       setRangeStart(timeRange[0]);
       setRangeEnd(timeRange[1]);
       
-      // Initialize cursor at START of timeline, not center
       if (mode === 'replay' && !hasInitializedCursorRef.current) {
         setCurrentTimestamp(timeRange[0]);
         hasInitializedCursorRef.current = true;
@@ -301,9 +300,7 @@ export const TimelineControl = () => {
     return { minDiff: min, maxDiff: max, diffRange: range };
   }, [dewPointDifferences]);
 
-  // Playback loop with reactive speed - clear and recreate interval when speed changes
   useEffect(() => {
-    // Clear existing interval
     if (playbackIntervalRef.current) {
       clearInterval(playbackIntervalRef.current);
       playbackIntervalRef.current = null;
@@ -311,7 +308,6 @@ export const TimelineControl = () => {
 
     if (!isPlaying || !rangeStart || !rangeEnd || mode === 'live') return;
 
-    // Create new interval with current speed
     playbackIntervalRef.current = setInterval(() => {
       setCurrentTimestamp((prev) => {
         const next = prev + (1000 * playbackSpeed);
@@ -649,11 +645,9 @@ export const TimelineControl = () => {
   const rangeEndPos = getPosition(rangeEnd);
   const currentPos = getPosition(currentTimestamp);
   
-  // Calculate color zone in percentage (±15% around cursor)
   const colorZoneStart = Math.max(rangeStartPos, currentPos - COLOR_ZONE_RADIUS);
   const colorZoneEnd = Math.min(rangeEndPos, currentPos + COLOR_ZONE_RADIUS);
 
-  // Debug logs for colored curve
   console.log('🎨 Colored Curve Debug:', {
     mode,
     hasOutdoorData,
@@ -677,7 +671,6 @@ export const TimelineControl = () => {
   return (
     <LiquidGlassCard className="p-2 sm:p-4">
       <div className="space-y-2 sm:space-y-4">
-        {/* Metric selector - always on top */}
         <TooltipPrimitive.Provider delayDuration={300}>
           <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)} className="w-full">
             <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 sm:h-9 p-1 gap-1 w-full grid grid-cols-4">
@@ -768,7 +761,6 @@ export const TimelineControl = () => {
           </Tabs>
         </TooltipPrimitive.Provider>
 
-        {/* Playback controls - below metric selector */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 sm:gap-2">
             {isLiveMode ? (
@@ -932,9 +924,10 @@ export const TimelineControl = () => {
             className={`relative h-12 sm:h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={handleTimelineClick}
           >
+            {/* Layer 1: Negative fill (z-index: 1) */}
             {hasOutdoorData && hasNegativeValues && (
               <svg
-                className="absolute inset-0 w-full h-full pointer-events-none"
+                className="absolute inset-0 w-full h-full pointer-events-none z-[1]"
                 preserveAspectRatio="none"
                 viewBox="0 0 100 100"
               >
@@ -946,9 +939,10 @@ export const TimelineControl = () => {
               </svg>
             )}
 
+            {/* Layer 2: Zero line (z-index: 2) */}
             {hasOutdoorData && hasNegativeValues && (
               <svg
-                className="absolute inset-0 w-full h-full pointer-events-none"
+                className="absolute inset-0 w-full h-full pointer-events-none z-[2]"
                 preserveAspectRatio="none"
                 viewBox="0 0 100 100"
               >
@@ -965,10 +959,10 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Gray background curve - always visible */}
+            {/* Layer 3: Gray background curve (z-index: 3) */}
             {hasOutdoorData && dewPointDifferences.length > 0 && (
               <svg
-                className="absolute inset-0 w-full h-full pointer-events-none"
+                className="absolute inset-0 w-full h-full pointer-events-none z-[3]"
                 preserveAspectRatio="none"
                 viewBox="0 0 100 100"
               >
@@ -984,10 +978,10 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {/* Colored curve with mask - only in replay mode */}
+            {/* Layer 4: Colored curve with mask (z-index: 4) - HIGHEST PRIORITY */}
             {hasOutdoorData && dewPointDifferences.length > 0 && mode === 'replay' && (
               <svg
-                className="absolute inset-0 w-full h-full pointer-events-none"
+                className="absolute inset-0 w-full h-full pointer-events-none z-[4]"
                 preserveAspectRatio="none"
                 viewBox="0 0 100 100"
               >
@@ -1029,12 +1023,13 @@ export const TimelineControl = () => {
               </svg>
             )}
 
+            {/* Layer 5: Day markers (z-index: 5) */}
             {dayMarkers.map((marker, idx) => {
               const pos = getPosition(marker);
               return (
                 <div
                   key={idx}
-                  className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none"
+                  className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-[5]"
                   style={{ left: `${pos}%` }}
                 >
                   <div className="w-px h-full bg-gray-400/50"></div>
@@ -1045,14 +1040,16 @@ export const TimelineControl = () => {
               );
             })}
 
+            {/* Layer 6: Range highlight (z-index: 6) */}
             <div
-              className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm pointer-events-none"
+              className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm pointer-events-none z-[6]"
               style={{
                 left: `${getPosition(rangeStart)}%`,
                 width: `${getPosition(rangeEnd) - getPosition(rangeStart)}%`
               }}
             />
 
+            {/* Layer 7: Range handles (z-index: 10) */}
             {!isLiveMode && (
               <>
                 <div
@@ -1075,6 +1072,7 @@ export const TimelineControl = () => {
               </>
             )}
 
+            {/* Layer 8: Current cursor (z-index: 20) - HIGHEST */}
             <div
               className={`absolute top-0 bottom-0 w-0.5 bg-gradient-to-b ${cursorColor} ${isLiveMode ? 'cursor-not-allowed' : 'cursor-ew-resize'} shadow-lg z-20 ${isRecording ? 'animate-pulse' : ''}`}
               style={{ left: `${getPosition(currentTimestamp)}%`, marginLeft: '-1px', opacity: isLiveMode && !liveSystemConnected ? 0.5 : 1 }}
