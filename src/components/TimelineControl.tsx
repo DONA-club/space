@@ -19,7 +19,7 @@ interface DewPointDifference {
 const POINTS_BEFORE = 500;
 const POINTS_AFTER = 500;
 const PRELOAD_THRESHOLD = 333;
-const COLOR_ZONE_RADIUS = 0.15;
+const COLOR_ZONE_RADIUS = 15; // Changed to percentage directly
 
 export const TimelineControl = () => {
   const mode = useAppStore((state) => state.mode);
@@ -649,19 +649,24 @@ export const TimelineControl = () => {
   const rangeEndPos = getPosition(rangeEnd);
   const currentPos = getPosition(currentTimestamp);
   
-  const colorZoneStart = Math.max(rangeStartPos, currentPos - (COLOR_ZONE_RADIUS * 100));
-  const colorZoneEnd = Math.min(rangeEndPos, currentPos + (COLOR_ZONE_RADIUS * 100));
+  // Calculate color zone in percentage (±15% around cursor)
+  const colorZoneStart = Math.max(rangeStartPos, currentPos - COLOR_ZONE_RADIUS);
+  const colorZoneEnd = Math.min(rangeEndPos, currentPos + COLOR_ZONE_RADIUS);
 
   // Debug logs for colored curve
   console.log('🎨 Colored Curve Debug:', {
     mode,
     hasOutdoorData,
     dewPointDifferencesCount: dewPointDifferences.length,
-    currentPos,
-    colorZoneStart,
-    colorZoneEnd,
-    colorZoneWidth: colorZoneEnd - colorZoneStart,
-    smoothPath: smoothPath.substring(0, 50) + '...',
+    currentTimestamp: new Date(currentTimestamp).toISOString(),
+    currentPos: currentPos.toFixed(2) + '%',
+    colorZoneStart: colorZoneStart.toFixed(2) + '%',
+    colorZoneEnd: colorZoneEnd.toFixed(2) + '%',
+    colorZoneWidth: (colorZoneEnd - colorZoneStart).toFixed(2) + '%',
+    rangeStartPos: rangeStartPos.toFixed(2) + '%',
+    rangeEndPos: rangeEndPos.toFixed(2) + '%',
+    smoothPathLength: smoothPath.length,
+    smoothPathPreview: smoothPath.substring(0, 50) + '...',
   });
 
   const isLiveMode = mode === 'live';
