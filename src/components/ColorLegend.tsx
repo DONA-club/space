@@ -16,7 +16,20 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const interpolationRange = useAppStore((state) => state.interpolationRange);
 
   const { theme } = useTheme();
-  const isDarkMode = theme === 'dark' || (theme === 'system' && typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const isDarkMode =
+    theme === 'dark' ||
+    (theme === 'system' &&
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  // IMPORTANT: appeler tous les hooks AVANT tout return conditionnel
+  // Lissage visuel uniquement pour l'affichage (pas de coût côté calculs)
+  const smoothedAverage = useSmoothedValue(volumetricAverage ?? null, {
+    stiffness: 200,
+    damping: 28,
+    enabled: true,
+  });
 
   if (!dataReady || !interpolationRange) return null;
 
@@ -46,18 +59,17 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
           unit: '°C',
           colors: ['#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4'],
         };
+      default:
+        return {
+          label: '',
+          unit: '',
+          colors: ['#3b82f6', '#ef4444'],
+        };
     }
   };
 
   const metricInfo = getMetricInfo()!;
   const gradient = `linear-gradient(to right, ${metricInfo.colors.join(', ')})`;
-
-  // Lissage visuel uniquement pour l'affichage (pas de coût côté calculs)
-  const smoothedAverage = useSmoothedValue(volumetricAverage ?? null, {
-    stiffness: 200,
-    damping: 28,
-    enabled: true,
-  });
 
   const getPositionFromValue = (avg: number | null) => {
     if (!meshingEnabled || avg === null || avg === undefined) return null;
@@ -117,104 +129,107 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
         className="absolute top-2 sm:top-4 left-0 right-0 z-10 flex justify-center px-2"
       >
         <div className="space-y-1 sm:space-y-2 flex flex-col items-center">
-          {/* Metric label */}
           <div className="flex items-center justify-center">
-            <span 
+            <span
               className="text-[10px] sm:text-xs font-semibold tracking-wide"
               style={{
                 textShadow: isDarkMode
                   ? '0 1px 1px rgba(255,255,255,0.06), 0 -1px 0 rgba(0,0,0,0.5)'
                   : '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
-                color: isDarkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0, 0, 0, 0.5)'
+                color: isDarkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0, 0, 0, 0.5)',
               }}
             >
               {metricInfo.label}
             </span>
           </div>
-          
-          {/* Gradient bar - responsive width */}
+
           <div className="relative w-[150px] sm:w-[200px]">
-            <div 
-              className="h-2 sm:h-3 rounded-full shadow-inner" 
-              style={{ 
+            <div
+              className="h-2 sm:h-3 rounded-full shadow-inner"
+              style={{
                 background: gradient,
-                boxShadow: isDarkMode ? 'inset 0 2px 4px rgba(255,255,255,0.1)' : 'inset 0 2px 4px rgba(0, 0, 0, 0.2)'
+                boxShadow: isDarkMode
+                  ? 'inset 0 2px 4px rgba(255,255,255,0.1)'
+                  : 'inset 0 2px 4px rgba(0, 0, 0, 0.2)',
               }}
             ></div>
-            
-            {/* Volumetric average indicator (adouci) */}
+
             {meshingEnabled && averagePosition !== null && (
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 exit={{ scale: 0 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                 className="absolute -translate-x-1/2"
-                style={{ 
+                style={{
                   left: `${averagePosition}%`,
-                  top: '0px'
+                  top: '0px',
                 }}
               >
-                <div 
+                <div
                   className="w-2 sm:w-3 h-2 sm:h-3 rounded-full border-2 border-white shadow-lg relative"
                   style={{ backgroundColor: averageColor }}
                 >
-                  <div 
-                    className="absolute inset-0 rounded-full animate-ping opacity-75" 
+                  <div
+                    className="absolute inset-0 rounded-full animate-ping opacity-75"
                     style={{ backgroundColor: averageColor }}
                   ></div>
                 </div>
               </motion.div>
             )}
           </div>
-          
-          {/* Min/Max/Average values */}
+
           <div className="relative w-[150px] sm:w-[200px] flex items-center justify-between text-[9px] sm:text-[11px] font-bold">
-            <span 
+            <span
               className="absolute left-0 -translate-x-1/2"
               style={{
                 color: minColor,
                 textShadow: isDarkMode
                   ? '0 1px 2px rgba(255,255,255,0.18)'
                   : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
-                filter: isDarkMode ? 'brightness(1.15) opacity(0.95)' : 'brightness(0.9) opacity(0.8)'
+                filter: isDarkMode ? 'brightness(1.15) opacity(0.95)' : 'brightness(0.9) opacity(0.8)',
               }}
             >
-              {interpolationRange.min.toFixed(decimals)}{metricInfo.unit}
+              {interpolationRange.min.toFixed(decimals)}
+              {metricInfo.unit}
             </span>
-            
-            {/* Average value (adoucie) */}
-            {meshingEnabled && averagePosition !== null && smoothedAverage !== null && smoothedAverage !== undefined && (
-              <motion.span
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                className="absolute -translate-x-1/2"
-                style={{
-                  left: `${averagePosition}%`,
-                  color: averageColor,
-                  textShadow: isDarkMode
-                    ? '0 1px 2px rgba(255,255,255,0.18)'
-                    : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
-                  filter: isDarkMode ? 'brightness(1.2) opacity(0.95)' : 'brightness(0.9) opacity(0.8)'
-                }}
-              >
-                {smoothedAverage.toFixed(decimals)}{metricInfo.unit}
-              </motion.span>
-            )}
-            
-            <span 
+
+            {meshingEnabled &&
+              averagePosition !== null &&
+              smoothedAverage !== null &&
+              smoothedAverage !== undefined && (
+                <motion.span
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                  className="absolute -translate-x-1/2"
+                  style={{
+                    left: `${averagePosition}%`,
+                    color: averageColor,
+                    textShadow: isDarkMode
+                      ? '0 1px 2px rgba(255,255,255,0.18)'
+                      : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
+                    filter: isDarkMode ? 'brightness(1.2) opacity(0.95)' : 'brightness(0.9) opacity(0.8)',
+                  }}
+                >
+                  {smoothedAverage.toFixed(decimals)}
+                  {metricInfo.unit}
+                </motion.span>
+              )}
+
+            <span
               className="absolute right-0 translate-x-1/2"
               style={{
                 color: maxColor,
                 textShadow: isDarkMode
                   ? '0 1px 2px rgba(255,255,255,0.18)'
                   : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.2)',
-                filter: isDarkMode ? 'brightness(1.15) opacity(0.95)' : 'brightness(0.9) opacity(0.8)'
+                filter: isDarkMode ? 'brightness(1.15) opacity(0.95)' : 'brightness(0.9) opacity(0.8)',
               }}
             >
-              {interpolationRange.max.toFixed(decimals)}{metricInfo.unit}
+              {interpolationRange.max.toFixed(decimals)}
+              {metricInfo.unit}
             </span>
           </div>
         </div>
