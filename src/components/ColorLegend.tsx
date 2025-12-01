@@ -25,13 +25,8 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
 
   // IMPORTANT: appeler tous les hooks AVANT tout return conditionnel
   // Lissage visuel uniquement pour l'affichage (pas de coût côté calculs)
-  const s1 = useSmoothedValue(volumetricAverage ?? null, {
-    stiffness: 140,
-    damping: 32,
-    enabled: true,
-  });
-  const smoothedAverage = useSmoothedValue(s1, {
-    stiffness: 120,
+  const smoothedAverage = useSmoothedValue(volumetricAverage ?? null, {
+    stiffness: 200,
     damping: 28,
     enabled: true,
   });
