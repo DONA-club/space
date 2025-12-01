@@ -142,7 +142,7 @@ export const useAppStore = create<AppState>((set) => ({
   idwPower: 2,
   meshResolution: 40,
   visualizationType: 'points',
-  smoothingWindowSec: 3,
+  smoothingWindowSec: 0,
   interpolationRange: null,
   wsConnected: false,
   isRecording: false,
