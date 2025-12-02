@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { Alert, AlertDescription } from './ui/alert';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/FixedTooltip';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
@@ -57,89 +58,80 @@ export const SensorPanel = () => {
   const loadSensorDataInfo = async () => {
     if (!currentSpace) return;
 
-    try {
-      const counts = new Map<number, number>();
-      const dates = new Map<number, Date>();
+    const counts = new Map<number, number>();
+    const dates = new Map<number, Date>();
       
-      for (const sensor of sensors) {
-        const { count, error: countError } = await supabase
-          .from('sensor_data')
-          .select('*', { count: 'exact', head: true })
-          .eq('space_id', currentSpace.id)
-          .eq('sensor_id', sensor.id);
+    for (const sensor of sensors) {
+      const { count, error: countError } = await supabase
+        .from('sensor_data')
+        .select('*', { count: 'exact', head: true })
+        .eq('space_id', currentSpace.id)
+        .eq('sensor_id', sensor.id);
 
-        if (countError) throw countError;
-        counts.set(sensor.id, count || 0);
+      if (countError) throw countError;
+      counts.set(sensor.id, count || 0);
 
-        const { data: lastData, error: dateError } = await supabase
-          .from('sensor_data')
-          .select('timestamp')
-          .eq('space_id', currentSpace.id)
-          .eq('sensor_id', sensor.id)
-          .order('timestamp', { ascending: false })
-          .limit(1)
-          .single();
+      const { data: lastData, error: dateError } = await supabase
+        .from('sensor_data')
+        .select('timestamp')
+        .eq('space_id', currentSpace.id)
+        .eq('sensor_id', sensor.id)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
 
-        if (dateError && dateError.code !== 'PGRST116') throw dateError;
+      // PGRST116 = no rows
+      if (dateError && dateError.code !== 'PGRST116') throw dateError;
         
-        if (lastData) {
-          dates.set(sensor.id, new Date(lastData.timestamp));
-        }
+      if (lastData) {
+        dates.set(sensor.id, new Date(lastData.timestamp));
       }
-      
-      setSensorDataCounts(counts);
-      setLastDataDates(dates);
-    } catch (error) {
-      console.error('Error loading sensor data info:', error);
     }
+      
+    setSensorDataCounts(counts);
+    setLastDataDates(dates);
   };
 
   const loadOutdoorDataInfo = async () => {
     if (!currentSpace) return;
 
-    try {
-      const { count, error: countError } = await supabase
+    const { count, error: countError } = await supabase
+      .from('sensor_data')
+      .select('*', { count: 'exact', head: true })
+      .eq('space_id', currentSpace.id)
+      .eq('sensor_id', 0);
+
+    if (countError) throw countError;
+    setOutdoorDataCount(count || 0);
+    setHasOutdoorData((count || 0) > 0);
+
+    if (count && count > 0) {
+      const { data: nameData, error: nameError } = await supabase
         .from('sensor_data')
-        .select('*', { count: 'exact', head: true })
+        .select('sensor_name')
         .eq('space_id', currentSpace.id)
-        .eq('sensor_id', 0);
+        .eq('sensor_id', 0)
+        .limit(1)
+        .single();
 
-      if (countError) throw countError;
-      setOutdoorDataCount(count || 0);
-      setHasOutdoorData((count || 0) > 0);
-
-      if (count && count > 0) {
-        const { data: nameData, error: nameError } = await supabase
-          .from('sensor_data')
-          .select('sensor_name')
-          .eq('space_id', currentSpace.id)
-          .eq('sensor_id', 0)
-          .limit(1)
-          .single();
-
-        if (nameError && nameError.code !== 'PGRST116') throw nameError;
-        
-        if (nameData && nameData.sensor_name) {
-          setOutdoorSensorName(nameData.sensor_name);
-        }
-
-        const { data: lastData, error: dateError } = await supabase
-          .from('sensor_data')
-          .select('timestamp')
-          .eq('space_id', currentSpace.id)
-          .eq('sensor_id', 0)
-          .order('timestamp', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (dateError && dateError.code !== 'PGRST116') throw dateError;
-        
-        if (lastData) {
-          setOutdoorLastDate(new Date(lastData.timestamp));
-        }
+      if (nameError && nameError.code !== 'PGRST116') throw nameError;
+      if (nameData && nameData.sensor_name) {
+        setOutdoorSensorName(nameData.sensor_name);
       }
-    } catch (error) {
-      console.error('Error loading outdoor data info:', error);
+
+      const { data: lastData, error: dateError } = await supabase
+        .from('sensor_data')
+        .select('timestamp')
+        .eq('space_id', currentSpace.id)
+        .eq('sensor_id', 0)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (dateError && dateError.code !== 'PGRST116') throw dateError;        
+      if (lastData) {
+        setOutdoorLastDate(new Date(lastData.timestamp));
+      }
     }
   };
 
@@ -161,14 +153,12 @@ export const SensorPanel = () => {
 
   const detectOutdoorName = (filename: string): string => {
     const normalized = normalizeName(filename);
-    
     if (normalized.includes('balcon')) return 'Balcon';
     if (normalized.includes('terrasse')) return 'Terrasse';
     if (normalized.includes('jardin')) return 'Jardin';
     if (normalized.includes('ville') || normalized.includes('city')) return 'Ville';
     if (normalized.includes('outdoor') || normalized.includes('outside')) return 'Extérieur';
     if (normalized.includes('exterieur')) return 'Extérieur';
-    
     return 'Extérieur';
   };
 
@@ -187,24 +177,18 @@ export const SensorPanel = () => {
   const calculateSimilarity = (str1: string, str2: string): number => {
     const norm1 = normalizeName(str1);
     const norm2 = normalizeName(str2);
-    
     if (norm1 === norm2) return 1.0;
-    
     const initials1 = getInitials(str1);
     const initials2 = getInitials(str2);
     if (initials1 === norm2 || initials2 === norm1) return 0.9;
-    
     if (norm1.includes(norm2) || norm2.includes(norm1)) return 0.8;
-    
     const maxLen = Math.max(norm1.length, norm2.length);
     if (maxLen === 0) return 0;
-    
     let matches = 0;
     const minLen = Math.min(norm1.length, norm2.length);
     for (let i = 0; i < minLen; i++) {
       if (norm1[i] === norm2[i]) matches++;
     }
-    
     return matches / maxLen;
   };
 
@@ -231,12 +215,10 @@ export const SensorPanel = () => {
         }
 
         const fileNameWithoutExt = file.name.replace(/\.csv$/i, '');
-        
         let bestMatch: { sensor: typeof sensors[0]; score: number } | null = null;
         
         for (const sensor of sensors) {
           const score = calculateSimilarity(sensor.name, fileNameWithoutExt);
-          
           if (score > 0.7 && (!bestMatch || score > bestMatch.score)) {
             bestMatch = { sensor, score };
           }
@@ -270,232 +252,202 @@ export const SensorPanel = () => {
   const handleOutdoorCSVUpload = async (file: File, showToast: boolean = true, detectedName: string = 'Extérieur') => {
     if (!currentSpace) return;
 
-    try {
-      const text = await file.text();
-      const lines = text.split('\n').filter(line => line.trim());
-      const dataLines = lines.slice(1);
+    const text = await file.text();
+    const lines = text.split('\n').filter(line => line.trim());
+    const dataLines = lines.slice(1);
 
-      const newData: any[] = [];
+    const newData: any[] = [];
 
-      for (const line of dataLines) {
-        const values = line.replace(/"/g, '').split(',');
-        if (values.length < 5) continue;
+    for (const line of dataLines) {
+      const values = line.replace(/"/g, '').split(',');
+      if (values.length < 5) continue;
 
-        const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
-        const timestamp = new Date(timestampStr.trim());
+      const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
+      const timestamp = new Date(timestampStr.trim());
+      if (isNaN(timestamp.getTime())) continue;
 
-        if (isNaN(timestamp.getTime())) continue;
+      const temp = parseFloat(tempStr);
+      const hum = parseFloat(humStr);
+      const absHum = parseFloat(absHumStr);
+      const dpt = parseFloat(dptStr);
+      if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
 
-        const temp = parseFloat(tempStr);
-        const hum = parseFloat(humStr);
-        const absHum = parseFloat(absHumStr);
-        const dpt = parseFloat(dptStr);
+      newData.push({
+        space_id: currentSpace.id,
+        sensor_id: 0,
+        sensor_name: detectedName,
+        timestamp: timestamp.toISOString(),
+        temperature: temp,
+        humidity: hum,
+        absolute_humidity: absHum,
+        dew_point: dpt,
+      });
+    }
 
-        if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
+    if (newData.length === 0) {
+      throw new Error('Aucune donnée valide trouvée');
+    }
 
-        newData.push({
-          space_id: currentSpace.id,
-          sensor_id: 0,
-          sensor_name: detectedName,
-          timestamp: timestamp.toISOString(),
-          temperature: temp,
-          humidity: hum,
-          absolute_humidity: absHum,
-          dew_point: dpt,
-        });
-      }
+    const { error } = await supabase
+      .from('sensor_data')
+      .upsert(newData, { onConflict: 'space_id,sensor_id,timestamp' });
 
-      if (newData.length === 0) {
-        throw new Error('Aucune donnée valide trouvée');
-      }
+    if (error) throw error;
 
-      const { error } = await supabase
-        .from('sensor_data')
-        .upsert(newData, { onConflict: 'space_id,sensor_id,timestamp' });
-
-      if (error) throw error;
-
-      if (showToast) {
-        showSuccess(`${newData.length} points de données extérieures ajoutés`);
-        loadOutdoorDataInfo();
-      }
-    } catch (error) {
-      console.error('Error uploading outdoor CSV:', error);
-      if (showToast) {
-        showError(error instanceof Error ? error.message : 'Erreur lors du chargement du CSV extérieur');
-      }
-      throw error;
+    if (showToast) {
+      showSuccess(`${newData.length} points de données extérieures ajoutés`);
+      loadOutdoorDataInfo();
     }
   };
 
   const handleCSVUpload = async (sensorId: number, file: File, showToast: boolean = true) => {
     if (!currentSpace) return;
 
-    try {
-      const text = await file.text();
-      const lines = text.split('\n').filter(line => line.trim());
-      const dataLines = lines.slice(1);
+    const text = await file.text();
+    const lines = text.split('\n').filter(line => line.trim());
+    const dataLines = lines.slice(1);
 
-      const sensor = sensors.find(s => s.id === sensorId);
-      if (!sensor) throw new Error('Capteur non trouvé');
+    const sensor = sensors.find(s => s.id === sensorId);
+    if (!sensor) throw new Error('Capteur non trouvé');
 
-      const newData: any[] = [];
+    const newData: any[] = [];
 
-      for (const line of dataLines) {
-        const values = line.replace(/"/g, '').split(',');
-        if (values.length < 5) continue;
+    for (const line of dataLines) {
+      const values = line.replace(/"/g, '').split(',');
+      if (values.length < 5) continue;
 
-        const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
-        const timestamp = new Date(timestampStr.trim());
+      const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
+      const timestamp = new Date(timestampStr.trim());
+      if (isNaN(timestamp.getTime())) continue;
 
-        if (isNaN(timestamp.getTime())) continue;
+      const temp = parseFloat(tempStr);
+      const hum = parseFloat(humStr);
+      const absHum = parseFloat(absHumStr);
+      const dpt = parseFloat(dptStr);
+      if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
 
-        const temp = parseFloat(tempStr);
-        const hum = parseFloat(humStr);
-        const absHum = parseFloat(absHumStr);
-        const dpt = parseFloat(dptStr);
+      newData.push({
+        space_id: currentSpace.id,
+        sensor_id: sensorId,
+        sensor_name: sensor.name,
+        timestamp: timestamp.toISOString(),
+        temperature: temp,
+        humidity: hum,
+        absolute_humidity: absHum,
+        dew_point: dpt,
+      });
+    }
 
-        if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
+    if (newData.length === 0) {
+      throw new Error('Aucune donnée valide trouvée');
+    }
 
-        newData.push({
-          space_id: currentSpace.id,
-          sensor_id: sensorId,
-          sensor_name: sensor.name,
-          timestamp: timestamp.toISOString(),
-          temperature: temp,
-          humidity: hum,
-          absolute_humidity: absHum,
-          dew_point: dpt,
-        });
-      }
+    const { error } = await supabase
+      .from('sensor_data')
+      .upsert(newData, { onConflict: 'space_id,sensor_id,timestamp' });
 
-      if (newData.length === 0) {
-        throw new Error('Aucune donnée valide trouvée');
-      }
+    if (error) throw error;
 
-      const { error } = await supabase
-        .from('sensor_data')
-        .upsert(newData, { onConflict: 'space_id,sensor_id,timestamp' });
+    const maxTimestamp = Math.max(...newData.map(d => new Date(d.timestamp).getTime()));
+    await supabase
+      .from('spaces')
+      .update({ 
+        last_csv_date: new Date(maxTimestamp).toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', currentSpace.id);
 
-      if (error) throw error;
-
-      const maxTimestamp = Math.max(...newData.map(d => new Date(d.timestamp).getTime()));
-      await supabase
-        .from('spaces')
-        .update({ 
-          last_csv_date: new Date(maxTimestamp).toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', currentSpace.id);
-
-      if (showToast) {
-        showSuccess(`${newData.length} points de données ajoutés pour ${sensor.name}`);
-        loadSensorDataInfo();
-      }
-    } catch (error) {
-      console.error('Error uploading CSV:', error);
-      if (showToast) {
-        showError(error instanceof Error ? error.message : 'Erreur lors du chargement du CSV');
-      }
-      throw error;
+    if (showToast) {
+      showSuccess(`${newData.length} points de données ajoutés pour ${sensor.name}`);
+      loadSensorDataInfo();
     }
   };
 
   const downloadAllData = async (sensorId: number) => {
     if (!currentSpace) return;
 
-    try {
-      const sensor = sensors.find(s => s.id === sensorId);
-      if (!sensor) return;
+    const sensor = sensors.find(s => s.id === sensorId);
+    if (!sensor) return;
 
-      const { data, error } = await supabase
-        .from('sensor_data')
-        .select('*')
-        .eq('space_id', currentSpace.id)
-        .eq('sensor_id', sensorId)
-        .order('timestamp', { ascending: true });
+    const { data, error } = await supabase
+      .from('sensor_data')
+      .select('*')
+      .eq('space_id', currentSpace.id)
+      .eq('sensor_id', sensorId)
+      .order('timestamp', { ascending: true });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      if (!data || data.length === 0) {
-        showError('Aucune donnée disponible');
-        return;
-      }
-
-      const headers = ['timestamp', 'temperature', 'humidity', 'absolute_humidity', 'dew_point'];
-      const csvLines = [headers.join(',')];
-
-      data.forEach(row => {
-        csvLines.push([
-          row.timestamp,
-          row.temperature,
-          row.humidity,
-          row.absolute_humidity,
-          row.dew_point
-        ].join(','));
-      });
-
-      const csv = csvLines.join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${sensor.name}_${Date.now()}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      showSuccess('Données téléchargées');
-    } catch (error) {
-      console.error('Error downloading data:', error);
-      showError('Erreur lors du téléchargement');
+    if (!data || data.length === 0) {
+      showError('Aucune donnée disponible');
+      return;
     }
+
+    const headers = ['timestamp', 'temperature', 'humidity', 'absolute_humidity', 'dew_point'];
+    const csvLines = [headers.join(',')];
+
+    data.forEach(row => {
+      csvLines.push([
+        row.timestamp,
+        row.temperature,
+        row.humidity,
+        row.absolute_humidity,
+        row.dew_point
+      ].join(','));
+    });
+
+    const csv = csvLines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${sensor.name}_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showSuccess('Données téléchargées');
   };
 
   const downloadOutdoorData = async () => {
     if (!currentSpace) return;
 
-    try {
-      const { data, error } = await supabase
-        .from('sensor_data')
-        .select('*')
-        .eq('space_id', currentSpace.id)
-        .eq('sensor_id', 0)
-        .order('timestamp', { ascending: true });
+    const { data, error } = await supabase
+      .from('sensor_data')
+      .select('*')
+      .eq('space_id', currentSpace.id)
+      .eq('sensor_id', 0)
+      .order('timestamp', { ascending: true });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      if (!data || data.length === 0) {
-        showError('Aucune donnée disponible');
-        return;
-      }
-
-      const headers = ['timestamp', 'temperature', 'humidity', 'absolute_humidity', 'dew_point'];
-      const csvLines = [headers.join(',')];
-
-      data.forEach(row => {
-        csvLines.push([
-          row.timestamp,
-          row.temperature,
-          row.humidity,
-          row.absolute_humidity,
-          row.dew_point
-        ].join(','));
-      });
-
-      const csv = csvLines.join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${outdoorSensorName}_${Date.now()}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      showSuccess('Données extérieures téléchargées');
-    } catch (error) {
-      console.error('Error downloading outdoor data:', error);
-      showError('Erreur lors du téléchargement');
+    if (!data || data.length === 0) {
+      showError('Aucune donnée disponible');
+      return;
     }
+
+    const headers = ['timestamp', 'temperature', 'humidity', 'absolute_humidity', 'dew_point'];
+    const csvLines = [headers.join(',')];
+
+    data.forEach(row => {
+      csvLines.push([
+        row.timestamp,
+        row.temperature,
+        row.humidity,
+        row.absolute_humidity,
+        row.dew_point
+      ].join(','));
+    });
+
+    const csv = csvLines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${outdoorSensorName}_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showSuccess('Données extérieures téléchargées');
   };
 
   const deleteAllData = async (sensorId: number) => {
@@ -508,21 +460,16 @@ export const SensorPanel = () => {
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('sensor_data')
-        .delete()
-        .eq('space_id', currentSpace.id)
-        .eq('sensor_id', sensorId);
+    const { error } = await supabase
+      .from('sensor_data')
+      .delete()
+      .eq('space_id', currentSpace.id)
+      .eq('sensor_id', sensorId);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      showSuccess('Données supprimées');
-      loadSensorDataInfo();
-    } catch (error) {
-      console.error('Error deleting data:', error);
-      showError('Erreur lors de la suppression');
-    }
+    showSuccess('Données supprimées');
+    loadSensorDataInfo();
   };
 
   const deleteOutdoorData = async () => {
@@ -532,23 +479,18 @@ export const SensorPanel = () => {
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('sensor_data')
-        .delete()
-        .eq('space_id', currentSpace.id)
-        .eq('sensor_id', 0);
+    const { error } = await supabase
+      .from('sensor_data')
+      .delete()
+      .eq('space_id', currentSpace.id)
+      .eq('sensor_id', 0);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      showSuccess('Données supprimées');
-      setOutdoorSensorName('Extérieur');
-      setOutdoorLastDate(null);
-      loadOutdoorDataInfo();
-    } catch (error) {
-      console.error('Error deleting outdoor data:', error);
-      showError('Erreur lors de la suppression');
-    }
+    showSuccess('Données supprimées');
+    setOutdoorSensorName('Extérieur');
+    setOutdoorLastDate(null);
+    loadOutdoorDataInfo();
   };
 
   const handleSensorHover = (sensorId: number) => {
@@ -571,7 +513,6 @@ export const SensorPanel = () => {
     const diff = now - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
-    
     if (days > 0) return `il y a ${days}j`;
     if (hours > 0) return `il y a ${hours}h`;
     return 'récent';
@@ -579,13 +520,11 @@ export const SensorPanel = () => {
 
   const getDataPeriodDuration = (): string | null => {
     if (!timeRange) return null;
-    
     const duration = (timeRange[1] - timeRange[0]) / (1000 * 60 * 60);
     const days = Math.floor(duration / 24);
     const hours = Math.floor(duration % 24);
-    
     if (days > 0) {
-      return `${days}j ${hours}h`;
+      return `${days}j, ${hours}h`;
     }
     return `${hours}h`;
   };
@@ -599,6 +538,67 @@ export const SensorPanel = () => {
   const indoorSensorsWithData = sensors.filter(s => (sensorDataCounts.get(s.id) || 0) > 0).length;
   const dataPeriod = getDataPeriodDuration();
 
+  // Global last data timestamp across indoor and outdoor
+  const latestIndoorDate = useMemo(() => {
+    let max: Date | null = null;
+    lastDataDates.forEach((d) => {
+      if (d && (!max || d.getTime() > max.getTime())) {
+        max = d;
+      }
+    });
+    return max;
+  }, [lastDataDates]);
+
+  const globalLastDate: Date | null = useMemo(() => {
+    if (latestIndoorDate && outdoorLastDate) {
+      return latestIndoorDate.getTime() >= outdoorLastDate.getTime() ? latestIndoorDate : outdoorLastDate;
+    }
+    return latestIndoorDate || outdoorLastDate || null;
+  }, [latestIndoorDate, outdoorLastDate]);
+
+  const getIndoorBadgeClasses = () => {
+    if (sensors.length === 0) {
+      return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+    }
+    if (indoorSensorsWithData === sensors.length) {
+      return 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
+    }
+    if (indoorSensorsWithData > 0) {
+      return 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700';
+    }
+    return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+  };
+
+  const getOutdoorBadgeClasses = () => {
+    if (hasOutdoorData) {
+      return 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-700';
+    }
+    return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+  };
+
+  const getDelayBadgeClasses = () => {
+    if (!globalLastDate) {
+      return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+    }
+    const diffHours = Math.floor((Date.now() - globalLastDate.getTime()) / (1000 * 60 * 60));
+    if (diffHours <= 1) {
+      return 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
+    }
+    if (diffHours <= 24) {
+      return 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700';
+    }
+    return 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700';
+  };
+
+  const delayLabel = useMemo(() => {
+    if (!globalLastDate) return 'N/A';
+    const diff = Date.now() - globalLastDate.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days}j, ${hours % 24}h`;
+    return `${hours}h`;
+  }, [globalLastDate]);
+
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
       {/* Data Panel Card */}
@@ -609,23 +609,89 @@ export const SensorPanel = () => {
               <Database size={14} className="text-blue-600" />
               <h3 className="text-sm font-medium">Données</h3>
               {!isDataExpanded && (
-                <div className="flex items-center gap-1.5">
-                  <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1">
-                    <Home size={10} />
-                    {indoorSensorsWithData}/{sensors.length}
-                  </Badge>
-                  {hasOutdoorData && (
-                    <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700">
-                      <Cloud size={10} className="text-blue-600" />
-                    </Badge>
-                  )}
-                  {dataPeriod && (
-                    <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1">
-                      <Clock size={10} />
-                      {dataPeriod}
-                    </Badge>
-                  )}
-                </div>
+                <TooltipProvider delayDuration={250}>
+                  <div className="flex items-center gap-1.5">
+                    {/* Indoor sensors coverage badge */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] h-5 px-1.5 flex items-center gap-1 cursor-help ${getIndoorBadgeClasses()}`}
+                          onClick={() => setIsDataExpanded(true)}
+                        >
+                          <Home size={10} />
+                          {indoorSensorsWithData}/{sensors.length}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs font-medium">Capteurs intérieurs</p>
+                        <p className="text-xs text-gray-400">
+                          {indoorSensorsWithData} sur {sensors.length} avec des données
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* Outdoor data badge */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] h-5 px-1.5 flex items-center gap-1 cursor-help ${getOutdoorBadgeClasses()}`}
+                          onMouseEnter={() => handleSensorHover(0)}
+                          onMouseLeave={handleSensorLeave}
+                          onClick={() => setIsDataExpanded(true)}
+                        >
+                          <Cloud size={10} className={hasOutdoorData ? 'text-cyan-600' : 'text-gray-500'} />
+                          {hasOutdoorData ? outdoorSensorName : 'Extérieur'}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs font-medium">Données extérieures</p>
+                        <p className="text-xs text-gray-400">
+                          {hasOutdoorData ? `${outdoorDataCount.toLocaleString()} points` : 'Aucune donnée'}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* Data period badge */}
+                    {dataPeriod && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] h-5 px-1.5 flex items-center gap-1 cursor-help bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
+                          >
+                            <Calendar size={10} />
+                            {dataPeriod}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs font-medium">Durée disponible</p>
+                          <p className="text-xs text-gray-400">Plage temporelle sélectionnée</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {/* Global delay badge */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] h-5 px-1.5 flex items-center gap-1 cursor-help ${getDelayBadgeClasses()}`}
+                        >
+                          <Clock size={10} />
+                          {delayLabel}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs font-medium">Dernière donnée reçue</p>
+                        <p className="text-xs text-gray-400">
+                          {globalLastDate ? `Il y a ${formatRelativeTime(globalLastDate).replace('il y a ', '')}` : 'Inconnue'}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
               )}
             </div>
             <Button
@@ -791,9 +857,19 @@ export const SensorPanel = () => {
                   <div className="flex items-center gap-2 mb-2">
                     <Home size={12} className="text-purple-600" />
                     <h4 className="text-xs font-medium">Intérieur</h4>
-                    <Badge variant="outline" className="text-xs h-5">
-                      {sensors.length}
-                    </Badge>
+                    <TooltipProvider delayDuration={250}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="outline" className={`text-xs h-5 cursor-help ${getIndoorBadgeClasses()}`}>
+                            {sensors.length}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs font-medium">Nombre de capteurs</p>
+                          <p className="text-xs text-gray-400">{sensors.length} capteur(s) enregistrés</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
 
                   {sensors.length === 0 ? (
@@ -807,7 +883,7 @@ export const SensorPanel = () => {
                         const dataCount = sensorDataCounts.get(sensor.id) || 0;
                         const hasData = dataCount > 0;
                         const lastDate = lastDataDates.get(sensor.id);
-                        const isOld = lastDate && isDataOld(lastDate);
+                        const isOld = !!(lastDate && isDataOld(lastDate));
 
                         return (
                           <motion.div
@@ -827,9 +903,19 @@ export const SensorPanel = () => {
                               <span className="text-xs font-medium truncate">{sensor.name}</span>
                               <div className="flex items-center gap-1">
                                 {hasData && (
-                                  <Badge variant="outline" className="text-[9px] h-4 px-1">
-                                    {dataCount.toLocaleString()}
-                                  </Badge>
+                                  <TooltipProvider delayDuration={250}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="outline" className="text-[9px] h-4 px-1 cursor-help">
+                                          {dataCount.toLocaleString()}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="text-xs font-medium">Points de données</p>
+                                        <p className="text-xs text-gray-400">{dataCount.toLocaleString()} enregistrements</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 )}
                                 <Badge 
                                   variant={sensor.currentData ? "default" : "secondary"}
