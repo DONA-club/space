@@ -49,6 +49,7 @@ export const SensorPanel = () => {
   const [outdoorDataCount, setOutdoorDataCount] = useState(0);
   const [outdoorSensorName, setOutdoorSensorName] = useState<string>('Extérieur');
   const [outdoorLastDate, setOutdoorLastDate] = useState<Date | null>(null);
+  const [chartPoints, setChartPoints] = useState<{ name: string; temperature: number; absoluteHumidity: number }[]>([]);
 
   useEffect(() => {
     if (currentSpace && mode === 'replay') {
@@ -598,6 +599,81 @@ export const SensorPanel = () => {
     if (days > 0) return `${days}j, ${hours % 24}h`;
     return `${hours}h`;
   }, [globalLastDate]);
+
+  // Préparer les points pour le diagramme psychrométrique
+  useEffect(() => {
+    if (!currentSpace) return;
+
+    // Mode replay: charger le dernier point de chaque capteur dans la plage
+    if (mode === 'replay' && timeRange) {
+      const startISO = new Date(timeRange[0]).toISOString();
+      const endISO = new Date(timeRange[1]).toISOString();
+
+      const loadPoints = async () => {
+        const pts: { name: string; temperature: number; absoluteHumidity: number }[] = [];
+
+        for (const sensor of sensors) {
+          const { data } = await supabase
+            .from('sensor_data')
+            .select('temperature, absolute_humidity, timestamp')
+            .eq('space_id', currentSpace.id)
+            .eq('sensor_id', sensor.id)
+            .gte('timestamp', startISO)
+            .lte('timestamp', endISO)
+            .order('timestamp', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (data && typeof data.temperature === 'number' && typeof data.absolute_humidity === 'number') {
+            pts.push({
+              name: sensor.name,
+              temperature: data.temperature,
+              absoluteHumidity: data.absolute_humidity
+            });
+          }
+        }
+
+        // Optionnel: inclure le capteur extérieur s'il existe
+        if (hasOutdoorData) {
+          const { data } = await supabase
+            .from('sensor_data')
+            .select('temperature, absolute_humidity, timestamp, sensor_name')
+            .eq('space_id', currentSpace.id)
+            .eq('sensor_id', 0)
+            .gte('timestamp', startISO)
+            .lte('timestamp', endISO)
+            .order('timestamp', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (data && typeof data.temperature === 'number' && typeof data.absolute_humidity === 'number') {
+            pts.push({
+              name: data.sensor_name || outdoorSensorName,
+              temperature: data.temperature,
+              absoluteHumidity: data.absolute_humidity
+            });
+          }
+        }
+
+        setChartPoints(pts);
+      };
+
+      // lancer la charge
+      loadPoints();
+      return;
+    }
+
+    // Mode live: utiliser les données courantes des capteurs
+    const livePts = sensors
+      .filter(s => s.currentData)
+      .map(s => ({
+        name: s.name,
+        temperature: s.currentData!.temperature,
+        absoluteHumidity: s.currentData!.absoluteHumidity
+      }));
+
+    setChartPoints(livePts);
+  }, [mode, timeRange, sensors, currentSpace, hasOutdoorData, outdoorSensorName]);
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
@@ -1283,25 +1359,15 @@ export const SensorPanel = () => {
               </div>
             </div>
 
-            {(() => {
-              const points = sensors
-                .filter(s => s.currentData)
-                .map(s => ({
-                  name: s.name,
-                  temperature: s.currentData!.temperature,
-                  absoluteHumidity: s.currentData!.absoluteHumidity
-                }));
-
-              return points.length > 0 ? (
-                <div className="h-64">
-                  <PsychrometricChart points={points} />
-                </div>
-              ) : (
-                <div className="text-xs text-gray-600 dark:text-gray-400 py-2">
-                  Aucune donnée en direct pour afficher le diagramme psychrométrique.
-                </div>
-              );
-            })()}
+            {chartPoints.length > 0 ? (
+              <div className="h-64">
+                <PsychrometricChart points={chartPoints} />
+              </div>
+            ) : (
+              <div className="text-xs text-gray-600 dark:text-gray-400 py-2">
+                Aucune donnée disponible dans la plage sélectionnée pour le diagramme psychrométrique.
+              </div>
+            )}
           </div>
         </LiquidGlassCard>
         </>
