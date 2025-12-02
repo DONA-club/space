@@ -606,7 +606,9 @@ export const TimelineControl = () => {
     return merged;
   }, [timeRange, currentSpace, mode, liveTimelineEnd]);
 
-  const currentMidnightPlusOne = (d: Date) => d.getDate() + 1;
+  function currentMidnightPlusOne(d: Date) {
+    return d.getDate() + 1;
+  }
 
   const getColorForDifference = (difference: number): string => {
     if (diffRange === 0) return 'rgb(128, 128, 128)';
