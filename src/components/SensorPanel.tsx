@@ -39,6 +39,8 @@ export const SensorPanel = () => {
   const setHasOutdoorData = useAppStore((state) => state.setHasOutdoorData);
   const timeRange = useAppStore((state) => state.timeRange);
   const outdoorData = useAppStore((state) => state.outdoorData);
+  const currentTimestamp = useAppStore((state) => state.currentTimestamp);
+  const smoothingWindowSec = useAppStore((state) => state.smoothingWindowSec);
   
   const [isDataExpanded, setIsDataExpanded] = useState(true);
   const [isInterpolationExpanded, setIsInterpolationExpanded] = useState(true);
@@ -600,66 +602,106 @@ export const SensorPanel = () => {
     return `${hours}h`;
   }, [globalLastDate]);
 
-  // Préparer les points pour le diagramme psychrométrique
+  // Points du diagramme psychrométrique synchronisés avec la Timeline
   useEffect(() => {
     if (!currentSpace) return;
 
-    // Mode replay: charger le dernier point de chaque capteur dans la plage
-    if (mode === 'replay' && timeRange) {
-      const startISO = new Date(timeRange[0]).toISOString();
-      const endISO = new Date(timeRange[1]).toISOString();
+    const loadNearestPointsAtTimestamp = async () => {
+      const pts: { name: string; temperature: number; absoluteHumidity: number }[] = [];
+      const ts = currentTimestamp || Date.now();
 
-      const loadPoints = async () => {
-        const pts: { name: string; temperature: number; absoluteHumidity: number }[] = [];
+      // Fenêtre de lissage (pour limiter les requêtes à une zone proche)
+      const halfWindowMs = (smoothingWindowSec || 60) * 1000 / 2;
+      const tsMinus = new Date(ts - halfWindowMs).toISOString();
+      const tsPlus = new Date(ts + halfWindowMs).toISOString();
 
-        for (const sensor of sensors) {
-          const { data } = await supabase
-            .from('sensor_data')
-            .select('temperature, absolute_humidity, timestamp')
-            .eq('space_id', currentSpace.id)
-            .eq('sensor_id', sensor.id)
-            .gte('timestamp', startISO)
-            .lte('timestamp', endISO)
-            .order('timestamp', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+      // Pour chaque capteur: on prend la mesure la plus proche de currentTimestamp
+      for (const sensor of sensors) {
+        // Plus proche en dessous
+        const { data: below } = await supabase
+          .from('sensor_data')
+          .select('temperature, absolute_humidity, timestamp')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', sensor.id)
+          .lte('timestamp', new Date(ts).toISOString())
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-          if (data && typeof data.temperature === 'number' && typeof data.absolute_humidity === 'number') {
-            pts.push({
-              name: sensor.name,
-              temperature: data.temperature,
-              absoluteHumidity: data.absolute_humidity
-            });
-          }
+        // Plus proche au-dessus
+        const { data: above } = await supabase
+          .from('sensor_data')
+          .select('temperature, absolute_humidity, timestamp')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', sensor.id)
+          .gte('timestamp', new Date(ts).toISOString())
+          .order('timestamp', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        let chosen = null as null | { temperature: number; absolute_humidity: number; timestamp: string };
+        if (below && above) {
+          const dBelow = Math.abs(new Date(below.timestamp).getTime() - ts);
+          const dAbove = Math.abs(new Date(above.timestamp).getTime() - ts);
+          chosen = dBelow <= dAbove ? below : above;
+        } else {
+          chosen = below || above || null;
         }
 
-        // Optionnel: inclure le capteur extérieur s'il existe
-        if (hasOutdoorData) {
-          const { data } = await supabase
-            .from('sensor_data')
-            .select('temperature, absolute_humidity, timestamp, sensor_name')
-            .eq('space_id', currentSpace.id)
-            .eq('sensor_id', 0)
-            .gte('timestamp', startISO)
-            .lte('timestamp', endISO)
-            .order('timestamp', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+        if (chosen && typeof chosen.temperature === 'number' && typeof chosen.absolute_humidity === 'number') {
+          pts.push({
+            name: sensor.name,
+            temperature: chosen.temperature,
+            absoluteHumidity: chosen.absolute_humidity
+          });
+        }
+      }
 
-          if (data && typeof data.temperature === 'number' && typeof data.absolute_humidity === 'number') {
-            pts.push({
-              name: data.sensor_name || outdoorSensorName,
-              temperature: data.temperature,
-              absoluteHumidity: data.absolute_humidity
-            });
-          }
+      // Capteur extérieur (si présent)
+      if (hasOutdoorData) {
+        const { data: belowOut } = await supabase
+          .from('sensor_data')
+          .select('temperature, absolute_humidity, timestamp, sensor_name')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', 0)
+          .lte('timestamp', new Date(ts).toISOString())
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const { data: aboveOut } = await supabase
+          .from('sensor_data')
+          .select('temperature, absolute_humidity, timestamp, sensor_name')
+          .eq('space_id', currentSpace.id)
+          .eq('sensor_id', 0)
+          .gte('timestamp', new Date(ts).toISOString())
+          .order('timestamp', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        let chosenOut = null as null | { temperature: number; absolute_humidity: number; timestamp: string; sensor_name?: string };
+        if (belowOut && aboveOut) {
+          const dBelow = Math.abs(new Date(belowOut.timestamp).getTime() - ts);
+          const dAbove = Math.abs(new Date(aboveOut.timestamp).getTime() - ts);
+          chosenOut = dBelow <= dAbove ? belowOut : aboveOut;
+        } else {
+          chosenOut = belowOut || aboveOut || null;
         }
 
-        setChartPoints(pts);
-      };
+        if (chosenOut && typeof chosenOut.temperature === 'number' && typeof chosenOut.absolute_humidity === 'number') {
+          pts.push({
+            name: chosenOut.sensor_name || outdoorSensorName,
+            temperature: chosenOut.temperature,
+            absoluteHumidity: chosenOut.absolute_humidity
+          });
+        }
+      }
 
-      // lancer la charge
-      loadPoints();
+      setChartPoints(pts);
+    };
+
+    if (mode === 'replay') {
+      loadNearestPointsAtTimestamp();
       return;
     }
 
@@ -671,9 +713,8 @@ export const SensorPanel = () => {
         temperature: s.currentData!.temperature,
         absoluteHumidity: s.currentData!.absoluteHumidity
       }));
-
     setChartPoints(livePts);
-  }, [mode, timeRange, sensors, currentSpace, hasOutdoorData, outdoorSensorName]);
+  }, [mode, currentTimestamp, sensors, currentSpace, hasOutdoorData, outdoorSensorName, smoothingWindowSec]);
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
@@ -1361,11 +1402,11 @@ export const SensorPanel = () => {
 
             {chartPoints.length > 0 ? (
               <div className="h-64">
-                <PsychrometricChart points={chartPoints} />
+                <PsychrometricChart points={chartPoints} outdoorTemp={outdoorData ? outdoorData.temperature : null} />
               </div>
             ) : (
               <div className="text-xs text-gray-600 dark:text-gray-400 py-2">
-                Aucune donnée disponible dans la plage sélectionnée pour le diagramme psychrométrique.
+                Aucune donnée disponible pour le diagramme psychrométrique.
               </div>
             )}
           </div>
