@@ -40,6 +40,7 @@ interface Space {
   updated_at: string;
   latitude: number | null;
   longitude: number | null;
+  orientation_azimuth: number | null; // nouvel attribut
 }
 
 interface AppState {
@@ -84,6 +85,9 @@ interface AppState {
   smoothingWindowSec: number;
   interpolationRange: { min: number; max: number } | null;
   
+  // Orientation
+  orientationAzimuth: number; // en degrés [0..359]
+  
   // WebSocket & Live
   wsConnected: boolean;
   isRecording: boolean;
@@ -115,6 +119,7 @@ interface AppState {
   setVisualizationType: (type: VisualizationType) => void;
   setSmoothingWindowSec: (sec: number) => void;
   setInterpolationRange: (range: { min: number; max: number } | null) => void;
+  setOrientationAzimuth: (deg: number) => void;
   setWsConnected: (connected: boolean) => void;
   setRecording: (recording: boolean) => void;
   setLiveSystemConnected: (connected: boolean) => void;
@@ -144,6 +149,7 @@ export const useAppStore = create<AppState>((set) => ({
   visualizationType: 'points',
   smoothingWindowSec: 120,
   interpolationRange: null,
+  orientationAzimuth: 0,
   wsConnected: false,
   isRecording: false,
   liveSystemConnected: false,
@@ -162,9 +168,13 @@ export const useAppStore = create<AppState>((set) => ({
     outdoorData: null,
     hasOutdoorData: false,
     isRecording: false,
-    liveSystemConnected: false
+    liveSystemConnected: false,
+    orientationAzimuth: 0
   }),
-  setCurrentSpace: (space) => set({ currentSpace: space }),
+  setCurrentSpace: (space) => set((state) => ({ 
+    currentSpace: space,
+    orientationAzimuth: space?.orientation_azimuth != null ? Math.round(space.orientation_azimuth) : state.orientationAzimuth
+  })),
   setMode: (mode) => set({ mode }),
   setGltfModel: (model) => set({ gltfModel: model }),
   setRoomVolume: (volume) => set({ roomVolume: volume }),
@@ -197,6 +207,7 @@ export const useAppStore = create<AppState>((set) => ({
   setVisualizationType: (type) => set({ visualizationType: type }),
   setSmoothingWindowSec: (sec) => set({ smoothingWindowSec: sec }),
   setInterpolationRange: (range) => set({ interpolationRange: range }),
+  setOrientationAzimuth: (deg) => set({ orientationAzimuth: ((deg % 360) + 360) % 360 }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
   setRecording: (recording) => set({ isRecording: recording }),
   setLiveSystemConnected: (connected) => set({ liveSystemConnected: connected }),

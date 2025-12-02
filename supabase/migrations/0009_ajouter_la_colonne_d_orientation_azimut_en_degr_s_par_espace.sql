@@ -1,0 +1,1 @@
+ALTER TABLE public.spaces ADD COLUMN IF NOT EXISTS orientation_azimuth DOUBLE PRECISION DEFAULT 0;

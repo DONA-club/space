@@ -13,12 +13,12 @@ import { useSensorData } from "@/hooks/useSensorData";
 import { useSceneBackground } from "@/hooks/useSceneBackground";
 import { useSensorMeshUpdates } from "@/hooks/useSensorMeshUpdates";
 import { getColorFromValueSaturated, createCircleTexture } from "@/utils/colorUtils";
-import { findClosestDataPoint, calculateIndoorAverage, getDataRange, getAverageDataPointInWindow } from "@/utils/sensorUtils";
+import { calculateIndoorAverage, getDataRange, getAverageDataPointInWindow } from "@/utils/sensorUtils";
 import { getMetricValue } from "@/utils/metricUtils";
 import { createSensorSpheres } from "./scene3d/SensorSpheres";
 import { createScene, createCamera, createRenderer, setupLights, createControls } from "./scene3d/SceneSetup";
 import { SceneRef, ModelBounds } from "@/types/scene.types";
-import { INTERPOLATION_OFFSET, INTERPOLATION_DEFAULTS, VISUALIZATION_DEFAULTS } from "@/constants/interpolation";
+import { VISUALIZATION_DEFAULTS } from "@/constants/interpolation";
 import { calculateAirDensity, calculateWaterMass } from "@/utils/airCalculations";
 import { calculateSceneVolume } from "@/utils/volumeCalculations";
 import { useTheme } from "@/components/theme-provider";
@@ -57,16 +57,16 @@ export const Scene3DViewer = () => {
   const idwPower = useAppStore((state) => state.idwPower);
   const meshResolution = useAppStore((state) => state.meshResolution);
   const visualizationType = useAppStore((state) => state.visualizationType);
-  const interpolationRange = useAppStore((state) => state.interpolationRange);
+  const interpolationRange = useAppStore((state) => state.setInterpolationRange ? useAppStore.getState().interpolationRange : null);
   const setInterpolationRange = useAppStore((state) => state.setInterpolationRange);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setOutdoorData = useAppStore((state) => state.setOutdoorData);
   const sensorOffset = useAppStore((state) => state.sensorOffset);
   const smoothingWindowSec = useAppStore((state) => state.smoothingWindowSec);
+  const orientationAzimuth = useAppStore((state) => state.orientationAzimuth);
 
   const { sensorData, outdoorData } = useSensorData(currentSpace, sensors, hasOutdoorData, currentTimestamp);
 
-  // Détecter le mode sombre
   const isDarkMode = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useSceneBackground({
@@ -93,7 +93,6 @@ export const Scene3DViewer = () => {
     }
   }, [currentTimestamp, dataReady, hasOutdoorData, setOutdoorData, sensors, sensorData, outdoorData, smoothingWindowSec]);
 
-  // Mettre à jour la plage d'interpolation même si la maille est désactivée
   useEffect(() => {
     if (!dataReady || sensorData.size === 0) {
       setInterpolationRange(null);
@@ -114,42 +113,33 @@ export const Scene3DViewer = () => {
     sensorData,
     currentTimestamp,
     selectedMetric,
-    interpolationRange,
+    interpolationRange: useAppStore.getState().interpolationRange,
     dataReady,
     smoothingWindowSec
   });
 
-  // Animation de pulsation au survol
   useEffect(() => {
     const handleSensorHover = (event: CustomEvent) => {
       if (!sceneRef.current) return;
-      
       const { sensorId } = event.detail;
       const meshes = sceneRef.current.sensorMeshes.get(sensorId);
-      
       if (meshes) {
         if (pulseAnimationRef.current !== null) {
           cancelAnimationFrame(pulseAnimationRef.current);
         }
-
         const startTime = Date.now();
         const pulseDuration = 1000;
-        
         const animate = () => {
           const elapsed = (Date.now() - startTime) % pulseDuration;
           const progress = elapsed / pulseDuration;
           const scale = 1 + 0.3 * Math.sin(progress * Math.PI * 2);
-          
           meshes.sphere.scale.setScalar(scale);
           meshes.glow.scale.setScalar(scale * 1.5);
-          
           pulseAnimationRef.current = requestAnimationFrame(animate);
         };
-        
         animate();
       }
     };
-    
     const handleSensorLeave = () => {
       if (!sceneRef.current) return;
       if (pulseAnimationRef.current !== null) {
@@ -161,10 +151,8 @@ export const Scene3DViewer = () => {
         meshes.glow.scale.setScalar(1);
       });
     };
-    
     window.addEventListener('sensorHover', handleSensorHover as EventListener);
     window.addEventListener('sensorLeave', handleSensorLeave);
-    
     return () => {
       window.removeEventListener('sensorHover', handleSensorHover as EventListener);
       window.removeEventListener('sensorLeave', handleSensorLeave);
@@ -174,7 +162,6 @@ export const Scene3DViewer = () => {
     };
   }, []);
   
-  // Appliquer le thème au modèle GLTF (contours)
   useEffect(() => {
     if (!sceneRef.current || !modelLoaded || !sceneRef.current.modelGroup) return;
     const group = sceneRef.current.modelGroup;
@@ -228,8 +215,7 @@ export const Scene3DViewer = () => {
       }
     });
   }, [isDarkMode, modelLoaded]);
-  
-  // Re-créer les sphères capteurs si offset change
+
   useEffect(() => {
     if (!sceneRef.current || !modelLoaded) return;
 
@@ -253,7 +239,6 @@ export const Scene3DViewer = () => {
     sceneRef.current.sensorMeshes = newSensorMeshes;
   }, [sensorOffset, sensors, modelLoaded]);
 
-  // Mettre à jour/Créer la maille d'interpolation (inchangé)
   useEffect(() => {
     if (!sceneRef.current || !dataReady || !modelBounds || !originalModelBounds || sensorData.size === 0 || exactAirVolume === null) {
       if (sceneRef.current?.interpolationMesh) {
@@ -261,7 +246,6 @@ export const Scene3DViewer = () => {
         disposeInterpolationMesh(sceneRef.current.interpolationMesh);
         sceneRef.current.interpolationMesh = null;
       }
-      
       setVolumetricAverage(null);
       setInterpolationPointCount(0);
       setAirMass(null);
@@ -363,7 +347,6 @@ export const Scene3DViewer = () => {
     isDarkMode
   ]);
 
-  // Mise en place de la scène 3D + soleil
   useLayoutEffect(() => {
     if (!containerRef.current || !gltfModel) {
       setLoading(false);
@@ -447,7 +430,7 @@ export const Scene3DViewer = () => {
         scene.add(sunTarget);
         sunLight.target = sunTarget;
 
-        // Trajectoire du soleil (ligne)
+        // Trajectoire du soleil
         let sunPath: THREE.Line | undefined;
         if (currentSpace?.latitude != null && currentSpace?.longitude != null) {
           const pathPoints = getSunPathPoints(
@@ -468,6 +451,10 @@ export const Scene3DViewer = () => {
           scene.add(sunPath);
         }
 
+        // Rose des vents
+        const windRose = createWindRose(boundingSphere.radius);
+        scene.add(windRose);
+
         sceneRef.current = {
           renderer,
           scene,
@@ -482,16 +469,16 @@ export const Scene3DViewer = () => {
           originalCenter,
           sunLight,
           sunSphere,
-          sunPath
+          sunPath,
+          windRose
         };
 
-        // Position initiale du soleil
-        updateSunObjectsPosition();
+        updateSunAndWind();
 
         startAnimationLoop(sceneRef, controls, renderer, scene, camera);
       },
       undefined,
-      (err) => {
+      () => {
         setError("Erreur lors du chargement du modèle 3D.");
         setLoading(false);
       }
@@ -534,38 +521,41 @@ export const Scene3DViewer = () => {
     };
   }, [gltfModel, sensors]);
 
-  // Mettre à jour la position du soleil + exposition des capteurs à chaque changement de temps/lieu
   useEffect(() => {
-    updateSunObjectsPosition();
-  }, [currentTimestamp, currentSpace, isDarkMode]);
+    updateSunAndWind();
+  }, [currentTimestamp, currentSpace, isDarkMode, orientationAzimuth]);
 
-  const updateSunObjectsPosition = () => {
+  const updateSunAndWind = () => {
     if (!sceneRef.current) return;
-    const { sunLight, sunSphere, sunPath, boundingSphere, scene, sensorMeshes, modelGroup } = sceneRef.current;
+    const { sunLight, sunSphere, boundingSphere, modelGroup, windRose } = sceneRef.current;
     if (!sunLight || !sunSphere || !boundingSphere) return;
-
     if (currentSpace?.latitude == null || currentSpace?.longitude == null) return;
 
     const date = new Date(currentTimestamp || Date.now());
     const dir = getSunDirection(currentSpace.latitude, currentSpace.longitude, date);
     const sunRadius = boundingSphere.radius * 2;
 
-    const sunPos = new THREE.Vector3().copy(dir).multiplyScalar(sunRadius);
+    // Ajustement par l'orientation de la pièce (rotation inverse)
+    const azRad = THREE.MathUtils.degToRad(orientationAzimuth || 0);
+    const rotQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -azRad);
+    const adjustedDir = dir.clone().applyQuaternion(rotQuat);
+
+    const sunPos = new THREE.Vector3().copy(adjustedDir).multiplyScalar(sunRadius);
     sunSphere.position.copy(sunPos);
     sunLight.position.copy(sunPos);
     sunLight.target?.position.set(0, 0, 0);
     sunLight.target?.updateMatrixWorld();
 
-    // Mettre à jour le tracé si nécessaire (optionnel)
-    if (sunPath) {
-      // Rien à mettre à jour en continu; recréation si saison change n'est pas nécessaire ici.
+    // Mettre à jour rose des vents (affiche orientation)
+    if (windRose) {
+      windRose.rotation.y = azRad;
     }
 
-    // Calcul d'exposition des capteurs (raycasting)
+    // Exposition des capteurs (raycasting sur le modèle)
     if (modelGroup) {
       const ray = new THREE.Raycaster();
-      const direction = dir.clone().normalize(); // direction vers le soleil
-      sensorMeshes.forEach((meshes) => {
+      const direction = adjustedDir.clone().normalize();
+      sceneRef.current.sensorMeshes.forEach((meshes) => {
         const origin = meshes.sphere.position.clone();
         ray.set(origin, direction);
         const intersections = ray.intersectObject(modelGroup, true);
@@ -591,7 +581,7 @@ export const Scene3DViewer = () => {
         currentOutdoorData={currentOutdoorData}
         indoorAverage={indoorAverage}
         selectedMetric={selectedMetric}
-        interpolationRange={interpolationRange}
+        interpolationRange={useAppStore.getState().interpolationRange}
         hasOutdoorData={hasOutdoorData}
         dataReady={dataReady}
         volumetricAverage={volumetricAverage}
@@ -642,7 +632,7 @@ export const Scene3DViewer = () => {
   );
 };
 
-// Fonctions utilitaires existantes + helpers
+// Utils existants + helpers
 const disposeInterpolationMesh = (mesh: THREE.Points | THREE.Group | THREE.Mesh) => {
   if (mesh instanceof THREE.Points || mesh instanceof THREE.Mesh) {
     mesh.geometry.dispose();
@@ -1200,4 +1190,41 @@ const cleanupScene = (sceneRef: SceneRef, container: HTMLElement) => {
     container.removeChild(renderer.domElement);
   }
   renderer.dispose();
+};
+
+// Création d'une rose des vents simple (N/E/S/O)
+const createWindRose = (radius: number): THREE.Group => {
+  const group = new THREE.Group();
+
+  // Cercle
+  const circlePoints: THREE.Vector3[] = [];
+  const segments = 64;
+  const r = radius * 0.7;
+  for (let i = 0; i < segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    circlePoints.push(new THREE.Vector3(Math.cos(angle) * r, 0, Math.sin(angle) * r));
+  }
+  const circleGeom = new THREE.BufferGeometry().setFromPoints(circlePoints);
+  const circleMat = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.6 });
+  const circle = new THREE.LineLoop(circleGeom, circleMat);
+  group.add(circle);
+
+  // Flèches cardinales (mapping: z+ = sud, z- = nord, x+ = ouest, x- = est)
+  const arrowLen = r * 0.6;
+  const headLen = r * 0.1;
+  const headWidth = r * 0.05;
+
+  const addArrow = (dir: THREE.Vector3, color: number) => {
+    const origin = new THREE.Vector3(0, 0, 0);
+    const arrow = new THREE.ArrowHelper(dir.clone().normalize(), origin, arrowLen, color, headLen, headWidth);
+    group.add(arrow);
+  };
+
+  addArrow(new THREE.Vector3(0, 0, -1), 0xff0000); // N (rouge)
+  addArrow(new THREE.Vector3(1, 0, 0), 0xff7f00);  // O (orange)
+  addArrow(new THREE.Vector3(0, 0, 1), 0x0000ff);  // S (bleu)
+  addArrow(new THREE.Vector3(-1, 0, 0), 0x00aa00); // E (vert)
+
+  group.position.set(0, 0, 0);
+  return group;
 };

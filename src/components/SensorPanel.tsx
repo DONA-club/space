@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/FixedTooltip';
+import OrientationPanel from './OrientationPanel';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
@@ -80,7 +81,6 @@ export const SensorPanel = () => {
         .limit(1)
         .single();
 
-      // PGRST116 = no rows
       if (dateError && dateError.code !== 'PGRST116') throw dateError;
         
       if (lastData) {
@@ -538,7 +538,6 @@ export const SensorPanel = () => {
   const indoorSensorsWithData = sensors.filter(s => (sensorDataCounts.get(s.id) || 0) > 0).length;
   const dataPeriod = getDataPeriodDuration();
 
-  // Global last data timestamp across indoor and outdoor
   const latestIndoorDate = useMemo(() => {
     let max: Date | null = null;
     lastDataDates.forEach((d) => {
@@ -601,7 +600,6 @@ export const SensorPanel = () => {
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
-      {/* Data Panel Card */}
       <LiquidGlassCard className="flex-shrink-0">
         <div className="p-3">
           <div className="flex items-center justify-between mb-2">
@@ -611,7 +609,6 @@ export const SensorPanel = () => {
               {!isDataExpanded && (
                 <TooltipProvider delayDuration={250}>
                   <div className="flex items-center gap-1.5">
-                    {/* Indoor sensors coverage badge */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Badge
@@ -631,7 +628,6 @@ export const SensorPanel = () => {
                       </TooltipContent>
                     </Tooltip>
 
-                    {/* Outdoor data badge */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Badge
@@ -653,7 +649,6 @@ export const SensorPanel = () => {
                       </TooltipContent>
                     </Tooltip>
 
-                    {/* Data period badge */}
                     {dataPeriod && (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -672,7 +667,6 @@ export const SensorPanel = () => {
                       </Tooltip>
                     )}
 
-                    {/* Global delay badge */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Badge
@@ -712,7 +706,6 @@ export const SensorPanel = () => {
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                {/* Bulk Upload Button */}
                 {currentSpace && mode === 'replay' && (
                   <div className="mb-3">
                     <Button
@@ -750,7 +743,6 @@ export const SensorPanel = () => {
                   </div>
                 )}
 
-                {/* Outdoor Sensor Box */}
                 {hasOutdoorData && (
                   <div className="mb-3">
                     <motion.div
@@ -852,7 +844,6 @@ export const SensorPanel = () => {
                   </div>
                 )}
 
-                {/* Indoor Sensors Section */}
                 <div className="mb-2">
                   <div className="flex items-center gap-2 mb-2">
                     <Home size={12} className="text-purple-600" />
@@ -894,7 +885,7 @@ export const SensorPanel = () => {
                             className={`p-2 rounded-lg border transition-all cursor-pointer ${
                               hoveredSensorId === sensor.id 
                                 ? 'border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20' 
-                                : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-black/50'
+                                : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg黑/50'
                             }`}
                             onMouseEnter={() => handleSensorHover(sensor.id)}
                             onMouseLeave={handleSensorLeave}
@@ -1014,7 +1005,6 @@ export const SensorPanel = () => {
         </div>
       </LiquidGlassCard>
 
-      {/* Interpolation Card */}
       {dataReady && (
         <LiquidGlassCard className="flex-shrink-0">
           <div className="p-3">
@@ -1056,7 +1046,6 @@ export const SensorPanel = () => {
                   transition={{ duration: 0.2 }}
                   className="space-y-3"
                 >
-                  {/* Toggle */}
                   <div className="flex items-center justify-between">
                     <Label htmlFor="meshing-toggle" className="text-xs">
                       {meshingEnabled ? 'Activé' : 'Désactivé'}
@@ -1070,7 +1059,6 @@ export const SensorPanel = () => {
 
                   {meshingEnabled && (
                     <>
-                      {/* Visualization Type */}
                       <div className="space-y-2">
                         <Label className="text-xs text-gray-600 dark:text-gray-400">Visualisation</Label>
                         <div className="grid grid-cols-4 gap-2">
@@ -1162,7 +1150,6 @@ export const SensorPanel = () => {
                         </div>
                       </div>
 
-                      {/* Resolution */}
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs text-gray-600 dark:text-gray-400">Résolution</Label>
@@ -1178,7 +1165,6 @@ export const SensorPanel = () => {
                         />
                       </div>
 
-                      {/* Method */}
                       <div className="space-y-2">
                         <Label className="text-xs text-gray-600 dark:text-gray-400">Méthode</Label>
                         <div className="grid grid-cols-2 gap-2">
@@ -1232,7 +1218,6 @@ export const SensorPanel = () => {
                         </div>
                       </div>
 
-                      {/* IDW Power */}
                       {interpolationMethod === 'idw' && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
@@ -1256,7 +1241,6 @@ export const SensorPanel = () => {
                         </motion.div>
                       )}
 
-                      {/* RBF Kernel */}
                       {interpolationMethod === 'rbf' && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
@@ -1286,6 +1270,9 @@ export const SensorPanel = () => {
           </div>
         </LiquidGlassCard>
       )}
+
+      {/* Nouveau panneau Orientation géographique */}
+      <OrientationPanel />
     </div>
   );
 };

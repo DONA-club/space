@@ -23,6 +23,8 @@ export interface SceneRef {
   sunLight?: THREE.DirectionalLight;
   sunSphere?: THREE.Mesh;
   sunPath?: THREE.Line;
+  // Rose des vents
+  windRose?: THREE.Group;
 }
 
 export interface ModelBounds {
