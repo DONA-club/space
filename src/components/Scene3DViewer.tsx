@@ -755,9 +755,9 @@ export const Scene3DViewer = () => {
 };
 
 /**
- * Surface lumineuse en éventail depuis l’arc de la trajectoire du soleil vers le centre.
- * Triangulation en éventail: pour chaque segment [Pi, Pi+1] de l’arc, on crée le triangle (Pi, center, Pi+1).
- * Couleurs par sommet: plus lumineuses sur l’arc, atténuées vers le centre. Blending additif.
+ * Surface lumineuse en éventail depuis l’arc de la trajectoire du soleil,
+ * qui se fond progressivement vers le centre et s’arrête avant le point central.
+ * Réalisation: deux triangles par segment (arc -> anneau intérieur), avec alpha par sommet.
  */
 const createSunArcSurface = (pathPoints: THREE.Vector3[], isDarkMode: boolean): THREE.Mesh => {
   if (pathPoints.length < 2) {
@@ -766,44 +766,97 @@ const createSunArcSurface = (pathPoints: THREE.Vector3[], isDarkMode: boolean): 
     return new THREE.Mesh(emptyGeom, emptyMat);
   }
 
-  const center = new THREE.Vector3(0, 0, 0);
+  // Couleur lumineuse sur l’arc, teinte atténuée vers l’intérieur
+  const arcColor = new THREE.Color(isDarkMode ? 0xfff2b2 : 0xeea20a);
+  const innerColor = arcColor.clone().multiplyScalar(isDarkMode ? 0.25 : 0.3);
+
+  // Rayon de l’arc (moyenne des distances à l’origine)
+  const avgRadius =
+    pathPoints.reduce((acc, p) => acc + p.length(), 0) / Math.max(1, pathPoints.length);
+
+  // Anneau intérieur où l’alpha atteint 0 (ne pas toucher le centre)
+  const innerRadius = avgRadius * 0.15; // ajuste la distance de fin du fondu
+
   const positions: number[] = [];
   const colors: number[] = [];
+  const alphas: number[] = [];
 
-  const arcColor = new THREE.Color(isDarkMode ? 0xfff2b2 : 0xeea20a);
-  const centerColor = arcColor.clone().multiplyScalar(isDarkMode ? 0.15 : 0.2);
-
+  // Construire une bande (arc -> anneau intérieur) avec 2 triangles par segment
   for (let i = 0; i < pathPoints.length - 1; i++) {
     const p1 = pathPoints[i];
     const p2 = pathPoints[i + 1];
 
-    // Positions (triangle: p1 -> center -> p2)
+    const inner1 = p1.clone().normalize().multiplyScalar(innerRadius);
+    const inner2 = p2.clone().normalize().multiplyScalar(innerRadius);
+
+    // Triangle A: p1 (arc) -> inner1 (anneau) -> inner2 (anneau)
     positions.push(
       p1.x, p1.y, p1.z,
-      center.x, center.y, center.z,
-      p2.x, p2.y, p2.z
+      inner1.x, inner1.y, inner1.z,
+      inner2.x, inner2.y, inner2.z
     );
-
-    // Couleurs (arc très lumineux, centre atténué)
     colors.push(
       arcColor.r, arcColor.g, arcColor.b,
-      centerColor.r, centerColor.g, centerColor.b,
+      innerColor.r, innerColor.g, innerColor.b,
+      innerColor.r, innerColor.g, innerColor.b
+    );
+    alphas.push(
+      1.0, // p1 : opaque (selon uOpacity)
+      0.0, // inner1 : transparent
+      0.0  // inner2 : transparent
+    );
+
+    // Triangle B: p1 (arc) -> inner2 (anneau) -> p2 (arc)
+    positions.push(
+      p1.x, p1.y, p1.z,
+      inner2.x, inner2.y, inner2.z,
+      p2.x, p2.y, p2.z
+    );
+    colors.push(
+      arcColor.r, arcColor.g, arcColor.b,
+      innerColor.r, innerColor.g, innerColor.b,
       arcColor.r, arcColor.g, arcColor.b
+    );
+    alphas.push(
+      1.0, // p1 : opaque
+      0.0, // inner2 : transparent
+      1.0  // p2 : opaque
     );
   }
 
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geom.computeVertexNormals();
+  geom.setAttribute('alpha', new THREE.Float32BufferAttribute(alphas, 1));
 
-  const mat = new THREE.MeshBasicMaterial({
-    vertexColors: true,
+  const mat = new THREE.ShaderMaterial({
     transparent: true,
-    opacity: isDarkMode ? 0.35 : 0.45,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
+    dithering: true,
+    uniforms: {
+      uOpacity: { value: isDarkMode ? 0.35 : 0.45 }, // opacité globale modulée
+    },
+    vertexShader: `
+      attribute vec3 color;
+      attribute float alpha;
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        vColor = color;
+        vAlpha = alpha;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      uniform float uOpacity;
+      void main() {
+        gl_FragColor = vec4(vColor, vAlpha * uOpacity);
+      }
+    `,
   });
 
   const mesh = new THREE.Mesh(geom, mat);
