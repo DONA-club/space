@@ -22,7 +22,7 @@ export interface SceneRef {
   // Soleil
   sunLight?: THREE.DirectionalLight;
   sunSphere?: THREE.Mesh;
-  sunPath?: THREE.Line;
+  sunPath?: THREE.Line | THREE.Group;
   // Rose des vents
   windRose?: THREE.Group;
 }

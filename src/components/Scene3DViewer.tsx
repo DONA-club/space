@@ -23,6 +23,7 @@ import { calculateAirDensity, calculateWaterMass } from "@/utils/airCalculations
 import { calculateSceneVolume } from "@/utils/volumeCalculations";
 import { useTheme } from "@/components/theme-provider";
 import { getSunDirection, getSunPathPoints } from "@/utils/sunUtils";
+import * as SunCalc from "suncalc";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -451,9 +452,13 @@ export const Scene3DViewer = () => {
           scene.add(sunPath);
         }
 
-        // Rose des vents
+        // Rose des vents (cachée par défaut, affichée au survol du slider)
         const windRose = createWindRose(boundingSphere.radius);
         scene.add(windRose);
+        const handleShow = () => { windRose.visible = true; };
+        const handleHide = () => { windRose.visible = false; };
+        window.addEventListener('windRoseShow', handleShow);
+        window.addEventListener('windRoseHide', handleHide);
 
         sceneRef.current = {
           renderer,
@@ -527,29 +532,82 @@ export const Scene3DViewer = () => {
 
   const updateSunAndWind = () => {
     if (!sceneRef.current) return;
-    const { sunLight, sunSphere, boundingSphere, modelGroup, windRose } = sceneRef.current;
+    const { sunLight, sunSphere, boundingSphere, modelGroup, windRose, sunPath, scene } = sceneRef.current;
     if (!sunLight || !sunSphere || !boundingSphere) return;
     if (currentSpace?.latitude == null || currentSpace?.longitude == null) return;
 
     const date = new Date(currentTimestamp || Date.now());
-    const dir = getSunDirection(currentSpace.latitude, currentSpace.longitude, date);
+    const baseDir = getSunDirection(currentSpace.latitude, currentSpace.longitude, date);
     const sunRadius = boundingSphere.radius * 2;
 
-    // Ajustement par l'orientation de la pièce (rotation inverse)
+    // Orientation (rotation inverse autour de Y)
     const azRad = THREE.MathUtils.degToRad(orientationAzimuth || 0);
     const rotQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -azRad);
-    const adjustedDir = dir.clone().applyQuaternion(rotQuat);
+    const adjustedDir = baseDir.clone().applyQuaternion(rotQuat);
 
+    // Position du soleil (sphère + lumière)
     const sunPos = new THREE.Vector3().copy(adjustedDir).multiplyScalar(sunRadius);
     sunSphere.position.copy(sunPos);
     sunLight.position.copy(sunPos);
     sunLight.target?.position.set(0, 0, 0);
     sunLight.target?.updateMatrixWorld();
 
-    // Mettre à jour rose des vents (affiche orientation)
+    // Mettre à jour la rose des vents (affichage & rotation)
     if (windRose) {
       windRose.rotation.y = azRad;
     }
+
+    // Recalculer la trajectoire du soleil et les marqueurs (lever, zénith, coucher)
+    const pathPoints = getSunPathPoints(
+      currentSpace.latitude!,
+      currentSpace.longitude!,
+      date,
+      sunRadius,
+      new THREE.Vector3(0, 0, 0),
+      30
+    ).map(p => p.applyQuaternion(rotQuat));
+
+    const pathGeom = new THREE.BufferGeometry().setFromPoints(pathPoints);
+    const pathMat = new THREE.LineBasicMaterial({
+      color: 0xeea20a,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const newPathLine = new THREE.Line(pathGeom, pathMat);
+
+    // Marqueurs: lever, zénith (solarNoon), coucher
+    const times = SunCalc.getTimes(date, currentSpace.latitude!, currentSpace.longitude!);
+    const sunriseDir = getSunDirection(currentSpace.latitude!, currentSpace.longitude!, times.sunrise ?? date).applyQuaternion(rotQuat);
+    const sunsetDir = getSunDirection(currentSpace.latitude!, currentSpace.longitude!, times.sunset ?? date).applyQuaternion(rotQuat);
+    const noonDir = getSunDirection(currentSpace.latitude!, currentSpace.longitude!, times.solarNoon ?? date).applyQuaternion(rotQuat);
+
+    const sunrisePos = sunriseDir.clone().multiplyScalar(sunRadius);
+    const sunsetPos = sunsetDir.clone().multiplyScalar(sunRadius);
+    const noonPos = noonDir.clone().multiplyScalar(sunRadius);
+
+    const markerGeom = new THREE.SphereGeometry(0.12, 24, 24);
+    const sunriseMat = new THREE.MeshStandardMaterial({ color: 0xffb56b, emissive: 0xffa24a, emissiveIntensity: 0.6, metalness: 0.2, roughness: 0.6 });
+    const noonMat = new THREE.MeshStandardMaterial({ color: 0xfff2b2, emissive: 0xffe78a, emissiveIntensity: 0.7, metalness: 0.2, roughness: 0.6 });
+    const sunsetMat = new THREE.MeshStandardMaterial({ color: 0xff7b6b, emissive: 0xff604a, emissiveIntensity: 0.6, metalness: 0.2, roughness: 0.6 });
+
+    const sunriseMarker = new THREE.Mesh(markerGeom, sunriseMat);
+    const noonMarker = new THREE.Mesh(markerGeom, noonMat);
+    const sunsetMarker = new THREE.Mesh(markerGeom, sunsetMat);
+
+    sunriseMarker.position.copy(sunrisePos);
+    noonMarker.position.copy(noonPos);
+    sunsetMarker.position.copy(sunsetPos);
+
+    // Regrouper ligne + marqueurs
+    const pathGroup = new THREE.Group();
+    pathGroup.add(newPathLine, sunriseMarker, noonMarker, sunsetMarker);
+
+    // Remplacer l'ancien chemin (s'il existe)
+    if (sunPath) {
+      scene.remove(sunPath);
+    }
+    scene.add(pathGroup);
+    sceneRef.current.sunPath = pathGroup;
 
     // Exposition des capteurs (raycasting sur le modèle)
     if (modelGroup) {
@@ -1192,39 +1250,82 @@ const cleanupScene = (sceneRef: SceneRef, container: HTMLElement) => {
   renderer.dispose();
 };
 
-// Création d'une rose des vents simple (N/E/S/O)
+/** Rose des vents 3D style classique (16 pointes + N/E/S/O) */
 const createWindRose = (radius: number): THREE.Group => {
   const group = new THREE.Group();
+  const rOuter = radius * 0.75;
+  const rInnerLong = rOuter * 0.55;
+  const rInnerShort = rOuter * 0.35;
 
-  // Cercle
+  // Etoile à 16 pointes alternées (longues/noires et courtes/blanches)
+  for (let i = 0; i < 16; i++) {
+    const angle = (i / 16) * Math.PI * 2;
+    const isLong = i % 2 === 0;
+
+    const tip = new THREE.Vector3(Math.sin(angle) * rOuter, 0, Math.cos(angle) * rOuter);
+    const left = new THREE.Vector3(Math.sin(angle - 0.06) * (isLong ? rInnerLong : rInnerShort), 0, Math.cos(angle - 0.06) * (isLong ? rInnerLong : rInnerShort));
+    const right = new THREE.Vector3(Math.sin(angle + 0.06) * (isLong ? rInnerLong : rInnerShort), 0, Math.cos(angle + 0.06) * (isLong ? rInnerLong : rInnerShort));
+
+    const geom = new THREE.BufferGeometry();
+    const vertices = new Float32Array([
+      tip.x, tip.y, tip.z,
+      left.x, left.y, left.z,
+      right.x, right.y, right.z,
+    ]);
+    geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geom.computeVertexNormals();
+
+    const mat = new THREE.MeshBasicMaterial({
+      color: isLong ? 0x111111 : 0xffffff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: isLong ? 0.95 : 0.95,
+    });
+    const tri = new THREE.Mesh(geom, mat);
+    group.add(tri);
+  }
+
+  // Cercles fins pour l'esthétique
   const circlePoints: THREE.Vector3[] = [];
-  const segments = 64;
-  const r = radius * 0.7;
+  const segments = 96;
   for (let i = 0; i < segments; i++) {
-    const angle = (i / segments) * Math.PI * 2;
-    circlePoints.push(new THREE.Vector3(Math.cos(angle) * r, 0, Math.sin(angle) * r));
+    const a = (i / segments) * Math.PI * 2;
+    circlePoints.push(new THREE.Vector3(Math.sin(a) * (rOuter * 0.98), 0, Math.cos(a) * (rOuter * 0.98)));
   }
   const circleGeom = new THREE.BufferGeometry().setFromPoints(circlePoints);
-  const circleMat = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.6 });
+  const circleMat = new THREE.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.6 });
   const circle = new THREE.LineLoop(circleGeom, circleMat);
   group.add(circle);
 
-  // Flèches cardinales (mapping: z+ = sud, z- = nord, x+ = ouest, x- = est)
-  const arrowLen = r * 0.6;
-  const headLen = r * 0.1;
-  const headWidth = r * 0.05;
-
-  const addArrow = (dir: THREE.Vector3, color: number) => {
-    const origin = new THREE.Vector3(0, 0, 0);
-    const arrow = new THREE.ArrowHelper(dir.clone().normalize(), origin, arrowLen, color, headLen, headWidth);
-    group.add(arrow);
+  // Labels cardinal N/E/S/O via sprites (canvas)
+  const makeLabel = (text: string, pos: THREE.Vector3) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#111111';
+      ctx.font = 'bold 72px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 64, 64);
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.copy(pos);
+    sprite.position.y += 0.01; // un léger décalage
+    sprite.scale.set(0.8, 0.8, 0.8);
+    return sprite;
   };
 
-  addArrow(new THREE.Vector3(0, 0, -1), 0xff0000); // N (rouge)
-  addArrow(new THREE.Vector3(1, 0, 0), 0xff7f00);  // O (orange)
-  addArrow(new THREE.Vector3(0, 0, 1), 0x0000ff);  // S (bleu)
-  addArrow(new THREE.Vector3(-1, 0, 0), 0x00aa00); // E (vert)
+  const d = rOuter * 1.05;
+  group.add(makeLabel('N', new THREE.Vector3(0, 0, -d)));
+  group.add(makeLabel('E', new THREE.Vector3(d, 0, 0)));
+  group.add(makeLabel('S', new THREE.Vector3(0, 0, d)));
+  group.add(makeLabel('O', new THREE.Vector3(-d, 0, 0)));
 
   group.position.set(0, 0, 0);
+  group.visible = false; // par défaut cachée
   return group;
 };

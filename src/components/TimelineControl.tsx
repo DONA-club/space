@@ -992,23 +992,88 @@ export const TimelineControl = () => {
             onClick={handleTimelineClick}
           >
             {currentSpace?.latitude != null && currentSpace?.longitude != null && dayNightSegments.length > 0 && (
-              <div className="absolute inset-0 pointer-events-none z-[0]">
-                {dayNightSegments.map((seg, idx) => {
-                  const left = getPosition(seg.start);
-                  const right = getPosition(seg.end);
-                  const width = Math.max(0, right - left);
-                  const bgClass = seg.type === 'night'
-                    ? 'bg-gray-900/10 dark:bg-black/20'
-                    : 'bg-yellow-200/10 dark:bg-yellow-300/10';
+              <>
+                {/* Gradient continu jour → zénith → nuit */}
+                {(() => {
+                  // Génère un gradient linéaire en continu
+                  const stops: Array<{ offset: number; color: string }> = [];
+                  dayNightSegments.forEach((seg) => {
+                    const start = getPosition(seg.start);
+                    const end = getPosition(seg.end);
+                    if (seg.type === 'night') {
+                      // Nuit profonde → léger bleuté proche de l'aube/crépuscule
+                      stops.push({ offset: start, color: 'rgba(11,18,32,1)' });
+                      stops.push({ offset: end, color: 'rgba(27,42,68,1)' });
+                    } else {
+                      // Jour: aube/lever → zénith → crépuscule
+                      const dayMid = (start + end) / 2;
+                      stops.push({ offset: start, color: 'rgba(255,189,107,0.35)' }); // aube chaude
+                      stops.push({ offset: dayMid, color: 'rgba(233,247,255,0.55)' }); // zénith clair
+                      stops.push({ offset: end, color: 'rgba(255,123,107,0.35)' });   // crépuscule chaud
+                    }
+                  });
+                  const gradient = `linear-gradient(to right, ${stops
+                    .sort((a, b) => a.offset - b.offset)
+                    .map((s) => `${s.color} ${s.offset}%`)
+                    .join(', ')})`;
                   return (
-                    <div
-                      key={idx}
-                      className={`absolute top-0 bottom-0 ${bgClass}`}
-                      style={{ left: `${left}%`, width: `${width}%` }}
-                    />
+                    <div className="absolute inset-0 pointer-events-none z-[0]" style={{ background: gradient }} />
                   );
-                })}
-              </div>
+                })()}
+
+                {/* Petites étoiles animées qui s’estompent vers l’aube/crépuscule */}
+                <div className="absolute inset-0 pointer-events-none z-[0]">
+                  {dayNightSegments
+                    .filter((seg) => seg.type === 'night')
+                    .map((seg, idx) => {
+                      const left = getPosition(seg.start);
+                      const right = getPosition(seg.end);
+                      const width = Math.max(0, right - left);
+                      const stars = Array.from({ length: Math.max(8, Math.floor(width / 4)) });
+                      return (
+                        <div
+                          key={`night-${idx}`}
+                          className="absolute top-0 bottom-0"
+                          style={{ left: `${left}%`, width: `${width}%` }}
+                        >
+                          {stars.map((_, i) => {
+                            const top = Math.random() * 100;
+                            const size = 1 + Math.random() * 1.5;
+                            const x = Math.random() * 100;
+                            const opacity = 0.6 + Math.random() * 0.3;
+                            return (
+                              <div
+                                key={i}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${x}%`,
+                                  top: `${top}%`,
+                                  width: `${size}px`,
+                                  height: `${size}px`,
+                                  background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.2) 60%, rgba(255,255,255,0) 100%)',
+                                  borderRadius: '50%',
+                                  opacity,
+                                  animation: 'twinkle 2.5s ease-in-out infinite',
+                                  filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.6))',
+                                }}
+                              />
+                            );
+                          })}
+                          {/* Masque doux pour estomper les étoiles vers les bords (aube/crépuscule) */}
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              background:
+                                'linear-gradient(to right, rgba(11,18,32,0) 0%, rgba(11,18,32,0.95) 10%, rgba(11,18,32,0.95) 90%, rgba(11,18,32,0) 100%)',
+                              mixBlendMode: 'multiply',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                </div>
+              </>
             )}
             {hasOutdoorData && hasNegativeValues && (
               <svg
