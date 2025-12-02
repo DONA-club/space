@@ -600,6 +600,7 @@ export const SensorPanel = () => {
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
+      <OrientationPanel />
       <LiquidGlassCard className="flex-shrink-0">
         <div className="p-3">
           <div className="flex items-center justify-between mb-2">
@@ -1271,8 +1272,6 @@ export const SensorPanel = () => {
         </LiquidGlassCard>
       )}
 
-      {/* Nouveau panneau Orientation géographique */}
-      <OrientationPanel />
     </div>
   );
 };
