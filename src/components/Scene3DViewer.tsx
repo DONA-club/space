@@ -629,9 +629,9 @@ export const Scene3DViewer = () => {
 
     const pathGeom = new THREE.BufferGeometry().setFromPoints(pathPoints);
     const pathMat = new THREE.LineBasicMaterial({
-      color: 0xeea20a,
+      color: isDarkMode ? 0xfff2b2 : 0xeea20a,
       transparent: true,
-      opacity: 0.9,
+      opacity: isDarkMode ? 0.8 : 0.9,
     });
     const newPathLine = new THREE.Line(pathGeom, pathMat);
 
@@ -661,6 +661,10 @@ export const Scene3DViewer = () => {
     // Regrouper ligne + marqueurs
     const pathGroup = new THREE.Group();
     pathGroup.add(newPathLine, sunriseMarker, noonMarker, sunsetMarker);
+
+    // Surface lumineuse en éventail depuis l’arc vers le centre (plus lumineuse sur l’arc)
+    const arcSurface = createSunArcSurface(pathPoints, isDarkMode);
+    pathGroup.add(arcSurface);
 
     // Remplacer l'ancien chemin (s'il existe)
     if (sunPath) {
@@ -748,6 +752,63 @@ export const Scene3DViewer = () => {
       )}
     </div>
   );
+};
+
+/**
+ * Surface lumineuse en éventail depuis l’arc de la trajectoire du soleil vers le centre.
+ * Triangulation en éventail: pour chaque segment [Pi, Pi+1] de l’arc, on crée le triangle (Pi, center, Pi+1).
+ * Couleurs par sommet: plus lumineuses sur l’arc, atténuées vers le centre. Blending additif.
+ */
+const createSunArcSurface = (pathPoints: THREE.Vector3[], isDarkMode: boolean): THREE.Mesh => {
+  if (pathPoints.length < 2) {
+    const emptyGeom = new THREE.BufferGeometry();
+    const emptyMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+    return new THREE.Mesh(emptyGeom, emptyMat);
+  }
+
+  const center = new THREE.Vector3(0, 0, 0);
+  const positions: number[] = [];
+  const colors: number[] = [];
+
+  const arcColor = new THREE.Color(isDarkMode ? 0xfff2b2 : 0xeea20a);
+  const centerColor = arcColor.clone().multiplyScalar(isDarkMode ? 0.15 : 0.2);
+
+  for (let i = 0; i < pathPoints.length - 1; i++) {
+    const p1 = pathPoints[i];
+    const p2 = pathPoints[i + 1];
+
+    // Positions (triangle: p1 -> center -> p2)
+    positions.push(
+      p1.x, p1.y, p1.z,
+      center.x, center.y, center.z,
+      p2.x, p2.y, p2.z
+    );
+
+    // Couleurs (arc très lumineux, centre atténué)
+    colors.push(
+      arcColor.r, arcColor.g, arcColor.b,
+      centerColor.r, centerColor.g, centerColor.b,
+      arcColor.r, arcColor.g, arcColor.b
+    );
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geom.computeVertexNormals();
+
+  const mat = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: isDarkMode ? 0.35 : 0.45,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.renderOrder = 1;
+  return mesh;
 };
 
 // Utils existants + helpers
