@@ -1,11 +1,13 @@
 "use client";
 
 import React from "react";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/FixedTooltip";
 
 type ChartPoint = {
   name: string;
   temperature: number;        // °C
-  absoluteHumidity: number;   // g/m³ (entrée depuis nos données CSV/DB)
+  absoluteHumidity: number;   // g/m³
+  color?: string;             // hex color string (e.g. "#34d399")
 };
 
 type Props = {
@@ -13,43 +15,36 @@ type Props = {
   outdoorTemp?: number | null;
 };
 
-// Repère X (Température sèche en °C)
 const X_MIN = -15;
 const X_MAX = 40;
-const X_AT_MIN = 5;                 // -15°C est à x=5 dans le SVG
-const X_AT_40 = 865.9333333333334;  // 40°C est à x≈865.93
-const X_PER_DEG = (X_AT_40 - X_AT_MIN) / (X_MAX - X_MIN); // ≈ 15.6533 px/°C
+const X_AT_MIN = 5;
+const X_AT_40 = 865.9333333333334;
+const X_PER_DEG = (X_AT_40 - X_AT_MIN) / (X_MAX - X_MIN);
 
-// Repère Y (Humidité absolue en g/kg)
-const Y_AT_0_GKG = 691;                 // 0 g/kg est à y=691
-const Y_PER_GKG = 19.727272727272727;   // ≈ 19.7273 px par 1 g/kg (espacement des lignes horizontales)
+const Y_AT_0_GKG = 691;
+const Y_PER_GKG = 19.727272727272727;
 
-// Constantes physiques
-const R_v = 461.5;         // J/(kg·K) - constante spécifique de la vapeur d'eau
-const P_ATM = 101325;      // Pa - pression atmosphérique par défaut
+const R_v = 461.5;
+const P_ATM = 101325;
 
 function tempToX(t: number): number {
   const clamped = Math.max(X_MIN, Math.min(X_MAX, t));
   return X_AT_MIN + (clamped - X_MIN) * X_PER_DEG;
 }
 
-// Convertit AH (g/m³) + T (°C) → rapport de mélange w (g/kg)
-// Étapes :
-// 1) AH_gm3 → ρ_v (kg/m³)
-// 2) P_v = ρ_v * R_v * T_K
-// 3) w (kg/kg) = 0.62198 * P_v / (P - P_v) → g/kg
+// AH (g/m³) + T (°C) -> w (g/kg)
 function ahGm3ToMixingRatioGkg(absoluteHumidityGm3: number, temperatureC: number, pressurePa: number = P_ATM): number {
   if (!Number.isFinite(absoluteHumidityGm3) || !Number.isFinite(temperatureC)) return NaN;
-  const rho_v = absoluteHumidityGm3 / 1000;           // kg/m³
-  const T_K = temperatureC + 273.15;                  // K
-  const P_v = rho_v * R_v * T_K;                      // Pa
-  if (P_v <= 0 || P_v >= pressurePa) return NaN;      // éviter divisions invalides
-  const w_kgkg = 0.62198 * P_v / (pressurePa - P_v);  // kg/kg
-  return w_kgkg * 1000;                               // g/kg
+  const rho_v = absoluteHumidityGm3 / 1000;
+  const T_K = temperatureC + 273.15;
+  const P_v = rho_v * R_v * T_K;
+  if (P_v <= 0 || P_v >= pressurePa) return NaN;
+  const w_kgkg = 0.62198 * P_v / (pressurePa - P_v);
+  return w_kgkg * 1000;
 }
 
 function gkgToY(wGkg: number): number {
-  const clamped = Math.max(0, Math.min(60, wGkg)); // le diagramme supporte jusqu’à ~60 g/kg en haut
+  const clamped = Math.max(0, Math.min(60, wGkg));
   return Y_AT_0_GKG - clamped * Y_PER_GKG;
 }
 
@@ -62,19 +57,18 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
         name: p.name,
         cx: tempToX(p.temperature),
         cy: gkgToY(wGkg),
+        color: p.color
       };
     })
-    .filter(Boolean) as { name: string; cx: number; cy: number }[];
+    .filter(Boolean) as { name: string; cx: number; cy: number; color?: string }[];
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
   return (
-    <div className="w-full h-full">
+    <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
-        {/* Fond : SVG exact fourni */}
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
 
-        {/* Ligne verticale pour la température extérieure (si disponible) */}
         {typeof outdoorX === "number" && (
           <line
             x1={outdoorX}
@@ -82,27 +76,49 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
             x2={outdoorX}
             y2={691}
             stroke="hsl(var(--primary))"
-            strokeOpacity={0.85}
+            strokeOpacity={0.9}
             strokeDasharray="4 3"
             strokeWidth={2}
           />
         )}
 
-        {/* Points capteurs superposés */}
         <g>
           {circles.map((c, i) => (
             <circle
               key={`${c.name}-${i}`}
               cx={c.cx}
               cy={c.cy}
-              r={5.5}
-              fill="rgba(16,185,129,0.92)"    /* emerald-500 */
+              r={6.5}
+              fill={c.color ?? "rgba(16,185,129,0.92)"}
               stroke="hsl(var(--background))"
-              strokeWidth={1.25}
+              strokeWidth={1.5}
             />
           ))}
         </g>
       </svg>
+
+      {/* Tooltips axes (overlay discrets) */}
+      <TooltipProvider delayDuration={200}>
+        {/* Axe X: Température du bulbe sec */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="absolute left-0 right-0 bottom-0 h-7" />
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">Température du bulbe sec (°C)</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Axe Y (colonne droite des valeurs g/kg) */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="absolute right-0 top-10 bottom-0 w-14" />
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            <p className="text-xs">Humidité Absolue (g/kg)</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 };

@@ -253,6 +253,8 @@ export const Scene3DViewer = () => {
       setWaterMass(null);
       setAverageTemperature(null);
       setAverageHumidity(null);
+      // Nettoyer le point volumétrique dans le panneau
+      window.dispatchEvent(new CustomEvent('volumetricAverageUpdate', { detail: null }));
       return;
     }
 
@@ -268,6 +270,8 @@ export const Scene3DViewer = () => {
       setWaterMass(null);
       setAverageTemperature(null);
       setAverageHumidity(null);
+      // Nettoyer le point volumétrique dans le panneau
+      window.dispatchEvent(new CustomEvent('volumetricAverageUpdate', { detail: null }));
       return;
     }
 
@@ -293,7 +297,7 @@ export const Scene3DViewer = () => {
     setVolumetricAverage(average);
     setInterpolationPointCount(gridValues.length);
 
-    const { mass, waterMass: calculatedWaterMass, avgTemp, avgHumidity } = calculateAirProperties(
+    const { mass, waterMass: calculatedWaterMass, avgTemp, avgHumidity, avgAbsHumidity } = calculateAirProperties(
       gridValues,
       sensors,
       sensorData,
@@ -314,6 +318,15 @@ export const Scene3DViewer = () => {
     setWaterMass(calculatedWaterMass);
     setAverageTemperature(avgTemp);
     setAverageHumidity(avgHumidity);
+    // Partager la moyenne volumétrique au panneau (temp + AH + valeur métrique)
+    window.dispatchEvent(new CustomEvent('volumetricAverageUpdate', {
+      detail: {
+        avgTemp,
+        avgAbsHumidity,
+        metricAverage: average,
+        selectedMetric
+      }
+    }));
 
     const newMesh = createVisualizationMesh(
       gridValues,
@@ -1020,9 +1033,10 @@ const calculateAirProperties = (
   sensorOffset: { x: number; y: number; z: number },
   smoothingWindowMs: number,
   exactVolume: number
-): { mass: number; waterMass: number; avgTemp: number; avgHumidity: number } => {
+): { mass: number; waterMass: number; avgTemp: number; avgHumidity: number; avgAbsHumidity: number } => {
   const tempPoints: Point3D[] = [];
   const humidityPoints: Point3D[] = [];
+  const absHumidityPoints: Point3D[] = [];
   
   sensors.forEach((sensor) => {
     if (!sensorData.has(sensor.id)) return;
@@ -1046,50 +1060,48 @@ const calculateAirProperties = (
     const yFinal = yWithModel + sensorOffset.y;
     const zFinal = zWithModel + sensorOffset.z;
     
-    tempPoints.push({ 
-      x: xFinal, 
-      y: yFinal, 
-      z: zFinal, 
-      value: closestData.temperature 
-    });
-    
-    humidityPoints.push({ 
-      x: xFinal, 
-      y: yFinal, 
-      z: zFinal, 
-      value: closestData.humidity 
-    });
+    tempPoints.push({ x: xFinal, y: yFinal, z: zFinal, value: closestData.temperature });
+    humidityPoints.push({ x: xFinal, y: yFinal, z: zFinal, value: closestData.humidity });
+    absHumidityPoints.push({ x: xFinal, y: yFinal, z: zFinal, value: closestData.absoluteHumidity });
   });
 
   let rbfTempInterpolator: RBFInterpolator | null = null;
   let rbfHumidityInterpolator: RBFInterpolator | null = null;
+  let rbfAbsHumidityInterpolator: RBFInterpolator | null = null;
   
   if (interpolationMethod === 'rbf') {
     rbfTempInterpolator = new RBFInterpolator(tempPoints, rbfKernel as any, 1.0);
     rbfHumidityInterpolator = new RBFInterpolator(humidityPoints, rbfKernel as any, 1.0);
+    rbfAbsHumidityInterpolator = new RBFInterpolator(absHumidityPoints, rbfKernel as any, 1.0);
   }
 
   let totalTemp = 0;
   let totalHumidity = 0;
+  let totalAbsHumidity = 0;
 
   validGridPoints.forEach(({ x, y, z }) => {
     let temperature: number;
     let humidity: number;
+    let absHumidity: number;
 
     if (interpolationMethod === 'idw') {
       temperature = interpolateIDW(tempPoints, { x, y, z }, idwPower);
       humidity = interpolateIDW(humidityPoints, { x, y, z }, idwPower);
+      absHumidity = interpolateIDW(absHumidityPoints, { x, y, z }, idwPower);
     } else {
       temperature = rbfTempInterpolator!.interpolate({ x, y, z });
       humidity = rbfHumidityInterpolator!.interpolate({ x, y, z });
+      absHumidity = rbfAbsHumidityInterpolator!.interpolate({ x, y, z });
     }
 
     totalTemp += temperature;
     totalHumidity += humidity;
+    totalAbsHumidity += absHumidity;
   });
 
   const avgTemp = totalTemp / validGridPoints.length;
   const avgHumidity = totalHumidity / validGridPoints.length;
+  const avgAbsHumidity = totalAbsHumidity / validGridPoints.length;
 
   const density = calculateAirDensity(avgTemp, avgHumidity);
   const totalMass = density * exactVolume;
@@ -1100,7 +1112,8 @@ const calculateAirProperties = (
     mass: totalMass,
     waterMass: totalWaterMass,
     avgTemp,
-    avgHumidity
+    avgHumidity,
+    avgAbsHumidity
   };
 };
 

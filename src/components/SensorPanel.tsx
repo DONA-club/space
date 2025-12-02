@@ -17,6 +17,8 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/FixedTooltip';
 import OrientationPanel from './OrientationPanel';
 import PsychrometricSvgChart from './PsychrometricSvgChart';
+import { getColorFromValueSaturated } from '@/utils/colorUtils';
+import { getMetricValue } from '@/utils/metricUtils';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
@@ -41,6 +43,8 @@ export const SensorPanel = () => {
   const outdoorData = useAppStore((state) => state.outdoorData);
   const currentTimestamp = useAppStore((state) => state.currentTimestamp);
   const smoothingWindowSec = useAppStore((state) => state.smoothingWindowSec);
+  const selectedMetric = useAppStore((state) => state.selectedMetric);
+  const interpolationRange = useAppStore((state) => state.interpolationRange);
   
   const [isDataExpanded, setIsDataExpanded] = useState(true);
   const [isInterpolationExpanded, setIsInterpolationExpanded] = useState(true);
@@ -51,7 +55,28 @@ export const SensorPanel = () => {
   const [outdoorDataCount, setOutdoorDataCount] = useState(0);
   const [outdoorSensorName, setOutdoorSensorName] = useState<string>('Extérieur');
   const [outdoorLastDate, setOutdoorLastDate] = useState<Date | null>(null);
-  const [chartPoints, setChartPoints] = useState<{ name: string; temperature: number; absoluteHumidity: number }[]>([]);
+  const [chartPoints, setChartPoints] = useState<{ name: string; temperature: number; absoluteHumidity: number; color?: string }[]>([]);
+  const [volumetricPoint, setVolumetricPoint] = useState<{ temperature: number; absoluteHumidity: number; color?: string } | null>(null);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      const detail = e?.detail;
+      if (!detail || typeof detail !== 'object') { setVolumetricPoint(null); return; }
+      const { avgTemp, avgAbsHumidity, metricAverage, selectedMetric: sm } = detail;
+      if (typeof avgTemp === 'number' && typeof avgAbsHumidity === 'number') {
+        let colorHex = undefined as string | undefined;
+        if (typeof metricAverage === 'number' && interpolationRange && sm) {
+          const c = getColorFromValueSaturated(metricAverage, interpolationRange.min, interpolationRange.max, sm);
+          colorHex = `#${c.getHexString()}`;
+        }
+        setVolumetricPoint({ temperature: avgTemp, absoluteHumidity: avgAbsHumidity, color: colorHex });
+      } else {
+        setVolumetricPoint(null);
+      }
+    };
+    window.addEventListener('volumetricAverageUpdate', handler as EventListener);
+    return () => window.removeEventListener('volumetricAverageUpdate', handler as EventListener);
+  }, [interpolationRange]);
 
   useEffect(() => {
     if (currentSpace && mode === 'replay') {
@@ -615,12 +640,11 @@ export const SensorPanel = () => {
       const tsMinus = new Date(ts - halfWindowMs).toISOString();
       const tsPlus = new Date(ts + halfWindowMs).toISOString();
 
-      // Pour chaque capteur: on prend la mesure la plus proche de currentTimestamp
+      // Pour chaque capteur: on prend la mesure la plus proche et on colore comme la sphère (selectedMetric)
       for (const sensor of sensors) {
-        // Plus proche en dessous
         const { data: below } = await supabase
           .from('sensor_data')
-          .select('temperature, absolute_humidity, timestamp')
+          .select('temperature, humidity, absolute_humidity, dew_point, timestamp')
           .eq('space_id', currentSpace.id)
           .eq('sensor_id', sensor.id)
           .lte('timestamp', new Date(ts).toISOString())
@@ -628,10 +652,9 @@ export const SensorPanel = () => {
           .limit(1)
           .maybeSingle();
 
-        // Plus proche au-dessus
         const { data: above } = await supabase
           .from('sensor_data')
-          .select('temperature, absolute_humidity, timestamp')
+          .select('temperature, humidity, absolute_humidity, dew_point, timestamp')
           .eq('space_id', currentSpace.id)
           .eq('sensor_id', sensor.id)
           .gte('timestamp', new Date(ts).toISOString())
@@ -639,29 +662,40 @@ export const SensorPanel = () => {
           .limit(1)
           .maybeSingle();
 
-        let chosen = null as null | { temperature: number; absolute_humidity: number; timestamp: string };
+        let chosen = null as null | { temperature: number; humidity: number; absolute_humidity: number; dew_point: number; timestamp: string };
         if (below && above) {
           const dBelow = Math.abs(new Date(below.timestamp).getTime() - ts);
           const dAbove = Math.abs(new Date(above.timestamp).getTime() - ts);
           chosen = dBelow <= dAbove ? below : above;
         } else {
-          chosen = below || above || null;
+          chosen = (below as any) || (above as any) || null;
         }
 
-        if (chosen && typeof chosen.temperature === 'number' && typeof chosen.absolute_humidity === 'number') {
+        if (chosen && interpolationRange) {
+          const valueForColor = getMetricValue(
+            {
+              temperature: chosen.temperature,
+              humidity: chosen.humidity,
+              absoluteHumidity: chosen.absolute_humidity,
+              dewPoint: chosen.dew_point
+            },
+            selectedMetric
+          );
+          const color = getColorFromValueSaturated(valueForColor, interpolationRange.min, interpolationRange.max, selectedMetric);
           pts.push({
             name: sensor.name,
             temperature: chosen.temperature,
-            absoluteHumidity: chosen.absolute_humidity
+            absoluteHumidity: chosen.absolute_humidity,
+            color: `#${color.getHexString()}`
           });
         }
       }
 
-      // Capteur extérieur (si présent)
+      // Capteur extérieur (si présent) – couleur basée sur sa valeur (selectedMetric)
       if (hasOutdoorData) {
         const { data: belowOut } = await supabase
           .from('sensor_data')
-          .select('temperature, absolute_humidity, timestamp, sensor_name')
+          .select('temperature, humidity, absolute_humidity, dew_point, timestamp, sensor_name')
           .eq('space_id', currentSpace.id)
           .eq('sensor_id', 0)
           .lte('timestamp', new Date(ts).toISOString())
@@ -671,7 +705,7 @@ export const SensorPanel = () => {
 
         const { data: aboveOut } = await supabase
           .from('sensor_data')
-          .select('temperature, absolute_humidity, timestamp, sensor_name')
+          .select('temperature, humidity, absolute_humidity, dew_point, timestamp, sensor_name')
           .eq('space_id', currentSpace.id)
           .eq('sensor_id', 0)
           .gte('timestamp', new Date(ts).toISOString())
@@ -679,25 +713,47 @@ export const SensorPanel = () => {
           .limit(1)
           .maybeSingle();
 
-        let chosenOut = null as null | { temperature: number; absolute_humidity: number; timestamp: string; sensor_name?: string };
+        let chosenOut = null as null | { temperature: number; humidity: number; absolute_humidity: number; dew_point: number; timestamp: string; sensor_name?: string };
         if (belowOut && aboveOut) {
           const dBelow = Math.abs(new Date(belowOut.timestamp).getTime() - ts);
           const dAbove = Math.abs(new Date(aboveOut.timestamp).getTime() - ts);
           chosenOut = dBelow <= dAbove ? belowOut : aboveOut;
         } else {
-          chosenOut = belowOut || aboveOut || null;
+          chosenOut = (belowOut as any) || (aboveOut as any) || null;
         }
 
-        if (chosenOut && typeof chosenOut.temperature === 'number' && typeof chosenOut.absolute_humidity === 'number') {
+        if (chosenOut && interpolationRange) {
+          const valueForColor = getMetricValue(
+            {
+              temperature: chosenOut.temperature,
+              humidity: chosenOut.humidity,
+              absoluteHumidity: chosenOut.absolute_humidity,
+              dewPoint: chosenOut.dew_point
+            },
+            selectedMetric
+          );
+          const color = getColorFromValueSaturated(valueForColor, interpolationRange.min, interpolationRange.max, selectedMetric);
           pts.push({
             name: chosenOut.sensor_name || outdoorSensorName,
             temperature: chosenOut.temperature,
-            absoluteHumidity: chosenOut.absolute_humidity
+            absoluteHumidity: chosenOut.absolute_humidity,
+            color: `#${color.getHexString()}`
           });
         }
       }
 
-      setChartPoints(pts);
+      // Si interpolation active et point volumétrique disponible: ne garder que volumétrique + extérieur
+      if (meshingEnabled && (volumetricPoint || hasOutdoorData)) {
+        const filtered: { name: string; temperature: number; absoluteHumidity: number; color?: string }[] = [];
+        if (volumetricPoint) {
+          filtered.push({ name: 'Moyenne volumétrique', ...volumetricPoint });
+        }
+        const out = pts.find(p => p.name === outdoorSensorName);
+        if (out) filtered.push(out);
+        setChartPoints(filtered);
+      } else {
+        setChartPoints(pts);
+      }
     };
 
     if (mode === 'replay') {
@@ -705,16 +761,66 @@ export const SensorPanel = () => {
       return;
     }
 
-    // Mode live: utiliser les données courantes des capteurs
+    // Mode live: utiliser les données courantes des capteurs et colorer comme la sphère
     const livePts = sensors
       .filter(s => s.currentData)
-      .map(s => ({
-        name: s.name,
-        temperature: s.currentData!.temperature,
-        absoluteHumidity: s.currentData!.absoluteHumidity
-      }));
-    setChartPoints(livePts);
-  }, [mode, currentTimestamp, sensors, currentSpace, hasOutdoorData, outdoorSensorName, smoothingWindowSec]);
+      .map(s => {
+        const valueForColor = interpolationRange
+          ? getMetricValue(
+              {
+                temperature: s.currentData!.temperature,
+                humidity: s.currentData!.humidity,
+                absoluteHumidity: s.currentData!.absoluteHumidity,
+                dewPoint: s.currentData!.dewPoint
+              },
+              selectedMetric
+            )
+          : null;
+        const colorHex =
+          valueForColor != null && interpolationRange
+            ? `#${getColorFromValueSaturated(valueForColor, interpolationRange!.min, interpolationRange!.max, selectedMetric).getHexString()}`
+            : undefined;
+        return {
+          name: s.name,
+          temperature: s.currentData!.temperature,
+          absoluteHumidity: s.currentData!.absoluteHumidity,
+          color: colorHex
+        };
+      });
+
+    // Interpolation active: ne garder que volumétrique + extérieur
+    if (meshingEnabled) {
+      const filtered: { name: string; temperature: number; absoluteHumidity: number; color?: string }[] = [];
+      if (volumetricPoint) filtered.push({ name: 'Moyenne volumétrique', ...volumetricPoint });
+      if (hasOutdoorData && outdoorData) {
+        const valueForColor = interpolationRange
+          ? getMetricValue(
+              {
+                temperature: outdoorData.temperature,
+                humidity: outdoorData.humidity,
+                absoluteHumidity: outdoorData.absoluteHumidity,
+                dewPoint: outdoorData.dewPoint
+              },
+              selectedMetric
+            )
+          : null;
+        const colorHex =
+          valueForColor != null && interpolationRange
+            ? `#${getColorFromValueSaturated(valueForColor, interpolationRange!.min, interpolationRange!.max, selectedMetric).getHexString()}`
+            : undefined;
+        filtered.push({
+          name: outdoorSensorName,
+          temperature: outdoorData.temperature,
+          absoluteHumidity: outdoorData.absoluteHumidity,
+          color: colorHex
+        });
+      }
+      setChartPoints(filtered);
+    } else {
+      // Sinon, garder tous les points live
+      setChartPoints(livePts);
+    }
+  }, [mode, currentTimestamp, sensors, currentSpace, hasOutdoorData, outdoorSensorName, smoothingWindowSec, meshingEnabled, volumetricPoint, interpolationRange, selectedMetric, outdoorData]);
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
