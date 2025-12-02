@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/FixedTooltip';
 import OrientationPanel from './OrientationPanel';
+import PsychrometricChart from './PsychrometricChart';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
@@ -602,8 +603,8 @@ export const SensorPanel = () => {
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
       <OrientationPanel />
       <LiquidGlassCard className="flex-shrink-0">
-        <div className="p-3">
-          <div className="flex items-center justify-between mb-2">
+        <div className={`${isDataExpanded ? "p-3" : "px-3 py-2"}`}>
+          <div className={`flex items-center justify-between ${isDataExpanded ? "mb-2" : "h-10"}`}>
             <div className="flex items-center gap-2">
               <Database size={14} className="text-blue-600" />
               <h3 className="text-sm font-medium">Données</h3>
@@ -1007,9 +1008,10 @@ export const SensorPanel = () => {
       </LiquidGlassCard>
 
       {dataReady && (
+        <>
         <LiquidGlassCard className="flex-shrink-0">
-          <div className="p-3">
-            <div className="flex items-center justify-between mb-2">
+          <div className={`${isInterpolationExpanded ? "p-3" : "px-3 py-2"}`}>
+            <div className={`flex items-center justify-between ${isInterpolationExpanded ? "mb-2" : "h-10"}`}>
               <div className="flex items-center gap-2">
                 <Sparkles size={14} className="text-purple-600" />
                 <h3 className="text-sm font-medium">Interpolation</h3>
@@ -1270,6 +1272,39 @@ export const SensorPanel = () => {
             </AnimatePresence>
           </div>
         </LiquidGlassCard>
+
+        {/* Monitoring scientifique - Diagramme psychrométrique */}
+        <LiquidGlassCard className="flex-shrink-0">
+          <div className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <FlaskConical size={14} className="text-rose-600" />
+                <h3 className="text-sm font-medium">Monitoring scientifique</h3>
+              </div>
+            </div>
+
+            {(() => {
+              const points = sensors
+                .filter(s => s.currentData)
+                .map(s => ({
+                  name: s.name,
+                  temperature: s.currentData!.temperature,
+                  absoluteHumidity: s.currentData!.absoluteHumidity
+                }));
+
+              return points.length > 0 ? (
+                <div className="h-64">
+                  <PsychrometricChart points={points} />
+                </div>
+              ) : (
+                <div className="text-xs text-gray-600 dark:text-gray-400 py-2">
+                  Aucune donnée en direct pour afficher le diagramme psychrométrique.
+                </div>
+              );
+            })()}
+          </div>
+        </LiquidGlassCard>
+        </>
       )}
 
     </div>

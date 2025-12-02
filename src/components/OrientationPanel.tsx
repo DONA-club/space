@@ -72,11 +72,11 @@ export const OrientationPanel = () => {
   return (
     <LiquidGlassCard className="flex-shrink-0">
       <div
-        className="p-3"
+        className={`${locked ? "px-3 py-2" : "p-3"}`}
         onMouseEnter={handlePanelMouseEnter}
         onMouseLeave={handlePanelMouseLeave}
       >
-        <div className="flex items-center justify-between mb-2">
+        <div className={`flex items-center justify-between ${locked ? "h-10" : "mb-2"}`}>
           <div className="flex items-center gap-2">
             <Compass size={14} className="text-indigo-600" />
             <h3 className="text-sm font-medium">Orientation géographique</h3>
