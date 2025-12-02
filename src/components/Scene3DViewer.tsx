@@ -756,8 +756,8 @@ export const Scene3DViewer = () => {
 
 /**
  * Surface lumineuse en éventail depuis l’arc de la trajectoire du soleil,
- * qui se fond progressivement vers le centre et s’arrête avant le point central.
- * Réalisation: deux triangles par segment (arc -> anneau intérieur), avec alpha par sommet.
+ * fondu renforcé vers le centre et atténuation des extrémités (lever/coucher).
+ * Réalisation: bande arc -> anneau intérieur (ne touche pas le centre), alpha dégressif aux extrémités.
  */
 const createSunArcSurface = (pathPoints: THREE.Vector3[], isDarkMode: boolean): THREE.Mesh => {
   if (pathPoints.length < 2) {
@@ -766,28 +766,35 @@ const createSunArcSurface = (pathPoints: THREE.Vector3[], isDarkMode: boolean): 
     return new THREE.Mesh(emptyGeom, emptyMat);
   }
 
-  // Couleur lumineuse sur l’arc, teinte atténuée vers l’intérieur
   const arcColor = new THREE.Color(isDarkMode ? 0xfff2b2 : 0xeea20a);
   const innerColor = arcColor.clone().multiplyScalar(isDarkMode ? 0.25 : 0.3);
 
-  // Rayon de l’arc (moyenne des distances à l’origine)
+  // Rayon moyen de l’arc
   const avgRadius =
     pathPoints.reduce((acc, p) => acc + p.length(), 0) / Math.max(1, pathPoints.length);
 
-  // Anneau intérieur où l’alpha atteint 0 (ne pas toucher le centre)
-  const innerRadius = avgRadius * 0.15; // ajuste la distance de fin du fondu
+  // Anneau intérieur plus large pour disparaître plus tôt (fondu renforcé)
+  const innerRadius = avgRadius * 0.22;
 
   const positions: number[] = [];
   const colors: number[] = [];
   const alphas: number[] = [];
 
-  // Construire une bande (arc -> anneau intérieur) avec 2 triangles par segment
-  for (let i = 0; i < pathPoints.length - 1; i++) {
+  // Atténuation aux extrémités: alpha max au centre du parcours, min aux bords
+  const N = pathPoints.length - 1;
+  const taper = (t: number) => Math.pow(Math.sin(Math.PI * t), 0.85);
+
+  for (let i = 0; i < N; i++) {
     const p1 = pathPoints[i];
     const p2 = pathPoints[i + 1];
 
     const inner1 = p1.clone().normalize().multiplyScalar(innerRadius);
     const inner2 = p2.clone().normalize().multiplyScalar(innerRadius);
+
+    const t1 = i / N;
+    const t2 = (i + 1) / N;
+    const arcAlpha1 = taper(t1);
+    const arcAlpha2 = taper(t2);
 
     // Triangle A: p1 (arc) -> inner1 (anneau) -> inner2 (anneau)
     positions.push(
@@ -801,9 +808,9 @@ const createSunArcSurface = (pathPoints: THREE.Vector3[], isDarkMode: boolean): 
       innerColor.r, innerColor.g, innerColor.b
     );
     alphas.push(
-      1.0, // p1 : opaque (selon uOpacity)
-      0.0, // inner1 : transparent
-      0.0  // inner2 : transparent
+      arcAlpha1, // arc atténué aux extrémités
+      0.0,       // anneau intérieur: transparent
+      0.0
     );
 
     // Triangle B: p1 (arc) -> inner2 (anneau) -> p2 (arc)
@@ -818,9 +825,9 @@ const createSunArcSurface = (pathPoints: THREE.Vector3[], isDarkMode: boolean): 
       arcColor.r, arcColor.g, arcColor.b
     );
     alphas.push(
-      1.0, // p1 : opaque
-      0.0, // inner2 : transparent
-      1.0  // p2 : opaque
+      arcAlpha1,
+      0.0,
+      arcAlpha2
     );
   }
 
@@ -836,7 +843,8 @@ const createSunArcSurface = (pathPoints: THREE.Vector3[], isDarkMode: boolean): 
     side: THREE.DoubleSide,
     dithering: true,
     uniforms: {
-      uOpacity: { value: isDarkMode ? 0.35 : 0.45 }, // opacité globale modulée
+      // Moins lumineux en thème clair pour un rendu plus doux
+      uOpacity: { value: isDarkMode ? 0.32 : 0.26 },
     },
     vertexShader: `
       attribute vec3 color;
