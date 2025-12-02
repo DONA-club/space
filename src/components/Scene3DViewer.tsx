@@ -1250,67 +1250,113 @@ const cleanupScene = (sceneRef: SceneRef, container: HTMLElement) => {
   renderer.dispose();
 };
 
-/** Rose des vents 3D moderne (8 flèches: N/E/S/O grandes + NE/SE/SO/NO petites, bicolores gris avec liseré) */
+/** Rose des vents 3D (réplique de l’icône fournie): étoile 8 pointes (4 longues cardinales + 4 courtes intercardinales), anneau + arcs internes, labels N/E/S/O. */
 const createWindRose = (radius: number): THREE.Group => {
   const group = new THREE.Group();
   const rOuter = radius * 0.75;
+  const rLong = rOuter * 0.62;
+  const rShort = rOuter * 0.42;
+  const baseColor = 0x22303a; // monochrome sombre
+  const lightColor = 0x3a4c59;
 
-  // Anneau fin pour l’esthétique
-  const ringSegments = 96;
-  const ringPoints: THREE.Vector3[] = [];
-  for (let i = 0; i < ringSegments; i++) {
-    const a = (i / ringSegments) * Math.PI * 2;
-    ringPoints.push(new THREE.Vector3(Math.cos(a) * (rOuter * 0.98), 0, Math.sin(a) * (rOuter * 0.98)));
+  // Anneau principal (fin)
+  {
+    const segments = 128;
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i < segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.sin(a) * (rOuter * 0.98), 0, Math.cos(a) * (rOuter * 0.98)));
+    }
+    const g = new THREE.BufferGeometry().setFromPoints(pts);
+    const m = new THREE.LineBasicMaterial({ color: baseColor, transparent: true, opacity: 0.6 });
+    group.add(new THREE.LineLoop(g, m));
   }
-  const ringGeom = new THREE.BufferGeometry().setFromPoints(ringPoints);
-  const ringMat = new THREE.LineBasicMaterial({ color: 0x6b7280, transparent: true, opacity: 0.35 });
-  const ring = new THREE.LineLoop(ringGeom, ringMat);
-  group.add(ring);
 
-  // Helper pour créer une flèche bicolore avec léger liseré
-  const createBiArrow = (dir: THREE.Vector3, length: number) => {
-    const origin = new THREE.Vector3(0, 0, 0);
-    const g = new THREE.Group();
+  // Arcs internes (deux arcs semi-circulaires)
+  const addArc = (radiusArc: number, startDeg: number, endDeg: number) => {
+    const pts: THREE.Vector3[] = [];
+    const steps = 48;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const a = THREE.MathUtils.degToRad(startDeg + (endDeg - startDeg) * t);
+      pts.push(new THREE.Vector3(Math.sin(a) * radiusArc, 0, Math.cos(a) * radiusArc));
+    }
+    const g = new THREE.BufferGeometry().setFromPoints(pts);
+    const m = new THREE.LineBasicMaterial({ color: baseColor, transparent: true, opacity: 0.5 });
+    group.add(new THREE.Line(g, m));
+  };
+  addArc(rOuter * 0.55, -50, 50);
+  addArc(rOuter * 0.55, 130, 230);
+  addArc(rOuter * 0.68, -50, 50);
+  addArc(rOuter * 0.68, 130, 230);
 
-    // Flèche foncée (fond)
-    const dark = new THREE.ArrowHelper(dir.clone().normalize(), origin, length, 0x374151, length * 0.12, length * 0.05);
-    g.add(dark);
+  // Helper wedge (triangle) pour les pointes
+  const addWedge = (angleRad: number, rTip: number, rBase: number, widthRad: number, color: number) => {
+    const tip = new THREE.Vector3(Math.sin(angleRad) * rTip, 0, Math.cos(angleRad) * rTip);
+    const left = new THREE.Vector3(Math.sin(angleRad - widthRad) * rBase, 0, Math.cos(angleRad - widthRad) * rBase);
+    const right = new THREE.Vector3(Math.sin(angleRad + widthRad) * rBase, 0, Math.cos(angleRad + widthRad) * rBase);
 
-    // Flèche claire (overlay léger)
-    const light = new THREE.ArrowHelper(dir.clone().normalize(), origin, length * 0.96, 0x9ca3af, length * 0.10, length * 0.042);
-    // léger décalage pour éviter le z-fighting
-    const n = dir.clone().normalize();
-    light.cone.position.add(n.clone().multiplyScalar(length * 0.01));
-    light.line.position.add(n.clone().multiplyScalar(length * 0.01));
-    g.add(light);
+    const geom = new THREE.BufferGeometry();
+    const vertices = new Float32Array([
+      tip.x, tip.y, tip.z,
+      left.x, left.y, left.z,
+      right.x, right.y, right.z,
+    ]);
+    geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 
-    // Liseré moderne (ligne centrale très subtile)
-    const tip = n.clone().multiplyScalar(length);
-    const lineGeom = new THREE.BufferGeometry().setFromPoints([origin, tip]);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.08 });
-    const line = new THREE.Line(lineGeom, lineMat);
-    g.add(line);
-
-    return g;
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.95,
+    });
+    const tri = new THREE.Mesh(geom, mat);
+    group.add(tri);
   };
 
-  const lenBig = rOuter * 0.62;
-  const lenSmall = rOuter * 0.45;
+  // 4 grandes cardinales (N,E,S,O)
+  const widthLong = 0.10;
+  addWedge(-Math.PI / 2, rOuter, rLong, widthLong, baseColor); // N
+  addWedge(0, rOuter, rLong, widthLong, baseColor);            // E
+  addWedge(Math.PI / 2, rOuter, rLong, widthLong, baseColor);  // S
+  addWedge(Math.PI, rOuter, rLong, widthLong, baseColor);      // O
 
-  // Cardinales (N: -Z, E: +X, S: +Z, O: -X)
-  group.add(createBiArrow(new THREE.Vector3(0, 0, -1), lenBig)); // N
-  group.add(createBiArrow(new THREE.Vector3(1, 0, 0), lenBig));  // E
-  group.add(createBiArrow(new THREE.Vector3(0, 0, 1), lenBig));  // S
-  group.add(createBiArrow(new THREE.Vector3(-1, 0, 0), lenBig)); // O
+  // 4 petites intercardinales (NE, SE, SO, NO)
+  const widthShort = 0.08;
+  addWedge(-Math.PI / 4, rOuter * 0.9, rShort, widthShort, lightColor); // NE
+  addWedge(Math.PI / 4, rOuter * 0.9, rShort, widthShort, lightColor);  // SE
+  addWedge((3 * Math.PI) / 4, rOuter * 0.9, rShort, widthShort, lightColor); // SO
+  addWedge(-(3 * Math.PI) / 4, rOuter * 0.9, rShort, widthShort, lightColor); // NO
 
-  // Intercardinales (NE, SE, SO, NO) plus petites
-  const diag = (x: number, z: number) => new THREE.Vector3(x, 0, z).normalize();
-  group.add(createBiArrow(diag(1, -1), lenSmall));  // NE
-  group.add(createBiArrow(diag(1, 1), lenSmall));   // SE
-  group.add(createBiArrow(diag(-1, 1), lenSmall));  // SO
-  group.add(createBiArrow(diag(-1, -1), lenSmall)); // NO
+  // Labels N/E/S/O (sprites canvas, monochrome)
+  const makeLabel = (text: string, pos: THREE.Vector3) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#22303a';
+      ctx.font = 'bold 64px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 64, 64);
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.copy(pos);
+    sprite.position.y += 0.01;
+    sprite.scale.set(0.8, 0.8, 0.8);
+    return sprite;
+  };
+
+  const d = rOuter * 1.06;
+  group.add(makeLabel('N', new THREE.Vector3(0, 0, -d)));
+  group.add(makeLabel('E', new THREE.Vector3(d, 0, 0)));
+  group.add(makeLabel('S', new THREE.Vector3(0, 0, d)));
+  group.add(makeLabel('O', new THREE.Vector3(-d, 0, 0)));
 
   group.position.set(0, 0, 0);
-  group.visible = false; // visible seulement au survol
+  group.visible = false;
   return group;
 };

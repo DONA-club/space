@@ -528,6 +528,21 @@ export const TimelineControl = () => {
     return ((timestamp - timeRange[0]) / effectiveRange) * 100;
   };
 
+  // Jour/nuit à un instant donné (continuité sans rupture à minuit)
+  const isDayAt = (ts: number): boolean => {
+    if (!currentSpace || currentSpace.latitude == null || currentSpace.longitude == null) return true;
+    const date = new Date(ts);
+    const times = SunCalc.getTimes(date, currentSpace.latitude!, currentSpace.longitude!);
+    if (times.sunrise && times.sunset) {
+      const t = date.getTime();
+      const sunrise = times.sunrise.getTime();
+      const sunset = times.sunset.getTime();
+      return t >= sunrise && t <= sunset;
+    }
+    const pos = SunCalc.getPosition(date, currentSpace.latitude!, currentSpace.longitude!);
+    return pos.altitude > 0;
+  };
+
   // Calcul des segments jour/nuit selon la localisation et la plage temporelle
   const dayNightSegments = useMemo(() => {
     if (!timeRange) return [];
@@ -726,6 +741,10 @@ export const TimelineControl = () => {
   
   const colorZoneStart = Math.max(rangeStartPos, currentPos - COLOR_ZONE_RADIUS);
   const colorZoneEnd = Math.min(rangeEndPos, currentPos + COLOR_ZONE_RADIUS);
+
+  const isDayNow = isDayAt(currentTimestamp);
+  const curveStrokeWidth = isDayNow ? 2.8 : 1.6;
+  const zeroLineStrokeWidth = isDayNow ? 0.7 : 0.5;
 
   const isLiveMode = mode === 'live';
   const cursorColor = isLiveMode ? (liveSystemConnected ? 'from-red-400 to-red-500' : 'from-gray-400 to-gray-500') : 'from-yellow-400 to-orange-500';
@@ -988,7 +1007,7 @@ export const TimelineControl = () => {
 
           <div
             ref={timelineRef}
-            className={`relative h-12 sm:h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            className={`relative ${isDayNow ? 'h-16 sm:h-20' : 'h-12 sm:h-16'} bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={handleTimelineClick}
           >
             {currentSpace?.latitude != null && currentSpace?.longitude != null && dayNightSegments.length > 0 && (
@@ -1016,62 +1035,6 @@ export const TimelineControl = () => {
                     .map((s) => `${s.color} ${s.offset}%`)
                     .join(', ')})`;
                   return <div className="absolute inset-0 pointer-events-none z-[0]" style={{ background: gradient }} />;
-                })()}
-
-                {/* Étoiles nocturnes très discrètes, qui s’estompent vers l’aube/crépuscule */}
-                <div className="absolute inset-0 pointer-events-none z-[0]">
-                  {dayNightSegments
-                    .filter((seg) => seg.type === 'night')
-                    .map((seg, idx) => {
-                      const left = getPosition(seg.start);
-                      const right = getPosition(seg.end);
-                      const width = Math.max(0, right - left);
-                      const stars = Array.from({ length: Math.max(10, Math.floor(width / 3)) });
-                      return (
-                        <div
-                          key={`night-${idx}`}
-                          className="absolute top-0 bottom-0"
-                          style={{ left: `${left}%`, width: `${width}%` }}
-                        >
-                          {stars.map((_, i) => {
-                            const top = Math.random() * 100;
-                            const size = 1 + Math.random() * 1.5;
-                            const x = Math.random() * 100;
-                            const opacity = 0.45 + Math.random() * 0.25;
-                            return (
-                              <div
-                                key={i}
-                                style={{
-                                  position: 'absolute',
-                                  left: `${x}%`,
-                                  top: `${top}%`,
-                                  width: `${size}px`,
-                                  height: `${size}px`,
-                                  background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.2) 60%, rgba(255,255,255,0) 100%)',
-                                  borderRadius: '50%',
-                                  opacity,
-                                  animation: 'twinkle 3s ease-in-out infinite',
-                                  filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.5))',
-                                }}
-                              />
-                            );
-                          })}
-                          {/* Masque doux pour fondre les étoiles aux bords de la nuit */}
-                          <div
-                            className="absolute inset-0"
-                            style={{
-                              background:
-                                'linear-gradient(to right, rgba(10,17,34,0) 0%, rgba(10,17,34,0.9) 15%, rgba(10,17,34,0.9) 85%, rgba(10,17,34,0) 100%)',
-                              mixBlendMode: 'multiply',
-                              pointerEvents: 'none',
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
-                </div>
-              </>
-            )}
             {hasOutdoorData && hasNegativeValues && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-[1]"
@@ -1098,7 +1061,7 @@ export const TimelineControl = () => {
                   x2="100"
                   y2={zeroLineY}
                   stroke="rgba(249, 115, 22, 0.6)"
-                  strokeWidth="0.5"
+                  strokeWidth={zeroLineStrokeWidth}
                   strokeDasharray="2,2"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -1114,8 +1077,8 @@ export const TimelineControl = () => {
                 <path
                   d={smoothPath}
                   fill="none"
-                  stroke="rgba(156, 163, 175, 0.4)"
-                  strokeWidth="2"
+                  stroke="rgba(156, 163, 175, 0.5)"
+                  strokeWidth={curveStrokeWidth}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
@@ -1123,49 +1086,6 @@ export const TimelineControl = () => {
               </svg>
             )}
 
-            {hasOutdoorData && dewPointDifferences.length > 0 && mode === 'replay' && (
-              <svg
-                className="absolute inset-0 w-full h-full pointer-events-none z-50"
-                preserveAspectRatio="none"
-                viewBox="0 0 100 100"
-              >
-                <defs>
-                  <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
-                    {dewPointDifferences.map((point, idx) => {
-                      const position = getPosition(point.timestamp);
-                      const color = getColorForDifference(point.difference);
-                      return (
-                        <stop
-                          key={idx}
-                          offset={`${position}%`}
-                          stopColor={color}
-                        />
-                      );
-                    })}
-                  </linearGradient>
-                  <mask id={maskId}>
-                    <rect x="0" y="0" width="100" height="100" fill="black" />
-                    <rect 
-                      x={colorZoneStart}
-                      y="0" 
-                      width={colorZoneEnd - colorZoneStart}
-                      height="100" 
-                      fill="white"
-                    />
-                  </mask>
-                </defs>
-                <path
-                  d={smoothPath}
-                  fill="none"
-                  stroke={`url(#${gradientId})`}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                  mask={`url(#${maskId})`}
-                />
-              </svg>
-            )}
 
             {dayMarkers.map((marker, idx) => {
               const pos = getPosition(marker);
