@@ -22,6 +22,7 @@ import { INTERPOLATION_OFFSET, INTERPOLATION_DEFAULTS, VISUALIZATION_DEFAULTS } 
 import { calculateAirDensity, calculateWaterMass } from "@/utils/airCalculations";
 import { calculateSceneVolume } from "@/utils/volumeCalculations";
 import { useTheme } from "@/components/theme-provider";
+import { getSunDirection, getSunPathPoints } from "@/utils/sunUtils";
 
 export const Scene3DViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,7 +66,7 @@ export const Scene3DViewer = () => {
 
   const { sensorData, outdoorData } = useSensorData(currentSpace, sensors, hasOutdoorData, currentTimestamp);
 
-  // Determine if we're in dark mode
+  // Détecter le mode sombre
   const isDarkMode = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useSceneBackground({
@@ -92,7 +93,7 @@ export const Scene3DViewer = () => {
     }
   }, [currentTimestamp, dataReady, hasOutdoorData, setOutdoorData, sensors, sensorData, outdoorData, smoothingWindowSec]);
 
-  // Update interpolation range even when meshing is disabled
+  // Mettre à jour la plage d'interpolation même si la maille est désactivée
   useEffect(() => {
     if (!dataReady || sensorData.size === 0) {
       setInterpolationRange(null);
@@ -118,7 +119,7 @@ export const Scene3DViewer = () => {
     smoothingWindowSec
   });
 
-  // Handle continuous sensor hover pulse effect
+  // Animation de pulsation au survol
   useEffect(() => {
     const handleSensorHover = (event: CustomEvent) => {
       if (!sceneRef.current) return;
@@ -127,20 +128,16 @@ export const Scene3DViewer = () => {
       const meshes = sceneRef.current.sensorMeshes.get(sensorId);
       
       if (meshes) {
-        // Cancel any existing animation
         if (pulseAnimationRef.current !== null) {
           cancelAnimationFrame(pulseAnimationRef.current);
         }
 
-        // Start continuous pulse animation
         const startTime = Date.now();
-        const pulseDuration = 1000; // 1 second per pulse
+        const pulseDuration = 1000;
         
         const animate = () => {
           const elapsed = (Date.now() - startTime) % pulseDuration;
           const progress = elapsed / pulseDuration;
-          
-          // Smooth sine wave for continuous pulsing
           const scale = 1 + 0.3 * Math.sin(progress * Math.PI * 2);
           
           meshes.sphere.scale.setScalar(scale);
@@ -155,14 +152,10 @@ export const Scene3DViewer = () => {
     
     const handleSensorLeave = () => {
       if (!sceneRef.current) return;
-      
-      // Cancel animation
       if (pulseAnimationRef.current !== null) {
         cancelAnimationFrame(pulseAnimationRef.current);
         pulseAnimationRef.current = null;
       }
-      
-      // Reset all scales
       sceneRef.current.sensorMeshes.forEach((meshes) => {
         meshes.sphere.scale.setScalar(1);
         meshes.glow.scale.setScalar(1);
@@ -175,19 +168,17 @@ export const Scene3DViewer = () => {
     return () => {
       window.removeEventListener('sensorHover', handleSensorHover as EventListener);
       window.removeEventListener('sensorLeave', handleSensorLeave);
-      
       if (pulseAnimationRef.current !== null) {
         cancelAnimationFrame(pulseAnimationRef.current);
       }
     };
   }, []);
   
-  // Appliquer le thème au modèle GLTF: contours et ajustements des matériaux
+  // Appliquer le thème au modèle GLTF (contours)
   useEffect(() => {
     if (!sceneRef.current || !modelLoaded || !sceneRef.current.modelGroup) return;
     const group = sceneRef.current.modelGroup;
 
-    // Retirer d'anciens overlays de contours s'ils existent
     group.traverse((child: any) => {
       if ((child as any).isLineSegments && child.userData?.__edgeOverlay) {
         if ((child as any).geometry) (child as any).geometry.dispose();
@@ -202,7 +193,6 @@ export const Scene3DViewer = () => {
       }
     });
 
-    // Ajuster les matériaux et ajouter des contours
     group.traverse((obj: any) => {
       if ((obj as any).isMesh) {
         const mesh = obj as THREE.Mesh;
@@ -214,7 +204,6 @@ export const Scene3DViewer = () => {
             if ('emissiveIntensity' in m) m.emissiveIntensity = isDarkMode ? 0.22 : 0.0;
           }
           if ('color' in m) {
-            // Plus clair en sombre, plus sombre en clair pour le contraste des gravures et détails
             m.color = new THREE.Color(isDarkMode ? 0xdadada : 0x6b7280);
           }
           if ('metalness' in m) m.metalness = 0.1;
@@ -227,12 +216,11 @@ export const Scene3DViewer = () => {
           adjustMaterial(mat);
         }
 
-        // Contours (edges) pour souligner les inscriptions et détails du modèle
         const edgesGeom = new THREE.EdgesGeometry(mesh.geometry);
         const lineMat = new THREE.LineBasicMaterial({
-          color: isDarkMode ? 0xffffff : 0x374151, // blanc en sombre, gris foncé en clair
+          color: isDarkMode ? 0xffffff : 0x374151,
           transparent: true,
-          opacity: isDarkMode ? 0.25 : 0.5, // contours plus marqués en mode clair
+          opacity: isDarkMode ? 0.25 : 0.5,
         });
         const edges = new THREE.LineSegments(edgesGeom, lineMat);
         edges.userData.__edgeOverlay = true;
@@ -241,6 +229,7 @@ export const Scene3DViewer = () => {
     });
   }, [isDarkMode, modelLoaded]);
   
+  // Re-créer les sphères capteurs si offset change
   useEffect(() => {
     if (!sceneRef.current || !modelLoaded) return;
 
@@ -264,6 +253,7 @@ export const Scene3DViewer = () => {
     sceneRef.current.sensorMeshes = newSensorMeshes;
   }, [sensorOffset, sensors, modelLoaded]);
 
+  // Mettre à jour/Créer la maille d'interpolation (inchangé)
   useEffect(() => {
     if (!sceneRef.current || !dataReady || !modelBounds || !originalModelBounds || sensorData.size === 0 || exactAirVolume === null) {
       if (sceneRef.current?.interpolationMesh) {
@@ -281,7 +271,6 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    // Only create interpolation mesh if meshing is enabled
     if (!meshingEnabled) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
@@ -374,6 +363,7 @@ export const Scene3DViewer = () => {
     isDarkMode
   ]);
 
+  // Mise en place de la scène 3D + soleil
   useLayoutEffect(() => {
     if (!containerRef.current || !gltfModel) {
       setLoading(false);
@@ -409,7 +399,6 @@ export const Scene3DViewer = () => {
         setLoading(false);
         
         const originalVolume = calculateSceneVolume(gltf.scene);
-        console.log('📊 Volume calculé du GLB:', originalVolume.toFixed(2), 'm³');
         setExactAirVolume(originalVolume);
         
         const { bounds, originalBounds, scale, center, modelPosition } = processLoadedModel(gltf, scene);
@@ -433,6 +422,52 @@ export const Scene3DViewer = () => {
         positionCamera(camera, controls, boundingSphere, width, height);
         setModelLoaded(true);
 
+        // Soleil: sphère, lumière et trajectoire
+        const sunRadius = boundingSphere.radius * 2;
+        const sunSphereGeom = new THREE.SphereGeometry(0.25, 24, 24);
+        const sunSphereMat = new THREE.MeshStandardMaterial({
+          color: 0xffd166,
+          emissive: 0xffc857,
+          emissiveIntensity: 0.8,
+          metalness: 0.3,
+          roughness: 0.4,
+        });
+        const sunSphere = new THREE.Mesh(sunSphereGeom, sunSphereMat);
+        scene.add(sunSphere);
+
+        const sunLight = new THREE.DirectionalLight(0xfff2b2, 1.0);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 1024;
+        sunLight.shadow.mapSize.height = 1024;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 200;
+        scene.add(sunLight);
+        const sunTarget = new THREE.Object3D();
+        sunTarget.position.set(0, 0, 0);
+        scene.add(sunTarget);
+        sunLight.target = sunTarget;
+
+        // Trajectoire du soleil (ligne)
+        let sunPath: THREE.Line | undefined;
+        if (currentSpace?.latitude != null && currentSpace?.longitude != null) {
+          const pathPoints = getSunPathPoints(
+            currentSpace.latitude,
+            currentSpace.longitude,
+            new Date(currentTimestamp || Date.now()),
+            sunRadius,
+            new THREE.Vector3(0, 0, 0),
+            30
+          );
+          const pathGeom = new THREE.BufferGeometry().setFromPoints(pathPoints);
+          const pathMat = new THREE.LineBasicMaterial({
+            color: isDarkMode ? 0xfff2b2 : 0xeea20a,
+            transparent: true,
+            opacity: isDarkMode ? 0.8 : 0.9,
+          });
+          sunPath = new THREE.Line(pathGeom, pathMat);
+          scene.add(sunPath);
+        }
+
         sceneRef.current = {
           renderer,
           scene,
@@ -444,8 +479,14 @@ export const Scene3DViewer = () => {
           interpolationMesh: null,
           modelScale,
           modelGroup: gltf.scene,
-          originalCenter
+          originalCenter,
+          sunLight,
+          sunSphere,
+          sunPath
         };
+
+        // Position initiale du soleil
+        updateSunObjectsPosition();
 
         startAnimationLoop(sceneRef, controls, renderer, scene, camera);
       },
@@ -492,6 +533,57 @@ export const Scene3DViewer = () => {
       }
     };
   }, [gltfModel, sensors]);
+
+  // Mettre à jour la position du soleil + exposition des capteurs à chaque changement de temps/lieu
+  useEffect(() => {
+    updateSunObjectsPosition();
+  }, [currentTimestamp, currentSpace, isDarkMode]);
+
+  const updateSunObjectsPosition = () => {
+    if (!sceneRef.current) return;
+    const { sunLight, sunSphere, sunPath, boundingSphere, scene, sensorMeshes, modelGroup } = sceneRef.current;
+    if (!sunLight || !sunSphere || !boundingSphere) return;
+
+    if (currentSpace?.latitude == null || currentSpace?.longitude == null) return;
+
+    const date = new Date(currentTimestamp || Date.now());
+    const dir = getSunDirection(currentSpace.latitude, currentSpace.longitude, date);
+    const sunRadius = boundingSphere.radius * 2;
+
+    const sunPos = new THREE.Vector3().copy(dir).multiplyScalar(sunRadius);
+    sunSphere.position.copy(sunPos);
+    sunLight.position.copy(sunPos);
+    sunLight.target?.position.set(0, 0, 0);
+    sunLight.target?.updateMatrixWorld();
+
+    // Mettre à jour le tracé si nécessaire (optionnel)
+    if (sunPath) {
+      // Rien à mettre à jour en continu; recréation si saison change n'est pas nécessaire ici.
+    }
+
+    // Calcul d'exposition des capteurs (raycasting)
+    if (modelGroup) {
+      const ray = new THREE.Raycaster();
+      const direction = dir.clone().normalize(); // direction vers le soleil
+      sensorMeshes.forEach((meshes) => {
+        const origin = meshes.sphere.position.clone();
+        ray.set(origin, direction);
+        const intersections = ray.intersectObject(modelGroup, true);
+        const occluded = intersections.length > 0;
+        const glowMat = meshes.glow.material as THREE.MeshBasicMaterial;
+        const sphereMat = meshes.sphere.material as THREE.MeshStandardMaterial;
+
+        if (occluded) {
+          glowMat.opacity = 0.15;
+          sphereMat.emissiveIntensity = 0.2;
+        } else {
+          glowMat.opacity = 0.6;
+          sphereMat.emissiveIntensity = 0.7;
+        }
+        glowMat.needsUpdate = true;
+      });
+    }
+  };
 
   return (
     <div ref={containerRef} className="absolute inset-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
@@ -550,23 +642,23 @@ export const Scene3DViewer = () => {
   );
 };
 
-// Helper functions...
+// Fonctions utilitaires existantes + helpers
 const disposeInterpolationMesh = (mesh: THREE.Points | THREE.Group | THREE.Mesh) => {
   if (mesh instanceof THREE.Points || mesh instanceof THREE.Mesh) {
     mesh.geometry.dispose();
     if (Array.isArray(mesh.material)) {
       mesh.material.forEach(m => m.dispose());
     } else {
-      mesh.material.dispose();
+      (mesh.material as THREE.Material).dispose();
     }
   } else if (mesh instanceof THREE.Group) {
     mesh.traverse((child) => {
       if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
         child.geometry.dispose();
         if (Array.isArray(child.material)) {
-          child.material.forEach(m => m.dispose());
+          (child.material as THREE.Material[]).forEach(m => m.dispose());
         } else {
-          child.material.dispose();
+          (child.material as THREE.Material).dispose();
         }
       }
     });
@@ -816,7 +908,6 @@ const createVisualizationMesh = (
   const basePointSize = avgDim / VISUALIZATION_DEFAULTS.POINT_SIZE_DIVISOR;
   const pointSize = isDarkMode ? basePointSize * 0.85 : basePointSize;
 
-  // Dark mode: use normal blending and lower opacity to avoid "whitening" by overlap
   const opacity = isDarkMode ? 0.68 : 0.75;
 
   const material = new THREE.PointsMaterial({
@@ -825,7 +916,7 @@ const createVisualizationMesh = (
     transparent: true,
     opacity: opacity,
     sizeAttenuation: true,
-    blending: isDarkMode ? THREE.NormalBlending : THREE.NormalBlending,
+    blending: THREE.NormalBlending,
     depthTest: true,
     depthWrite: false,
     dithering: true,
@@ -999,7 +1090,6 @@ const createVolumeMesh = (
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   
-  // Adjust opacity and material properties based on theme for better visibility
   const opacity = isDarkMode ? 0.9 : 0.7;
   
   const material = new THREE.MeshStandardMaterial({

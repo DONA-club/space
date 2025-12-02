@@ -19,6 +19,10 @@ export interface SceneRef {
   modelScale: number;
   modelGroup: THREE.Group | null;
   originalCenter: THREE.Vector3 | null;
+  // Soleil
+  sunLight?: THREE.DirectionalLight;
+  sunSphere?: THREE.Mesh;
+  sunPath?: THREE.Line;
 }
 
 export interface ModelBounds {
