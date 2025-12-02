@@ -703,7 +703,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
               Space
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Visualisation environnementale 3D
+              Visualisation environnementale
             </p>
           </div>
           <Button onClick={() => setShowCreateForm(!showCreateForm)}>
