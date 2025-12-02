@@ -1037,8 +1037,10 @@ export const TimelineControl = () => {
                   return <div className="absolute inset-0 pointer-events-none z-[0]" style={{ background: gradient }} />;
                 })()}
               </>
-            {hasOutdoorData && hasNegativeValues && (
-              <svg
+            </>
+          )}
+          {hasOutdoorData && hasNegativeValues && (
+            <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-[1]"
                 preserveAspectRatio="none"
                 viewBox="0 0 100 100"
