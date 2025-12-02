@@ -92,6 +92,10 @@ interface AppState {
   wsConnected: boolean;
   isRecording: boolean;
   liveSystemConnected: boolean;
+
+  // Monitoring scientifique & diagramme
+  scienceExpanded: boolean;
+  chartPoints: { name: string; temperature: number; absoluteHumidity: number; color?: string }[];
   
   // Actions
   setAuth: (user: any | null) => void;
@@ -123,6 +127,10 @@ interface AppState {
   setWsConnected: (connected: boolean) => void;
   setRecording: (recording: boolean) => void;
   setLiveSystemConnected: (connected: boolean) => void;
+
+  // Monitoring actions
+  setScienceExpanded: (expanded: boolean) => void;
+  setChartPoints: (points: { name: string; temperature: number; absoluteHumidity: number; color?: string }[]) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -153,6 +161,9 @@ export const useAppStore = create<AppState>((set) => ({
   wsConnected: false,
   isRecording: false,
   liveSystemConnected: false,
+
+  scienceExpanded: false,
+  chartPoints: [],
   
   setAuth: (user) => set({ 
     isAuthenticated: !!user, 
@@ -211,4 +222,7 @@ export const useAppStore = create<AppState>((set) => ({
   setWsConnected: (connected) => set({ wsConnected: connected }),
   setRecording: (recording) => set({ isRecording: recording }),
   setLiveSystemConnected: (connected) => set({ liveSystemConnected: connected }),
+
+  setScienceExpanded: (expanded) => set({ scienceExpanded: expanded }),
+  setChartPoints: (points) => set({ chartPoints: points }),
 }));

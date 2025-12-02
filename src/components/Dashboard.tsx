@@ -13,6 +13,7 @@ import { TimelineControl } from './TimelineControl';
 import { FileUploadPanel } from './FileUploadPanel';
 import { DataControlPanel } from './DataControlPanel';
 import { supabase } from '@/integrations/supabase/client';
+import PsychrometricSvgChart from './PsychrometricSvgChart';
 
 interface DashboardProps {
   onBackToSpaces: () => void;
@@ -27,6 +28,9 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   const gltfModel = useAppStore((state) => state.gltfModel);
   const dataReady = useAppStore((state) => state.dataReady);
   const currentSpace = useAppStore((state) => state.currentSpace);
+  const scienceExpanded = useAppStore((state) => state.scienceExpanded);
+  const chartPoints = useAppStore((state) => state.chartPoints);
+  const outdoorData = useAppStore((state) => state.outdoorData);
   
   const [spaceAddress, setSpaceAddress] = useState<string>('');
   const [loadingAddress, setLoadingAddress] = useState(false);
@@ -229,7 +233,14 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
               >
                 <LiquidGlassCard className="p-4 h-full">
                   <div className="relative w-full h-full">
-                    <Scene3DViewer />
+                    {scienceExpanded ? (
+                      <PsychrometricSvgChart
+                        points={chartPoints}
+                        outdoorTemp={outdoorData ? outdoorData.temperature : null}
+                      />
+                    ) : (
+                      <Scene3DViewer />
+                    )}
                   </div>
                 </LiquidGlassCard>
               </motion.div>
@@ -240,7 +251,15 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                 transition={{ delay: 0.2 }}
                 className="h-full min-h-0 space-y-4 overflow-y-auto"
               >
-                <SensorPanel />
+                {scienceExpanded ? (
+                  <LiquidGlassCard className="p-2">
+                    <div className="relative w-full h-[360px]">
+                      <Scene3DViewer />
+                    </div>
+                  </LiquidGlassCard>
+                ) : (
+                  <SensorPanel />
+                )}
               </motion.div>
             </div>
 

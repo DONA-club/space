@@ -45,9 +45,35 @@ export const SensorPanel = () => {
   const smoothingWindowSec = useAppStore((state) => state.smoothingWindowSec);
   const selectedMetric = useAppStore((state) => state.selectedMetric);
   const interpolationRange = useAppStore((state) => state.interpolationRange);
+  const scienceExpanded = useAppStore((state) => state.scienceExpanded);
+  const setScienceExpanded = useAppStore((state) => state.setScienceExpanded);
+  const setChartPointsStore = useAppStore((state) => state.setChartPoints);
   
   const [isDataExpanded, setIsDataExpanded] = useState(true);
   const [isInterpolationExpanded, setIsInterpolationExpanded] = useState(true);
+  const [lastInteraction, setLastInteraction] = useState<number>(Date.now());
+
+  // Track global interaction to keep interpolation panel open
+  useEffect(() => {
+    const onInteract = () => setLastInteraction(Date.now());
+    window.addEventListener('mousemove', onInteract);
+    window.addEventListener('keydown', onInteract);
+    return () => {
+      window.removeEventListener('mousemove', onInteract);
+      window.removeEventListener('keydown', onInteract);
+    };
+  }, []);
+
+  // Auto-collapse interpolation after 12s of inactivity
+  useEffect(() => {
+    if (!isInterpolationExpanded) return;
+    const id = setInterval(() => {
+      if (Date.now() - lastInteraction > 12000) {
+        setIsInterpolationExpanded(false);
+      }
+    }, 2000);
+    return () => clearInterval(id);
+  }, [isInterpolationExpanded, lastInteraction]);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [sensorDataCounts, setSensorDataCounts] = useState<Map<number, number>>(new Map());
@@ -632,7 +658,7 @@ export const SensorPanel = () => {
     if (!currentSpace) return;
 
     const loadNearestPointsAtTimestamp = async () => {
-      const pts: { name: string; temperature: number; absoluteHumidity: number }[] = [];
+      const pts: { name: string; temperature: number; absoluteHumidity: number; color?: string }[] = [];
       const ts = currentTimestamp || Date.now();
 
       // Fenêtre de lissage (pour limiter les requêtes à une zone proche)
@@ -674,6 +700,7 @@ export const SensorPanel = () => {
         if (chosen && interpolationRange) {
           const valueForColor = getMetricValue(
             {
+              timestamp: new Date(chosen.timestamp).getTime(),
               temperature: chosen.temperature,
               humidity: chosen.humidity,
               absoluteHumidity: chosen.absolute_humidity,
@@ -725,6 +752,7 @@ export const SensorPanel = () => {
         if (chosenOut && interpolationRange) {
           const valueForColor = getMetricValue(
             {
+              timestamp: new Date(chosenOut.timestamp).getTime(),
               temperature: chosenOut.temperature,
               humidity: chosenOut.humidity,
               absoluteHumidity: chosenOut.absolute_humidity,
@@ -751,8 +779,10 @@ export const SensorPanel = () => {
         const out = pts.find(p => p.name === outdoorSensorName);
         if (out) filtered.push(out);
         setChartPoints(filtered);
+        setChartPointsStore(filtered);
       } else {
         setChartPoints(pts);
+        setChartPointsStore(pts);
       }
     };
 
@@ -768,6 +798,7 @@ export const SensorPanel = () => {
         const valueForColor = interpolationRange
           ? getMetricValue(
               {
+                timestamp: s.currentData!.timestamp,
                 temperature: s.currentData!.temperature,
                 humidity: s.currentData!.humidity,
                 absoluteHumidity: s.currentData!.absoluteHumidity,
@@ -796,6 +827,7 @@ export const SensorPanel = () => {
         const valueForColor = interpolationRange
           ? getMetricValue(
               {
+                timestamp: outdoorData.timestamp,
                 temperature: outdoorData.temperature,
                 humidity: outdoorData.humidity,
                 absoluteHumidity: outdoorData.absoluteHumidity,
@@ -816,9 +848,11 @@ export const SensorPanel = () => {
         });
       }
       setChartPoints(filtered);
+      setChartPointsStore(filtered);
     } else {
       // Sinon, garder tous les points live
       setChartPoints(livePts);
+      setChartPointsStore(livePts);
     }
   }, [mode, currentTimestamp, sensors, currentSpace, hasOutdoorData, outdoorSensorName, smoothingWindowSec, meshingEnabled, volumetricPoint, interpolationRange, selectedMetric, outdoorData]);
 
@@ -1504,6 +1538,14 @@ export const SensorPanel = () => {
                 <FlaskConical size={14} className="text-rose-600" />
                 <h3 className="text-sm font-medium">Monitoring scientifique</h3>
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2"
+                onClick={() => setScienceExpanded(!scienceExpanded)}
+              >
+                {scienceExpanded ? "Réduire" : "Agrandir"}
+              </Button>
             </div>
 
             {chartPoints.length > 0 ? (

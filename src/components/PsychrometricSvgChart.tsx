@@ -55,12 +55,14 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
       if (!Number.isFinite(wGkg)) return null;
       return {
         name: p.name,
+        temperature: p.temperature,
+        absoluteHumidity: p.absoluteHumidity,
         cx: tempToX(p.temperature),
         cy: gkgToY(wGkg),
         color: p.color
       };
     })
-    .filter(Boolean) as { name: string; cx: number; cy: number; color?: string }[];
+    .filter(Boolean) as { name: string; temperature: number; absoluteHumidity: number; cx: number; cy: number; color?: string }[];
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
@@ -83,17 +85,40 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
         )}
 
         <g>
-          {circles.map((c, i) => (
-            <circle
-              key={`${c.name}-${i}`}
-              cx={c.cx}
-              cy={c.cy}
-              r={6.5}
-              fill={c.color ?? "rgba(16,185,129,0.92)"}
-              stroke="hsl(var(--background))"
-              strokeWidth={1.5}
-            />
-          ))}
+          {circles.map((c, i) => {
+            const isVolumetric = c.name.toLowerCase().includes("moyenne volumétrique");
+            const fillColor = c.color ?? "rgba(16,185,129,0.92)";
+            return (
+              <TooltipProvider delayDuration={150} key={`${c.name}-${i}`}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <circle
+                      cx={c.cx}
+                      cy={c.cy}
+                      r={7}
+                      fill={fillColor}
+                      stroke="hsl(var(--background))"
+                      strokeWidth={1.5}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {isVolumetric ? (
+                      <div className="text-xs font-medium" style={{ color: fillColor }}>
+                        Moyenne volumétrique
+                        <div className="text-[11px] opacity-85">
+                          {c.temperature.toFixed(1)}°C • {c.absoluteHumidity.toFixed(2)} g/m³
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs">
+                        <span className="font-medium">{c.name}</span>
+                      </div>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          })}
         </g>
       </svg>
 
@@ -102,7 +127,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
         {/* Axe X: Température du bulbe sec */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="absolute left-0 right-0 bottom-0 h-7" />
+            <div className="absolute left-0 right-0 bottom-0 h-8" />
           </TooltipTrigger>
           <TooltipContent side="top">
             <p className="text-xs">Température du bulbe sec (°C)</p>
@@ -112,7 +137,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
         {/* Axe Y (colonne droite des valeurs g/kg) */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="absolute right-0 top-10 bottom-0 w-14" />
+            <div className="absolute right-0 top-10 bottom-0 w-16" />
           </TooltipTrigger>
           <TooltipContent side="left">
             <p className="text-xs">Humidité Absolue (g/kg)</p>
