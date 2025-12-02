@@ -24,7 +24,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from './ui/tooltip';
+} from './FixedTooltip';
 import {
   Dialog,
   DialogContent,
