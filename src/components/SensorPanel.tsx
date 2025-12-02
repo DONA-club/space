@@ -1401,7 +1401,7 @@ export const SensorPanel = () => {
             </div>
 
             {chartPoints.length > 0 ? (
-              <div className="h-64">
+              <div className="h-80">
                 <PsychrometricSvgChart points={chartPoints} outdoorTemp={outdoorData ? outdoorData.temperature : null} />
               </div>
             ) : (

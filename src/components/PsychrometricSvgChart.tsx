@@ -81,9 +81,10 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
             y1={40}
             x2={outdoorX}
             y2={691}
-            stroke="rgba(59,130,246,0.9)"
+            stroke="hsl(var(--primary))"
+            strokeOpacity={0.85}
             strokeDasharray="4 3"
-            strokeWidth={1.5}
+            strokeWidth={2}
           />
         )}
 
@@ -94,10 +95,10 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
               key={`${c.name}-${i}`}
               cx={c.cx}
               cy={c.cy}
-              r={4.5}
-              fill="rgba(34,197,94,0.85)"
-              stroke="white"
-              strokeWidth={1}
+              r={5.5}
+              fill="rgba(16,185,129,0.92)"    /* emerald-500 */
+              stroke="hsl(var(--background))"
+              strokeWidth={1.25}
             />
           ))}
         </g>
