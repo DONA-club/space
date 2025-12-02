@@ -10,6 +10,7 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { supabase } from '@/integrations/supabase/client';
 import { findClosestDataPoint } from '@/utils/sensorUtils';
 import { showSuccess, showError } from '@/utils/toast';
+import * as SunCalc from 'suncalc';
 
 interface DewPointDifference {
   timestamp: number;
@@ -45,6 +46,7 @@ export const TimelineControl = () => {
   const [liveTimelineEnd, setLiveTimelineEnd] = useState<number>(Date.now());
   const [isDragging, setIsDragging] = useState<'start' | 'end' | 'current' | null>(null);
   const [dewPointDifferences, setDewPointDifferences] = useState<DewPointDifference[]>([]);
+  // Segments jour/nuit pour l'overlay subtil de la timeline
   const [loadedRanges, setLoadedRanges] = useState<Array<{start: number, end: number}>>([]);
   const [loadingRanges, setLoadingRanges] = useState<Set<string>>(new Set());
   const [loopEnabled, setLoopEnabled] = useState(false);
@@ -526,6 +528,73 @@ export const TimelineControl = () => {
     return ((timestamp - timeRange[0]) / effectiveRange) * 100;
   };
 
+  // Calcul des segments jour/nuit selon la localisation et la plage temporelle
+  const dayNightSegments = useMemo(() => {
+    if (!timeRange) return [];
+    if (!currentSpace || currentSpace.latitude == null || currentSpace.longitude == null) return [];
+
+    const segments: Array<{ start: number; end: number; type: 'day' | 'night' }> = [];
+    const effectiveEnd = mode === 'live' ? liveTimelineEnd : timeRange[1];
+
+    const clampToRange = (ts: number) => Math.max(timeRange[0], Math.min(ts, effectiveEnd));
+
+    // Démarrer à minuit du premier jour
+    const startDate = new Date(timeRange[0]);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Boucler jour par jour jusqu'à la fin effective
+    let currentDate = new Date(startDate.getTime());
+    while (currentDate.getTime() <= effectiveEnd) {
+      const nextMidnight = new Date(currentDate.getTime());
+      nextMidnight.setDate(nextMidnight.getDate() + 1);
+      nextMidnight.setHours(0, 0, 0, 0);
+
+      const dayStart = Math.max(timeRange[0], currentDate.getTime());
+      const dayEnd = Math.min(effectiveEnd, nextMidnight.getTime());
+
+      const times = SunCalc.getTimes(currentDate, currentSpace.latitude!, currentSpace.longitude!);
+      const sunrise = times.sunrise?.getTime();
+      const sunset = times.sunset?.getTime();
+
+      const midday = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 12, 0, 0);
+      const posAtMidday = SunCalc.getPosition(midday, currentSpace.latitude!, currentSpace.longitude!);
+      const isPolarDay = sunrise == null || sunset == null ? posAtMidday.altitude > 0 : false;
+      const isPolarNight = sunrise == null || sunset == null ? posAtMidday.altitude <= 0 : false;
+
+      if (isPolarDay) {
+        segments.push({ start: dayStart, end: dayEnd, type: 'day' });
+      } else if (isPolarNight) {
+        segments.push({ start: dayStart, end: dayEnd, type: 'night' });
+      } else if (sunrise != null && sunset != null) {
+        // Nuit du début de journée au lever
+        if (sunrise > dayStart) {
+          segments.push({ start: dayStart, end: clampToRange(sunrise), type: 'night' });
+        }
+        // Jour du lever au coucher
+        segments.push({ start: clampToRange(sunrise), end: clampToRange(sunset), type: 'day' });
+        // Nuit du coucher à la fin de la journée
+        if (sunset < dayEnd) {
+          segments.push({ start: clampToRange(sunset), end: dayEnd, type: 'night' });
+        }
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setHours(0, 0, 0, 0);
+    }
+
+    // Fusion simple des segments contigus de même type
+    const merged: Array<{ start: number; end: number; type: 'day' | 'night' }> = [];
+    for (const seg of segments.sort((a, b) => a.start - b.start)) {
+      const last = merged[merged.length - 1];
+      if (last && last.type === seg.type && Math.abs(last.end - seg.start) < 1000) {
+        last.end = Math.max(last.end, seg.end);
+      } else {
+        merged.push({ ...seg });
+      }
+    }
+    return merged;
+  }, [timeRange, currentSpace, mode, liveTimelineEnd]);
+
   const getColorForDifference = (difference: number): string => {
     if (diffRange === 0) return 'rgb(128, 128, 128)';
 
@@ -917,11 +986,30 @@ export const TimelineControl = () => {
             <span className="truncate">{formatTime(effectiveTimelineEnd)}</span>
           </div>
 
-          <div 
+          <div
             ref={timelineRef}
             className={`relative h-12 sm:h-16 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={handleTimelineClick}
           >
+            {currentSpace?.latitude != null && currentSpace?.longitude != null && dayNightSegments.length > 0 && (
+              <div className="absolute inset-0 pointer-events-none z-[0]">
+                {dayNightSegments.map((seg, idx) => {
+                  const left = getPosition(seg.start);
+                  const right = getPosition(seg.end);
+                  const width = Math.max(0, right - left);
+                  const bgClass = seg.type === 'night'
+                    ? 'bg-gray-900/10 dark:bg-black/20'
+                    : 'bg-yellow-200/10 dark:bg-yellow-300/10';
+                  return (
+                    <div
+                      key={idx}
+                      className={`absolute top-0 bottom-0 ${bgClass}`}
+                      style={{ left: `${left}%`, width: `${width}%` }}
+                    />
+                  );
+                })}
+              </div>
+            )}
             {hasOutdoorData && hasNegativeValues && (
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-[1]"
