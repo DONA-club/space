@@ -993,35 +993,32 @@ export const TimelineControl = () => {
           >
             {currentSpace?.latitude != null && currentSpace?.longitude != null && dayNightSegments.length > 0 && (
               <>
-                {/* Gradient continu jour → zénith → nuit */}
+                {/* Gradient continu nuit ↔ aube ↔ jour ↔ crépuscule (palette plus nuancée et continue) */}
                 {(() => {
-                  // Génère un gradient linéaire en continu
                   const stops: Array<{ offset: number; color: string }> = [];
                   dayNightSegments.forEach((seg) => {
                     const start = getPosition(seg.start);
                     const end = getPosition(seg.end);
                     if (seg.type === 'night') {
-                      // Nuit profonde → léger bleuté proche de l'aube/crépuscule
-                      stops.push({ offset: start, color: 'rgba(11,18,32,1)' });
-                      stops.push({ offset: end, color: 'rgba(27,42,68,1)' });
+                      // Nuit: bleu nuit profond → bleu nuit doux
+                      stops.push({ offset: start, color: 'rgba(10,17,34,1)' });
+                      stops.push({ offset: end, color: 'rgba(24,39,68,1)' });
                     } else {
-                      // Jour: aube/lever → zénith → crépuscule
-                      const dayMid = (start + end) / 2;
-                      stops.push({ offset: start, color: 'rgba(255,189,107,0.35)' }); // aube chaude
-                      stops.push({ offset: dayMid, color: 'rgba(233,247,255,0.55)' }); // zénith clair
-                      stops.push({ offset: end, color: 'rgba(255,123,107,0.35)' });   // crépuscule chaud
+                      // Jour: lever (chaud) → zénith (bleu clair) → coucher (chaud)
+                      const mid = (start + end) / 2;
+                      stops.push({ offset: start, color: 'rgba(255,176,106,0.40)' }); // lever chaleureux
+                      stops.push({ offset: mid, color: 'rgba(204,232,255,0.55)' });   // zénith doux
+                      stops.push({ offset: end, color: 'rgba(255,154,120,0.40)' });   // coucher pêche
                     }
                   });
                   const gradient = `linear-gradient(to right, ${stops
                     .sort((a, b) => a.offset - b.offset)
                     .map((s) => `${s.color} ${s.offset}%`)
                     .join(', ')})`;
-                  return (
-                    <div className="absolute inset-0 pointer-events-none z-[0]" style={{ background: gradient }} />
-                  );
+                  return <div className="absolute inset-0 pointer-events-none z-[0]" style={{ background: gradient }} />;
                 })()}
 
-                {/* Petites étoiles animées qui s’estompent vers l’aube/crépuscule */}
+                {/* Étoiles nocturnes très discrètes, qui s’estompent vers l’aube/crépuscule */}
                 <div className="absolute inset-0 pointer-events-none z-[0]">
                   {dayNightSegments
                     .filter((seg) => seg.type === 'night')
@@ -1029,7 +1026,7 @@ export const TimelineControl = () => {
                       const left = getPosition(seg.start);
                       const right = getPosition(seg.end);
                       const width = Math.max(0, right - left);
-                      const stars = Array.from({ length: Math.max(8, Math.floor(width / 4)) });
+                      const stars = Array.from({ length: Math.max(10, Math.floor(width / 3)) });
                       return (
                         <div
                           key={`night-${idx}`}
@@ -1040,7 +1037,7 @@ export const TimelineControl = () => {
                             const top = Math.random() * 100;
                             const size = 1 + Math.random() * 1.5;
                             const x = Math.random() * 100;
-                            const opacity = 0.6 + Math.random() * 0.3;
+                            const opacity = 0.45 + Math.random() * 0.25;
                             return (
                               <div
                                 key={i}
@@ -1053,18 +1050,18 @@ export const TimelineControl = () => {
                                   background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.2) 60%, rgba(255,255,255,0) 100%)',
                                   borderRadius: '50%',
                                   opacity,
-                                  animation: 'twinkle 2.5s ease-in-out infinite',
-                                  filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.6))',
+                                  animation: 'twinkle 3s ease-in-out infinite',
+                                  filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.5))',
                                 }}
                               />
                             );
                           })}
-                          {/* Masque doux pour estomper les étoiles vers les bords (aube/crépuscule) */}
+                          {/* Masque doux pour fondre les étoiles aux bords de la nuit */}
                           <div
                             className="absolute inset-0"
                             style={{
                               background:
-                                'linear-gradient(to right, rgba(11,18,32,0) 0%, rgba(11,18,32,0.95) 10%, rgba(11,18,32,0.95) 90%, rgba(11,18,32,0) 100%)',
+                                'linear-gradient(to right, rgba(10,17,34,0) 0%, rgba(10,17,34,0.9) 15%, rgba(10,17,34,0.9) 85%, rgba(10,17,34,0) 100%)',
                               mixBlendMode: 'multiply',
                               pointerEvents: 'none',
                             }}
