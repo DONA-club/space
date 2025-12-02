@@ -740,8 +740,14 @@ export const TimelineControl = () => {
   const rangeEndPos = getPosition(rangeEnd);
   const currentPos = getPosition(currentTimestamp);
   
-  const colorZoneStart = Math.max(rangeStartPos, currentPos - COLOR_ZONE_RADIUS);
-  const colorZoneEnd = Math.min(rangeEndPos, currentPos + COLOR_ZONE_RADIUS);
+  const idx = dewPointDifferences.findIndex((d) => d.timestamp >= currentTimestamp);
+  const baseIdx = idx === -1 ? dewPointDifferences.length - 1 : idx;
+  const leftIdx = Math.max(0, baseIdx - 1000);
+  const rightIdx = Math.min(dewPointDifferences.length - 1, baseIdx + 1000);
+  const leftPos = dewPointDifferences.length > 0 ? getPosition(dewPointDifferences[leftIdx].timestamp) : rangeStartPos;
+  const rightPos = dewPointDifferences.length > 0 ? getPosition(dewPointDifferences[rightIdx].timestamp) : rangeEndPos;
+  const colorZoneStart = Math.max(rangeStartPos, leftPos);
+  const colorZoneEnd = Math.min(rangeEndPos, rightPos);
 
   const isDayNow = isDayAt(currentTimestamp);
   const curveStrokeWidth = 2.4;
@@ -1015,32 +1021,22 @@ export const TimelineControl = () => {
               <>
                 {/* Gradient continu nuit ↔ aube ↔ jour ↔ crépuscule (palette plus nuancée et continue) */}
                 {(() => {
-                  const stops: Array<{ offset: number; color: string }> = [];
-                  dayNightSegments.forEach((seg) => {
-                    const start = getPosition(seg.start);
-                    const end = getPosition(seg.end);
-                    if (seg.type === 'night') {
-                      // Nuit: totalement homogène (gris subtil)
-                      stops.push({ offset: start, color: 'rgba(120, 125, 135, 0.10)' });
-                      stops.push({ offset: end,   color: 'rgba(120, 125, 135, 0.10)' });
-                    } else {
-                      // Jour: bleu ciel léger avec transitions lever/coucher strictes
-                      const mid = (start + end) / 2;
-                      const dawn = start + (end - start) * 0.02; // transition stricte
-                      const dusk = end - (end - start) * 0.02;   // transition stricte
-                      stops.push({ offset: start, color: 'rgba(190, 220, 255, 0.12)' });
-                      stops.push({ offset: dawn,  color: 'rgba(200, 230, 255, 0.12)' });
-                      stops.push({ offset: mid,   color: 'rgba(210, 235, 255, 0.12)' });
-                      stops.push({ offset: dusk,  color: 'rgba(200, 230, 255, 0.12)' });
-                      stops.push({ offset: end,   color: 'rgba(190, 220, 255, 0.12)' });
-                    }
-                  });
-                  const gradient = `linear-gradient(to right, ${stops
-                    .sort((a, b) => a.offset - b.offset)
-                    .map((s) => `${s.color} ${s.offset}%`)
-                    .join(', ')})`;
-                  return <div className="absolute inset-0 pointer-events-none z-[0]" style={{ background: gradient }} />;
-                })()}
+                {dayNightSegments.map((seg, i) => {
+                  const start = getPosition(seg.start);
+                  const end = getPosition(seg.end);
+                  const left = Math.min(start, end);
+                  const width = Math.max(0.1, Math.abs(end - start));
+                  const bg = seg.type === 'night'
+                    ? 'rgba(120, 125, 135, 0.12)' // nuit uniforme (gris subtil)
+                    : 'rgba(200, 230, 255, 0.12)'; // jour uniforme (bleu ciel léger)
+                  return (
+                    <div
+                      key={`seg-${i}`}
+                      className="absolute top-0 bottom-0 pointer-events-none z-[0]"
+                      style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bg }}
+                    />
+                  );
+                })}
               </>
             )}
           {hasOutdoorData && hasNegativeValues && (
@@ -1084,7 +1080,7 @@ export const TimelineControl = () => {
                   viewBox="0 0 100 100"
                 >
                   <defs>
-                    <linearGradient id={legendGradientId} x1="0" y1="0" x2="1" y2="0">
+                    <linearGradient id={legendGradientId} x1="0" y1="100" x2="0" y2="0" gradientUnits="userSpaceOnUse">
                       <stop offset="0%" stopColor="rgba(59, 130, 246, 0.85)" />
                       <stop offset="100%" stopColor="rgba(34, 197, 94, 0.85)" />
                     </linearGradient>
@@ -1105,7 +1101,7 @@ export const TimelineControl = () => {
                   viewBox="0 0 100 100"
                 >
                   <defs>
-                    <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+                    <linearGradient id={gradientId} x1="0" y1="100" x2="0" y2="0" gradientUnits="userSpaceOnUse">
                       <stop offset="0%" stopColor="rgba(59, 130, 246, 0.9)" />
                       <stop offset="100%" stopColor="rgba(34, 197, 94, 0.9)" />
                     </linearGradient>
@@ -1143,28 +1139,7 @@ export const TimelineControl = () => {
                 </div>
               );
             })}
-            {dayNightSegments.filter(seg => seg.type === 'day').map((seg, i) => {
-              const sunrisePos = getPosition(seg.start);
-              const sunsetPos = getPosition(seg.end);
-              return (
-                <>
-                  <div
-                    key={`sunrise-${i}`}
-                    className="absolute top-0 bottom-0 flex items-center pointer-events-none z-[10]"
-                    style={{ left: `${sunrisePos}%` }}
-                  >
-                    <div className="w-[0.5px] h-full bg-orange-400/70 dark:bg-orange-300/70"></div>
-                  </div>
-                  <div
-                    key={`sunset-${i}`}
-                    className="absolute top-0 bottom-0 flex items-center pointer-events-none z-[10]"
-                    style={{ left: `${sunsetPos}%` }}
-                  >
-                    <div className="w-[0.5px] h-full bg-orange-400/70 dark:bg-orange-300/70"></div>
-                  </div>
-                </>
-              );
-            })}
+            <></>
 
             <div
               className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/20 to-purple-400/20 backdrop-blur-sm pointer-events-none z-[2]"
