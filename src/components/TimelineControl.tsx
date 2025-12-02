@@ -549,53 +549,47 @@ export const TimelineControl = () => {
     if (!timeRange) return [];
     if (!currentSpace || currentSpace.latitude == null || currentSpace.longitude == null) return [];
 
-    const segments: Array<{ start: number; end: number; type: 'day' | 'night' }> = [];
+    const lat = currentSpace.latitude!;
+    const lon = currentSpace.longitude!;
     const effectiveEnd = mode === 'live' ? liveTimelineEnd : timeRange[1];
 
-    const clampToRange = (ts: number) => Math.max(timeRange[0], Math.min(ts, effectiveEnd));
+    // Collecter tous les événements sunrise/sunset sur la plage
+    const events: Array<{ time: number; type: 'sunrise' | 'sunset' }> = [];
+    const startMidnight = new Date(timeRange[0]);
+    startMidnight.setHours(0, 0, 0, 0);
 
-    // Démarrer à minuit du premier jour
-    const startDate = new Date(timeRange[0]);
-    startDate.setHours(0, 0, 0, 0);
+    const endPlusOne = new Date(effectiveEnd);
+    endPlusOne.setDate(endPlusOne.getDate() + 1);
+    endPlusOne.setHours(0, 0, 0, 0);
 
-    // Boucler jour par jour jusqu'à la fin effective
-    let currentDate = new Date(startDate.getTime());
-    while (currentDate.getTime() <= effectiveEnd) {
-      const nextMidnight = new Date(currentDate.getTime());
-      nextMidnight.setDate(currentMidnightPlusOne(nextMidnight));
-      nextMidnight.setHours(0, 0, 0, 0);
-
-      const dayStart = Math.max(timeRange[0], currentDate.getTime());
-      const dayEnd = Math.min(effectiveEnd, nextMidnight.getTime());
-
-      const times = SunCalc.getTimes(currentDate, currentSpace.latitude!, currentSpace.longitude!);
-      const sunrise = times.sunrise?.getTime();
-      const sunset = times.sunset?.getTime();
-
-      const midday = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 12, 0, 0);
-      const posAtMidday = SunCalc.getPosition(midday, currentSpace.latitude!, currentSpace.longitude!);
-      const isPolarDay = sunrise == null || sunset == null ? posAtMidday.altitude > 0 : false;
-      const isPolarNight = sunrise == null || sunset == null ? posAtMidday.altitude <= 0 : false;
-
-      if (isPolarDay) {
-        segments.push({ start: dayStart, end: dayEnd, type: 'day' });
-      } else if (isPolarNight) {
-        segments.push({ start: dayStart, end: dayEnd, type: 'night' });
-      } else if (sunrise != null && sunset != null) {
-        if (sunrise > dayStart) {
-          segments.push({ start: dayStart, end: clampToRange(sunrise), type: 'night' });
-        }
-        segments.push({ start: clampToRange(sunrise), end: clampToRange(sunset), type: 'day' });
-        if (sunset < dayEnd) {
-          segments.push({ start: clampToRange(sunset), end: dayEnd, type: 'night' });
-        }
-      }
-
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate.setHours(0, 0, 0, 0);
+    let d = new Date(startMidnight.getTime());
+    while (d.getTime() <= endPlusOne.getTime()) {
+      const t = SunCalc.getTimes(d, lat, lon);
+      if (t.sunrise) events.push({ time: t.sunrise.getTime(), type: 'sunrise' });
+      if (t.sunset) events.push({ time: t.sunset.getTime(), type: 'sunset' });
+      d.setDate(d.getDate() + 1);
+      d.setHours(0, 0, 0, 0);
     }
 
-    // Fusion des segments contigus de même type
+    events.sort((a, b) => a.time - b.time);
+
+    // Construire les segments en alternant entre événements
+    const segments: Array<{ start: number; end: number; type: 'day' | 'night' }> = [];
+    let cursor = timeRange[0];
+    let isDayNow = isDayAt(cursor);
+
+    for (const ev of events) {
+      if (ev.time <= cursor || ev.time < timeRange[0] || ev.time > effectiveEnd) continue;
+      segments.push({ start: cursor, end: ev.time, type: isDayNow ? 'day' : 'night' });
+      isDayNow = ev.type === 'sunrise' ? true : false;
+      cursor = ev.time;
+    }
+
+    if (cursor < effectiveEnd) {
+      segments.push({ start: cursor, end: effectiveEnd, type: isDayNow ? 'day' : 'night' });
+    }
+
+    // Fusion légère pour gommer les micro-écarts
     const merged: Array<{ start: number; end: number; type: 'day' | 'night' }> = [];
     for (const seg of segments.sort((a, b) => a.start - b.start)) {
       const last = merged[merged.length - 1];

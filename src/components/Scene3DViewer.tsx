@@ -664,6 +664,7 @@ export const Scene3DViewer = () => {
 
     // Surface lumineuse en éventail depuis l’arc vers le centre (plus lumineuse sur l’arc)
     const arcSurface = createSunArcSurface(pathPoints, isDarkMode);
+    arcSurface.visible = aboveHorizon;
     pathGroup.add(arcSurface);
 
     // Remplacer l'ancien chemin (s'il existe)
@@ -672,6 +673,7 @@ export const Scene3DViewer = () => {
     }
     scene.add(pathGroup);
     sceneRef.current.sunPath = pathGroup;
+    (sceneRef.current as any).sunArcSurface = arcSurface;
 
     // Exposition des capteurs (raycasting sur le modèle)
     if (modelGroup) {
