@@ -63,6 +63,7 @@ export const TimelineControl = () => {
   });
   
   const gradientId = `curveGradient-${componentId}`;
+  const legendGradientId = `curveLegendGradient-${componentId}`;
   const maskId = `colorZoneMask-${componentId}`;
 
   useEffect(() => {
@@ -1019,19 +1020,19 @@ export const TimelineControl = () => {
                     const start = getPosition(seg.start);
                     const end = getPosition(seg.end);
                     if (seg.type === 'night') {
-                      // Nuit: gris très subtil (pas de noir absolu)
-                      stops.push({ offset: start, color: 'rgba(90, 90, 95, 0.12)' });
-                      stops.push({ offset: end, color: 'rgba(115, 115, 120, 0.12)' });
+                      // Nuit: totalement homogène (gris subtil)
+                      stops.push({ offset: start, color: 'rgba(120, 125, 135, 0.10)' });
+                      stops.push({ offset: end,   color: 'rgba(120, 125, 135, 0.10)' });
                     } else {
-                      // Jour: ton gris lumineux avec transitions plus homogènes à l'aube et au crépuscule
+                      // Jour: bleu ciel léger avec transitions lever/coucher strictes
                       const mid = (start + end) / 2;
-                      const dawn = start + (end - start) * 0.02;
-                      const dusk = end - (end - start) * 0.02;
-                      stops.push({ offset: start, color: 'rgba(210, 210, 215, 0.12)' }); // pré-aube
-                      stops.push({ offset: dawn, color: 'rgba(225, 225, 230, 0.12)' });  // matin
-                      stops.push({ offset: mid, color: 'rgba(235, 235, 240, 0.12)' });   // zénith
-                      stops.push({ offset: dusk, color: 'rgba(225, 225, 230, 0.12)' });  // fin d'après-midi
-                      stops.push({ offset: end, color: 'rgba(210, 210, 215, 0.12)' });   // crépuscule
+                      const dawn = start + (end - start) * 0.02; // transition stricte
+                      const dusk = end - (end - start) * 0.02;   // transition stricte
+                      stops.push({ offset: start, color: 'rgba(190, 220, 255, 0.12)' });
+                      stops.push({ offset: dawn,  color: 'rgba(200, 230, 255, 0.12)' });
+                      stops.push({ offset: mid,   color: 'rgba(210, 235, 255, 0.12)' });
+                      stops.push({ offset: dusk,  color: 'rgba(200, 230, 255, 0.12)' });
+                      stops.push({ offset: end,   color: 'rgba(190, 220, 255, 0.12)' });
                     }
                   });
                   const gradient = `linear-gradient(to right, ${stops
@@ -1082,10 +1083,16 @@ export const TimelineControl = () => {
                   preserveAspectRatio="none"
                   viewBox="0 0 100 100"
                 >
+                  <defs>
+                    <linearGradient id={legendGradientId} x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="rgba(59, 130, 246, 0.85)" />
+                      <stop offset="100%" stopColor="rgba(34, 197, 94, 0.85)" />
+                    </linearGradient>
+                  </defs>
                   <path
                     d={smoothPath}
                     fill="none"
-                    stroke="rgba(156, 163, 175, 0.6)"
+                    stroke={`url(#${legendGradientId})`}
                     strokeWidth={curveStrokeWidth}
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1099,8 +1106,8 @@ export const TimelineControl = () => {
                 >
                   <defs>
                     <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="rgba(251, 191, 36, 0.9)" />
-                      <stop offset="100%" stopColor="rgba(249, 115, 22, 0.9)" />
+                      <stop offset="0%" stopColor="rgba(59, 130, 246, 0.9)" />
+                      <stop offset="100%" stopColor="rgba(34, 197, 94, 0.9)" />
                     </linearGradient>
                     <clipPath id={maskId}>
                       <rect x={colorZoneStart} y="0" width={Math.max(0.1, colorZoneEnd - colorZoneStart)} height="100" />

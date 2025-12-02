@@ -431,25 +431,26 @@ export const Scene3DViewer = () => {
         scene.add(sunTarget);
         sunLight.target = sunTarget;
 
-        // Rayons lumineux autour du soleil (attachés à la sphère)
+        // Effet lumineux autour du soleil (sprites additifs)
         const raysGroup = new THREE.Group();
-        const raysCount = 12;
-        const rayLength = 0.8;
-        for (let i = 0; i < raysCount; i++) {
-          const angle = (i / raysCount) * Math.PI * 2;
-          const dir = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
-          const rayGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0, 0),
-            dir.clone().multiplyScalar(rayLength),
-          ]);
-          const rayMat = new THREE.LineBasicMaterial({
+        const glowTexture = createCircleTexture();
+        const makeGlowSprite = (scale: number, opacity: number) => {
+          const mat = new THREE.SpriteMaterial({
+            map: glowTexture,
             color: isDarkMode ? 0xfff2b2 : 0xeea20a,
             transparent: true,
-            opacity: isDarkMode ? 0.7 : 0.8,
+            opacity,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            depthTest: true,
           });
-          const ray = new THREE.Line(rayGeom, rayMat);
-          raysGroup.add(ray);
-        }
+          const sprite = new THREE.Sprite(mat);
+          sprite.scale.setScalar(scale);
+          return sprite;
+        };
+        raysGroup.add(makeGlowSprite(1.4, 0.5));
+        raysGroup.add(makeGlowSprite(2.0, 0.25));
+        raysGroup.add(makeGlowSprite(2.8, 0.12));
         sunSphere.add(raysGroup);
 
         // Ligne très fine entre le centre du soleil et le centre de la pièce
@@ -457,12 +458,15 @@ export const Scene3DViewer = () => {
           new THREE.Vector3(0, 0, 0),
           new THREE.Vector3(0, 0, 0)
         ]);
-        const rayLineMat = new THREE.LineBasicMaterial({
-          color: isDarkMode ? 0xfff2b2 : 0xeea20a,
+        const rayLineMat = new THREE.LineDashedMaterial({
+          color: isDarkMode ? 0xfff2b2 : 0x3aa0ff,
           transparent: true,
-          opacity: isDarkMode ? 0.7 : 0.8,
+          opacity: isDarkMode ? 0.7 : 0.9,
+          dashSize: 0.5,
+          gapSize: 0.35,
         });
         const sunRayLine = new THREE.Line(rayLineGeom, rayLineMat);
+        sunRayLine.computeLineDistances();
         scene.add(sunRayLine);
 
         // Trajectoire du soleil
@@ -594,6 +598,10 @@ export const Scene3DViewer = () => {
       positions.setXYZ(0, 0, 0, 0);
       positions.setXYZ(1, sunPos.x, sunPos.y, sunPos.z);
       positions.needsUpdate = true;
+      // Recalculer les distances pour le pointillé
+      if (sceneRef.current.sunRayLine) {
+        (sceneRef.current.sunRayLine as THREE.Line).computeLineDistances();
+      }
     }
 
     // Cacher le soleil quand il n'est pas sur sa trajectoire diurne (sous l'horizon)
