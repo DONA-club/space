@@ -70,10 +70,8 @@ export const TimelineControl = () => {
     if (mode === 'live' || !rangeStart || !rangeEnd) return;
 
     if (currentTimestamp < rangeStart) {
-      console.log('🔒 Cursor clamped to range start:', rangeStart);
       setCurrentTimestamp(rangeStart);
     } else if (currentTimestamp > rangeEnd) {
-      console.log('🔒 Cursor clamped to range end:', rangeEnd);
       setCurrentTimestamp(rangeEnd);
     }
   }, [rangeStart, rangeEnd, currentTimestamp, mode, setCurrentTimestamp]);
@@ -562,7 +560,7 @@ export const TimelineControl = () => {
     let currentDate = new Date(startDate.getTime());
     while (currentDate.getTime() <= effectiveEnd) {
       const nextMidnight = new Date(currentDate.getTime());
-      nextMidnight.setDate(nextMidnight.getDate() + 1);
+      nextMidnight.setDate(currentMidnightPlusOne(nextMidnight));
       nextMidnight.setHours(0, 0, 0, 0);
 
       const dayStart = Math.max(timeRange[0], currentDate.getTime());
@@ -582,13 +580,10 @@ export const TimelineControl = () => {
       } else if (isPolarNight) {
         segments.push({ start: dayStart, end: dayEnd, type: 'night' });
       } else if (sunrise != null && sunset != null) {
-        // Nuit du début de journée au lever
         if (sunrise > dayStart) {
           segments.push({ start: dayStart, end: clampToRange(sunrise), type: 'night' });
         }
-        // Jour du lever au coucher
         segments.push({ start: clampToRange(sunrise), end: clampToRange(sunset), type: 'day' });
-        // Nuit du coucher à la fin de la journée
         if (sunset < dayEnd) {
           segments.push({ start: clampToRange(sunset), end: dayEnd, type: 'night' });
         }
@@ -598,7 +593,7 @@ export const TimelineControl = () => {
       currentDate.setHours(0, 0, 0, 0);
     }
 
-    // Fusion simple des segments contigus de même type
+    // Fusion des segments contigus de même type
     const merged: Array<{ start: number; end: number; type: 'day' | 'night' }> = [];
     for (const seg of segments.sort((a, b) => a.start - b.start)) {
       const last = merged[merged.length - 1];
@@ -610,6 +605,8 @@ export const TimelineControl = () => {
     }
     return merged;
   }, [timeRange, currentSpace, mode, liveTimelineEnd]);
+
+  const currentMidnightPlusOne = (d: Date) => d.getDate() + 1;
 
   const getColorForDifference = (difference: number): string => {
     if (diffRange === 0) return 'rgb(128, 128, 128)';
@@ -647,7 +644,6 @@ export const TimelineControl = () => {
 
     let path = `M ${coords[0].x},${coords[0].y}`;
 
-    // Increased tension for smoother curves (was 0.7, now 0.4 for more smoothness)
     const tension = 0.4;
 
     for (let i = 0; i < coords.length - 1; i++) {
@@ -656,7 +652,6 @@ export const TimelineControl = () => {
       const p2 = coords[i + 1];
       const p3 = coords[Math.min(i + 2, coords.length - 1)];
 
-      // Catmull-Rom to Bezier conversion with tension control
       const cp1x = p1.x + (p2.x - p0.x) / 6 * tension;
       const cp1y = p1.y + (p2.y - p0.y) / 6 * tension;
       const cp2x = p2.x - (p3.x - p1.x) / 6 * tension;
@@ -939,7 +934,7 @@ export const TimelineControl = () => {
                       onClick={() => setLoopEnabled(!loopEnabled)}
                       className={loopEnabled 
                         ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 h-7 sm:h-8 w-7 sm:w-8 p-0"
-                        : "bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-7 sm:h-8 w-7 sm:w-8 p-0"
+                        : "bg-white/30 dark:bg黑/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-7 sm:h-8 w-7 sm:w-8 p-0"
                       }
                     >
                       <Repeat size={12} />
@@ -1019,8 +1014,6 @@ export const TimelineControl = () => {
           >
             {currentSpace?.latitude != null && currentSpace?.longitude != null && dayNightSegments.length > 0 && (
               <>
-                {/* Gradient continu nuit ↔ aube ↔ jour ↔ crépuscule (palette plus nuancée et continue) */}
-                {(() => {
                 {dayNightSegments.map((seg, i) => {
                   const start = getPosition(seg.start);
                   const end = getPosition(seg.end);
@@ -1039,8 +1032,8 @@ export const TimelineControl = () => {
                 })}
               </>
             )}
-          {hasOutdoorData && hasNegativeValues && (
-            <svg
+            {hasOutdoorData && hasNegativeValues && (
+              <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-[1]"
                 preserveAspectRatio="none"
                 viewBox="0 0 100 100"
@@ -1079,16 +1072,10 @@ export const TimelineControl = () => {
                   preserveAspectRatio="none"
                   viewBox="0 0 100 100"
                 >
-                  <defs>
-                    <linearGradient id={legendGradientId} x1="0" y1="100" x2="0" y2="0" gradientUnits="userSpaceOnUse">
-                      <stop offset="0%" stopColor="rgba(59, 130, 246, 0.85)" />
-                      <stop offset="100%" stopColor="rgba(34, 197, 94, 0.85)" />
-                    </linearGradient>
-                  </defs>
                   <path
                     d={smoothPath}
                     fill="none"
-                    stroke={`url(#${legendGradientId})`}
+                    stroke="rgba(156, 163, 175, 0.6)"
                     strokeWidth={curveStrokeWidth}
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1123,7 +1110,6 @@ export const TimelineControl = () => {
               </>
             )}
 
-
             {dayMarkers.map((marker, idx) => {
               const pos = getPosition(marker);
               return (
@@ -1139,7 +1125,6 @@ export const TimelineControl = () => {
                 </div>
               );
             })}
-            <></>
 
             <div
               className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/20 to-purple-400/20 backdrop-blur-sm pointer-events-none z-[2]"
