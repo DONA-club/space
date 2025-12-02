@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/FixedTooltip';
 import OrientationPanel from './OrientationPanel';
-import PsychrometricChart from './PsychrometricChart';
+import PsychrometricSvgChart from './PsychrometricSvgChart';
 
 export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
@@ -1402,7 +1402,7 @@ export const SensorPanel = () => {
 
             {chartPoints.length > 0 ? (
               <div className="h-64">
-                <PsychrometricChart points={chartPoints} outdoorTemp={outdoorData ? outdoorData.temperature : null} />
+                <PsychrometricSvgChart points={chartPoints} outdoorTemp={outdoorData ? outdoorData.temperature : null} />
               </div>
             ) : (
               <div className="text-xs text-gray-600 dark:text-gray-400 py-2">
