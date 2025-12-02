@@ -743,8 +743,8 @@ export const TimelineControl = () => {
   const colorZoneEnd = Math.min(rangeEndPos, currentPos + COLOR_ZONE_RADIUS);
 
   const isDayNow = isDayAt(currentTimestamp);
-  const curveStrokeWidth = isDayNow ? 2.8 : 1.6;
-  const zeroLineStrokeWidth = isDayNow ? 0.7 : 0.5;
+  const curveStrokeWidth = 2.4;
+  const zeroLineStrokeWidth = 0.6;
 
   const isLiveMode = mode === 'live';
   const cursorColor = isLiveMode ? (liveSystemConnected ? 'from-red-400 to-red-500' : 'from-gray-400 to-gray-500') : 'from-yellow-400 to-orange-500';
@@ -1007,7 +1007,7 @@ export const TimelineControl = () => {
 
           <div
             ref={timelineRef}
-            className={`relative ${isDayNow ? 'h-16 sm:h-20' : 'h-12 sm:h-16'} bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            className={`relative h-16 sm:h-20 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-xl border border-white/30 overflow-visible ${isLiveMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={handleTimelineClick}
           >
             {currentSpace?.latitude != null && currentSpace?.longitude != null && dayNightSegments.length > 0 && (
@@ -1019,15 +1019,19 @@ export const TimelineControl = () => {
                     const start = getPosition(seg.start);
                     const end = getPosition(seg.end);
                     if (seg.type === 'night') {
-                      // Nuit: bleu nuit profond → bleu nuit doux
-                      stops.push({ offset: start, color: 'rgba(10,17,34,1)' });
-                      stops.push({ offset: end, color: 'rgba(24,39,68,1)' });
+                      // Nuit: gris très subtil (pas de noir absolu)
+                      stops.push({ offset: start, color: 'rgba(90, 90, 95, 0.12)' });
+                      stops.push({ offset: end, color: 'rgba(115, 115, 120, 0.12)' });
                     } else {
-                      // Jour: lever (chaud) → zénith (bleu clair) → coucher (chaud)
+                      // Jour: ton gris lumineux avec transitions plus homogènes à l'aube et au crépuscule
                       const mid = (start + end) / 2;
-                      stops.push({ offset: start, color: 'rgba(255,176,106,0.40)' }); // lever chaleureux
-                      stops.push({ offset: mid, color: 'rgba(204,232,255,0.55)' });   // zénith doux
-                      stops.push({ offset: end, color: 'rgba(255,154,120,0.40)' });   // coucher pêche
+                      const dawn = start + (end - start) * 0.08;
+                      const dusk = end - (end - start) * 0.08;
+                      stops.push({ offset: start, color: 'rgba(210, 210, 215, 0.12)' }); // pré-aube
+                      stops.push({ offset: dawn, color: 'rgba(225, 225, 230, 0.12)' });  // matin
+                      stops.push({ offset: mid, color: 'rgba(235, 235, 240, 0.12)' });   // zénith
+                      stops.push({ offset: dusk, color: 'rgba(225, 225, 230, 0.12)' });  // fin d'après-midi
+                      stops.push({ offset: end, color: 'rgba(210, 210, 215, 0.12)' });   // crépuscule
                     }
                   });
                   const gradient = `linear-gradient(to right, ${stops
@@ -1072,21 +1076,48 @@ export const TimelineControl = () => {
             )}
 
             {hasOutdoorData && dewPointDifferences.length > 0 && (
-              <svg
-                className="absolute inset-0 w-full h-full pointer-events-none z-[3]"
-                preserveAspectRatio="none"
-                viewBox="0 0 100 100"
-              >
-                <path
-                  d={smoothPath}
-                  fill="none"
-                  stroke="rgba(156, 163, 175, 0.5)"
-                  strokeWidth={curveStrokeWidth}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
+              <>
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none z-[6]"
+                  preserveAspectRatio="none"
+                  viewBox="0 0 100 100"
+                >
+                  <path
+                    d={smoothPath}
+                    fill="none"
+                    stroke="rgba(156, 163, 175, 0.6)"
+                    strokeWidth={curveStrokeWidth}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none z-[7]"
+                  preserveAspectRatio="none"
+                  viewBox="0 0 100 100"
+                >
+                  <defs>
+                    <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="rgba(251, 191, 36, 0.9)" />
+                      <stop offset="100%" stopColor="rgba(249, 115, 22, 0.9)" />
+                    </linearGradient>
+                    <clipPath id={maskId}>
+                      <rect x={colorZoneStart} y="0" width={Math.max(0.1, colorZoneEnd - colorZoneStart)} height="100" />
+                    </clipPath>
+                  </defs>
+                  <path
+                    d={smoothPath}
+                    fill="none"
+                    stroke={`url(#${gradientId})`}
+                    strokeWidth={curveStrokeWidth + 0.6}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    clipPath={`url(#${maskId})`}
+                  />
+                </svg>
+              </>
             )}
 
 
@@ -1095,7 +1126,7 @@ export const TimelineControl = () => {
               return (
                 <div
                   key={idx}
-                  className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-[5]"
+                  className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-[9]"
                   style={{ left: `${pos}%` }}
                 >
                   <div className="w-px h-full bg-gray-400/50"></div>
@@ -1107,7 +1138,7 @@ export const TimelineControl = () => {
             })}
 
             <div
-              className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm pointer-events-none z-[6]"
+              className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-400/20 to-purple-400/20 backdrop-blur-sm pointer-events-none z-[2]"
               style={{
                 left: `${getPosition(rangeStart)}%`,
                 width: `${getPosition(rangeEnd) - getPosition(rangeStart)}%`
