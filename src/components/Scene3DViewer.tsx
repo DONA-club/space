@@ -431,6 +431,40 @@ export const Scene3DViewer = () => {
         scene.add(sunTarget);
         sunLight.target = sunTarget;
 
+        // Rayons lumineux autour du soleil (attachés à la sphère)
+        const raysGroup = new THREE.Group();
+        const raysCount = 12;
+        const rayLength = 0.8;
+        for (let i = 0; i < raysCount; i++) {
+          const angle = (i / raysCount) * Math.PI * 2;
+          const dir = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
+          const rayGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            dir.clone().multiplyScalar(rayLength),
+          ]);
+          const rayMat = new THREE.LineBasicMaterial({
+            color: isDarkMode ? 0xfff2b2 : 0xeea20a,
+            transparent: true,
+            opacity: isDarkMode ? 0.7 : 0.8,
+          });
+          const ray = new THREE.Line(rayGeom, rayMat);
+          raysGroup.add(ray);
+        }
+        sunSphere.add(raysGroup);
+
+        // Ligne très fine entre le centre du soleil et le centre de la pièce
+        const rayLineGeom = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(0, 0, 0)
+        ]);
+        const rayLineMat = new THREE.LineBasicMaterial({
+          color: isDarkMode ? 0xfff2b2 : 0xeea20a,
+          transparent: true,
+          opacity: isDarkMode ? 0.7 : 0.8,
+        });
+        const sunRayLine = new THREE.Line(rayLineGeom, rayLineMat);
+        scene.add(sunRayLine);
+
         // Trajectoire du soleil
         let sunPath: THREE.Line | undefined;
         if (currentSpace?.latitude != null && currentSpace?.longitude != null) {
@@ -475,7 +509,9 @@ export const Scene3DViewer = () => {
           sunLight,
           sunSphere,
           sunPath,
-          windRose
+          windRose,
+          sunRays: raysGroup,
+          sunRayLine
         };
 
         updateSunAndWind();
@@ -551,6 +587,22 @@ export const Scene3DViewer = () => {
     sunLight.position.copy(sunPos);
     sunLight.target?.position.set(0, 0, 0);
     sunLight.target?.updateMatrixWorld();
+
+    // Mettre à jour la ligne fine centre → soleil
+    if (sceneRef.current.sunRayLine) {
+      const positions = (sceneRef.current.sunRayLine.geometry as THREE.BufferGeometry).attributes.position as THREE.BufferAttribute;
+      positions.setXYZ(0, 0, 0, 0);
+      positions.setXYZ(1, sunPos.x, sunPos.y, sunPos.z);
+      positions.needsUpdate = true;
+    }
+
+    // Cacher le soleil quand il n'est pas sur sa trajectoire diurne (sous l'horizon)
+    const sunPosCalc = SunCalc.getPosition(date, currentSpace.latitude!, currentSpace.longitude!);
+    const aboveHorizon = sunPosCalc.altitude > 0;
+    sunSphere.visible = aboveHorizon;
+    sunLight.intensity = aboveHorizon ? 1.0 : 0.0;
+    if (sceneRef.current.sunRays) sceneRef.current.sunRays.visible = aboveHorizon;
+    if (sceneRef.current.sunRayLine) sceneRef.current.sunRayLine.visible = aboveHorizon;
 
     // Mettre à jour la rose des vents (affichage & rotation)
     if (windRose) {

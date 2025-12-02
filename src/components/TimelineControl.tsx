@@ -1025,8 +1025,8 @@ export const TimelineControl = () => {
                     } else {
                       // Jour: ton gris lumineux avec transitions plus homogènes à l'aube et au crépuscule
                       const mid = (start + end) / 2;
-                      const dawn = start + (end - start) * 0.08;
-                      const dusk = end - (end - start) * 0.08;
+                      const dawn = start + (end - start) * 0.02;
+                      const dusk = end - (end - start) * 0.02;
                       stops.push({ offset: start, color: 'rgba(210, 210, 215, 0.12)' }); // pré-aube
                       stops.push({ offset: dawn, color: 'rgba(225, 225, 230, 0.12)' });  // matin
                       stops.push({ offset: mid, color: 'rgba(235, 235, 240, 0.12)' });   // zénith
@@ -1125,7 +1125,7 @@ export const TimelineControl = () => {
               const pos = getPosition(marker);
               return (
                 <div
-                  key={idx}
+                  key={`day-${idx}`}
                   className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-[9]"
                   style={{ left: `${pos}%` }}
                 >
@@ -1134,6 +1134,28 @@ export const TimelineControl = () => {
                     {formatDate(marker)}
                   </span>
                 </div>
+              );
+            })}
+            {dayNightSegments.filter(seg => seg.type === 'day').map((seg, i) => {
+              const sunrisePos = getPosition(seg.start);
+              const sunsetPos = getPosition(seg.end);
+              return (
+                <>
+                  <div
+                    key={`sunrise-${i}`}
+                    className="absolute top-0 bottom-0 flex items-center pointer-events-none z-[10]"
+                    style={{ left: `${sunrisePos}%` }}
+                  >
+                    <div className="w-[0.5px] h-full bg-orange-400/70 dark:bg-orange-300/70"></div>
+                  </div>
+                  <div
+                    key={`sunset-${i}`}
+                    className="absolute top-0 bottom-0 flex items-center pointer-events-none z-[10]"
+                    style={{ left: `${sunsetPos}%` }}
+                  >
+                    <div className="w-[0.5px] h-full bg-orange-400/70 dark:bg-orange-300/70"></div>
+                  </div>
+                </>
               );
             })}
 
