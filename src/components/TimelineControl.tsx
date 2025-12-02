@@ -21,6 +21,8 @@ const POINTS_BEFORE = 500;
 const POINTS_AFTER = 500;
 const PRELOAD_THRESHOLD = 333;
 const COLOR_ZONE_RADIUS = 15;
+const NIGHT_BG = 'rgba(120, 125, 135, 0.14)';
+const DAY_BG = 'rgba(200, 230, 255, 0.12)';
 
 let instanceCounter = 0;
 
@@ -597,7 +599,7 @@ export const TimelineControl = () => {
     const merged: Array<{ start: number; end: number; type: 'day' | 'night' }> = [];
     for (const seg of segments.sort((a, b) => a.start - b.start)) {
       const last = merged[merged.length - 1];
-      if (last && last.type === seg.type && Math.abs(last.end - seg.start) < 1000) {
+      if (last && last.type === seg.type && Math.abs(last.end - seg.start) < 60000) {
         last.end = Math.max(last.end, seg.end);
       } else {
         merged.push({ ...seg });
@@ -936,7 +938,7 @@ export const TimelineControl = () => {
                       onClick={() => setLoopEnabled(!loopEnabled)}
                       className={loopEnabled 
                         ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 h-7 sm:h-8 w-7 sm:w-8 p-0"
-                        : "bg-white/30 dark:bg黑/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-7 sm:h-8 w-7 sm:w-8 p-0"
+                        : "bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 hover:bg-white/50 h-7 sm:h-8 w-7 sm:w-8 p-0"
                       }
                     >
                       <Repeat size={12} />
@@ -1022,8 +1024,8 @@ export const TimelineControl = () => {
                   const left = Math.min(start, end);
                   const width = Math.max(0.1, Math.abs(end - start));
                   const bg = seg.type === 'night'
-                    ? 'rgba(120, 125, 135, 0.12)' // nuit uniforme (gris subtil)
-                    : 'rgba(200, 230, 255, 0.12)'; // jour uniforme (bleu ciel léger)
+                    ? NIGHT_BG // nuit uniforme (gris identique toute la nuit)
+                    : DAY_BG; // jour uniforme (bleu ciel léger)
                   return (
                     <div
                       key={`seg-${i}`}
