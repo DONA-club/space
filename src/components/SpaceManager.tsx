@@ -893,9 +893,9 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
               return (
                 <motion.div
                   key={space.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
                 >
                   <LiquidGlassCard className="p-5 hover:shadow-lg transition-shadow h-full flex flex-col">
                     <div className="flex items-start justify-between mb-2">
