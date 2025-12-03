@@ -115,10 +115,55 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
     return null;
   }).filter(Boolean) as { rh: number; x: number; y: number; angle: number }[];
 
+  // Givoni comfort zone (driven by outdoor temperature)
+  const meanOutdoor = typeof outdoorTemp === "number" ? outdoorTemp : 20; // fallback
+  const baseT = Math.max(X_MIN, Math.min(X_MAX - 5, 17.6 + 0.31 * meanOutdoor - 3.5)); // o .. o+5
+  function pointFor(Tc: number, rhPercent: number) {
+    const w = mixingRatioFromRH(rhPercent, Tc);
+    if (!Number.isFinite(w)) return null;
+    return [tempToX(Tc), gkgToY(w)] as [number, number];
+  }
+  const gP1 = pointFor(baseT, 80);
+  const gP2 = pointFor(baseT + 5, 80);
+  const gP3 = pointFor(baseT + 5, 20);
+  const gP4 = pointFor(baseT, 20);
+  const givoniPts = [gP1, gP2, gP3, gP4].filter(Boolean) as [number, number][];
+  const givoniPolygon = givoniPts.length === 4
+    ? givoniPts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ")
+    : null;
+  const givoniLabel = givoniPts.length === 4
+    ? { x: (givoniPts[0][0] + givoniPts[1][0] + givoniPts[2][0] + givoniPts[3][0]) / 4,
+        y: (givoniPts[0][1] + givoniPts[1][1] + givoniPts[2][1] + givoniPts[3][1]) / 4 }
+    : null;
+
   return (
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
+
+        {/* Givoni comfort zone */}
+        {givoniPolygon && (
+          <g aria-label="Givoni comfort zone">
+            <polygon
+              points={givoniPolygon}
+              fill="rgba(34,197,94,0.18)"   /* green-500 with alpha */
+              stroke="rgba(34,197,94,0.8)"
+              strokeWidth={1}
+            />
+            {givoniLabel && (
+              <text
+                x={givoniLabel.x}
+                y={givoniLabel.y}
+                textAnchor="middle"
+                dy="-0.4em"
+                fontSize={12}
+                fill="hsl(var(--foreground))"
+              >
+                Zone de confort (Givoni)
+              </text>
+            )}
+          </g>
+        )}
 
         {/* RH% labels overlay */}
         <g aria-label="Relative Humidity labels">
