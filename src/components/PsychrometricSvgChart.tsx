@@ -108,6 +108,18 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
     { id: "humidification", name: "Humidification", tMin: 10, tMax: 20, rhMin: 0, rhMax: 30, color: "6,182,212", labelOffsetY: -6 },
   ];
 
+  // Décalage des zones de Givoni selon la température extérieure moyenne
+  // Référence 25°C, facteur 0.6 (même logique que le composant Recharts)
+  const SHIFT_REF = 25;
+  const SHIFT_FACTOR = 0.6;
+  const shift = typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0;
+
+  const shiftedZones: ZoneDef[] = ZONES.map((z) => ({
+    ...z,
+    tMin: z.tMin + shift,
+    tMax: z.tMax + shift,
+  }));
+
   function buildZonePolygonPoints(z: ZoneDef): { points: string; labelX: number; labelY: number } {
     const step = 0.5;
     const top: string[] = [];
@@ -134,7 +146,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
     return { points, labelX, labelY };
   }
 
-  const computedZones = ZONES.map((z) => {
+  const computedZones = shiftedZones.map((z) => {
     const poly = buildZonePolygonPoints(z);
     return { ...z, ...poly };
   });
