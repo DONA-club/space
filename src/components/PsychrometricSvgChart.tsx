@@ -84,6 +84,12 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
+  // Température de la moyenne volumétrique (si disponible dans les points)
+  const volumetricTemp = (() => {
+    const vol = points.find((p) => p.name.toLowerCase().includes("moyenne volumétrique"));
+    return typeof vol?.temperature === "number" ? vol.temperature : undefined;
+  })();
+
   // Zones de Givoni (simplifiées) avec plages de T (°C) et RH (%)
   type ZoneDef = {
     id: string;
@@ -185,7 +191,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
         <g>
           {computedZones.map((z) => {
             if (!z.points || z.points.length === 0) return null;
-            const isActive = typeof outdoorTemp === "number" && outdoorTemp >= z.tMin && outdoorTemp <= z.tMax;
+            const isActive = typeof volumetricTemp === "number" && volumetricTemp >= z.tMin && volumetricTemp <= z.tMax;
             const fillOpacity = isActive ? 0.18 : 0.06;
             const strokeOpacity = isActive ? 0.9 : 0.35;
             const strokeWidth = isActive ? 1.8 : 1;
