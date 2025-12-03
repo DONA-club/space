@@ -1,5 +1,11 @@
-/* Simple script loader for psychro-chart2d */
+/* Simple script loader for psychro-chart2d with BASE_URL awareness */
 let loadPromise: Promise<any> | null = null;
+
+function joinUrl(base: string, path: string): string {
+  if (!base.endsWith("/")) base += "/";
+  if (path.startsWith("/")) path = path.slice(1);
+  return base + path;
+}
 
 function appendScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -41,11 +47,18 @@ export function loadPsychroLib(): Promise<any> {
   }
   if (loadPromise) return loadPromise;
 
+  const base = (import.meta as any).env?.BASE_URL || "/";
+
   loadPromise = (async () => {
-    // Load in order: core -> opts -> main
-    await appendScript("/psychro/psychro-chart2d-core.min.js");
-    await appendScript("/psychro/psychro-chart2d-opts.min.js");
-    await appendScript("/psychro/psychro-chart2d.min.js");
+    // Load in order: core -> opts -> main, relative to BASE_URL
+    const corePath = joinUrl(base, "psychro/psychro-chart2d-core.min.js");
+    const optsPath = joinUrl(base, "psychro/psychro-chart2d-opts.min.js");
+    const mainPath = joinUrl(base, "psychro/psychro-chart2d.min.js");
+
+    await appendScript(corePath);
+    await appendScript(optsPath);
+    await appendScript(mainPath);
+
     return (window as any).PsychroChart2D ?? null;
   })();
 

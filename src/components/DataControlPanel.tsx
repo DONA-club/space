@@ -19,32 +19,34 @@ export const DataControlPanel = () => {
   const [checking, setChecking] = useState(false);
   const [sensorDataCounts, setSensorDataCounts] = useState<Map<number, number>>(new Map());
 
-  // Check if all sensors have data
+  // Check if sensors have data (parallelized) and init analysis as soon as some data exist
   useEffect(() => {
     if (!currentSpace || mode !== 'replay') return;
 
     const checkSensorData = async () => {
       setChecking(true);
       try {
-        const counts = new Map<number, number>();
-        
-        for (const sensor of sensors) {
-          const { count, error } = await supabase
-            .from('sensor_data')
-            .select('*', { count: 'exact', head: true })
-            .eq('space_id', currentSpace.id)
-            .eq('sensor_id', sensor.id);
+        // count per sensor in parallel
+        const results = await Promise.all(
+          sensors.map(async (sensor) => {
+            const { count, error } = await supabase
+              .from('sensor_data')
+              .select('*', { count: 'exact', head: true })
+              .eq('space_id', currentSpace.id)
+              .eq('sensor_id', sensor.id);
+            if (error) throw error;
+            return { id: sensor.id, count: count || 0 };
+          })
+        );
 
-          if (error) throw error;
-          counts.set(sensor.id, count || 0);
-        }
-        
+        const counts = new Map<number, number>();
+        results.forEach(r => counts.set(r.id, r.count));
         setSensorDataCounts(counts);
-        
-        // Check if all sensors have data
-        const allHaveData = sensors.length > 0 && sensors.every(s => (counts.get(s.id) || 0) > 0);
-        
-        if (allHaveData && !dataReady) {
+
+        const sensorsWithData = sensors.filter(s => (counts.get(s.id) || 0) > 0).length;
+
+        // Trigger analysis as soon as at least one indoor sensor has data
+        if (sensors.length > 0 && sensorsWithData > 0 && !dataReady) {
           await handleAnalyze();
         }
       } catch (error) {
@@ -55,8 +57,6 @@ export const DataControlPanel = () => {
     };
 
     checkSensorData();
-    
-    // Re-check every 2 seconds
     const interval = setInterval(checkSensorData, 2000);
     return () => clearInterval(interval);
   }, [currentSpace, mode, sensors, dataReady]);
@@ -65,7 +65,7 @@ export const DataControlPanel = () => {
     if (!currentSpace) return;
 
     try {
-      // Get time range from all sensor data (NO LIMIT - fetch all data)
+      // Get time range from all sensor data (fetch global min/max)
       const { data: minData, error: minError } = await supabase
         .from('sensor_data')
         .select('timestamp')
@@ -74,7 +74,7 @@ export const DataControlPanel = () => {
         .limit(1)
         .single();
 
-      if (minError) throw minError;
+      if (minError && (minError as any).code !== 'PGRST116') throw minError;
 
       const { data: maxData, error: maxError } = await supabase
         .from('sensor_data')
@@ -84,7 +84,7 @@ export const DataControlPanel = () => {
         .limit(1)
         .single();
 
-      if (maxError) throw maxError;
+      if (maxError && (maxError as any).code !== 'PGRST116') throw maxError;
       
       if (!minData || !maxData) {
         throw new Error('Aucune donnée trouvée');
@@ -127,7 +127,7 @@ export const DataControlPanel = () => {
       <LiquidGlassCard className="p-4">
         <div className="text-sm text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg flex items-center gap-2">
           {checking && <Loader2 className="animate-spin h-4 w-4" />}
-          📊 Chargez les fichiers CSV pour tous les capteurs pour commencer l'analyse
+          📊 Chargez les fichiers CSV pour tous les capteurs pour une analyse complète
           {sensorsWithData > 0 && (
             <span className="ml-2 text-xs">
               ({sensorsWithData}/{sensors.length} capteurs prêts)
