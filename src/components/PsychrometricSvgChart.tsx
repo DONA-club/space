@@ -49,6 +49,36 @@ function gkgToY(wGkg: number): number {
   return Y_AT_0_GKG - clamped * Y_PER_GKG;
 }
 
+// Saturation vapor pressure over water (Pa) using Tetens formula
+function saturationVaporPressurePa(tC: number): number {
+  return 610.94 * Math.exp((17.625 * tC) / (tC + 243.04));
+}
+
+// Mixing ratio (g/kg) for a given RH% and temperature (°C)
+function mixingRatioFromRH(rhPercent: number, tC: number, pressurePa: number = P_ATM): number {
+  const rh = Math.max(0, Math.min(100, rhPercent)) / 100;
+  const e_s = saturationVaporPressurePa(tC);
+  const e = rh * e_s;
+  if (e <= 0 || e >= pressurePa) return NaN;
+  return 0.62198 * e / (pressurePa - e) * 1000;
+}
+
+// Approximate local angle of the RH curve at temperature tC (degrees)
+function rhCurveAngleDeg(rhPercent: number, tC: number): number {
+  const t1 = tC;
+  const t2 = tC + 1; // 1°C step for slope
+  const w1 = mixingRatioFromRH(rhPercent, t1);
+  const w2 = mixingRatioFromRH(rhPercent, t2);
+  if (!Number.isFinite(w1) || !Number.isFinite(w2)) return 0;
+  const x1 = tempToX(t1);
+  const x2 = tempToX(t2);
+  const y1 = gkgToY(w1);
+  const y2 = gkgToY(w2);
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
   const circles = points
     .map(p => {
@@ -67,10 +97,64 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
+  // Compute label positions for RH% curves (10% to 100%)
+  const RH_LEVELS = [10,20,30,40,50,60,70,80,90,100];
+  const rhLabels = RH_LEVELS.map((rh) => {
+    // Try several candidate temperatures to place the label inside the visible area
+    const candidates = [30, 24, 18, 12, 6, 0, 35];
+    for (const tC of candidates) {
+      const w = mixingRatioFromRH(rh, tC);
+      if (!Number.isFinite(w)) continue;
+      const x = tempToX(tC);
+      const y = gkgToY(w);
+      if (x >= X_AT_MIN - 5 && x <= X_AT_40 + 5 && y >= 40 && y <= 691) {
+        const angle = rhCurveAngleDeg(rh, tC);
+        return { rh, x, y, angle };
+      }
+    }
+    return null;
+  }).filter(Boolean) as { rh: number; x: number; y: number; angle: number }[];
+
   return (
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
+
+        {/* RH% labels overlay */}
+        <g aria-label="Relative Humidity labels">
+          {rhLabels.map((lbl) => (
+            <g key={`rh-${lbl.rh}`}>
+              {/* Outline for readability on any background */}
+              <text
+                x={lbl.x}
+                y={lbl.y}
+                fontSize={12}
+                transform={`rotate(${lbl.angle.toFixed(2)}, ${lbl.x}, ${lbl.y})`}
+                fill="hsl(var(--foreground))"
+                stroke="hsl(var(--background))"
+                strokeWidth={2}
+                strokeOpacity={0.85}
+                style={{ paintOrder: 'stroke' }}
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {lbl.rh}%
+              </text>
+              {/* Fill on top to sharpen the text */}
+              <text
+                x={lbl.x}
+                y={lbl.y}
+                fontSize={12}
+                transform={`rotate(${lbl.angle.toFixed(2)}, ${lbl.x}, ${lbl.y})`}
+                fill="hsl(var(--foreground))"
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {lbl.rh}%
+              </text>
+            </g>
+          ))}
+        </g>
 
         {typeof outdoorX === "number" && (
           <>
