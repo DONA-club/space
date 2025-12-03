@@ -972,6 +972,8 @@ export const TimelineControl = () => {
                 <TooltipPrimitive.Root>
                   <TooltipPrimitive.Trigger asChild>
                     <select
+                      id="playback-speed"
+                      name="playback-speed"
                       value={playbackSpeed}
                       onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
                       className="text-[10px] sm:text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"

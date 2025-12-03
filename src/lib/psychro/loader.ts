@@ -50,6 +50,14 @@ export function loadPsychroLib(): Promise<any> {
   const base = (import.meta as any).env?.BASE_URL || "/";
 
   loadPromise = (async () => {
+    // External dependencies required by psychro libs
+    const jqueryCdn = "https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js";
+    const knockoutCdn = "https://cdn.jsdelivr.net/npm/knockout@3.5.1/build/output/knockout-latest.js";
+
+    // Load jQuery and Knockout first (globals: $, ko)
+    await appendScript(jqueryCdn);
+    await appendScript(knockoutCdn);
+
     // Load in order: core -> opts -> main, relative to BASE_URL
     const corePath = joinUrl(base, "psychro/psychro-chart2d-core.min.js");
     const optsPath = joinUrl(base, "psychro/psychro-chart2d-opts.min.js");

@@ -21,7 +21,7 @@ export const CSVManager = () => {
       loadLastDate();
       loadSensorDataCounts();
     }
-  }, [currentSpace]);
+  }, [currentSpace, sensors]);
 
   const loadLastDate = async () => {
     if (!currentSpace) return;
