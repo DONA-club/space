@@ -3,7 +3,6 @@
 import React from "react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/FixedTooltip";
 import { motion } from "framer-motion";
-import usePsychroZones from "@/hooks/usePsychroZones";
 
 type ChartPoint = {
   name: string;
@@ -81,8 +80,6 @@ function rhCurveAngleDeg(rhPercent: number, tC: number): number {
 }
 
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
-  const { zones } = usePsychroZones(typeof outdoorTemp === "number" ? outdoorTemp : null);
-
   const circles = points
     .map(p => {
       const wGkg = ahGm3ToMixingRatioGkg(p.absoluteHumidity, p.temperature);
@@ -118,28 +115,18 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
     return null;
   }).filter(Boolean) as { rh: number; x: number; y: number; angle: number }[];
 
-  // Givoni comfort zone (adaptive, driven by outdoor temperature)
+  // Givoni comfort zone (driven by outdoor temperature)
   const meanOutdoor = typeof outdoorTemp === "number" ? outdoorTemp : 20; // fallback
   const baseT = Math.max(X_MIN, Math.min(X_MAX - 5, 17.6 + 0.31 * meanOutdoor - 3.5)); // o .. o+5
-  const topT = baseT + 5;
-
   function pointFor(Tc: number, rhPercent: number) {
     const w = mixingRatioFromRH(rhPercent, Tc);
     if (!Number.isFinite(w)) return null;
     return [tempToX(Tc), gkgToY(w)] as [number, number];
   }
-
-  // Bornes RH inspirées de Givoni: RH haute décroît, RH basse croît légèrement
-  const RH_UP_LOW = 80; // à T_base
-  const RH_UP_HIGH = Math.max(50, RH_UP_LOW - 3 * (topT - baseT)); // ~65% à +5°C
-  const RH_LOW_LOW = 20; // à T_base
-  const RH_LOW_HIGH = Math.min(40, RH_LOW_LOW + 2 * (topT - baseT)); // ~30% à +5°C
-
-  const gP1 = pointFor(baseT, RH_UP_LOW);
-  const gP2 = pointFor(topT, RH_UP_HIGH);
-  const gP3 = pointFor(topT, RH_LOW_HIGH);
-  const gP4 = pointFor(baseT, RH_LOW_LOW);
-
+  const gP1 = pointFor(baseT, 80);
+  const gP2 = pointFor(baseT + 5, 80);
+  const gP3 = pointFor(baseT + 5, 20);
+  const gP4 = pointFor(baseT, 20);
   const givoniPts = [gP1, gP2, gP3, gP4].filter(Boolean) as [number, number][];
   const givoniPolygon = givoniPts.length === 4
     ? givoniPts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ")
@@ -154,36 +141,8 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
 
-        {/* Library-driven Givoni/comfort zones (exact shapes) */}
-        {zones && zones.length > 0 && (
-          <g aria-label="Psychrometric comfort zones (library)">
-            {zones.map((z, idx) => (
-              <g key={z.id ?? idx}>
-                <polygon
-                  points={z.points}
-                  fill={z.fill ?? "rgba(59,130,246,0.15)"}
-                  stroke={z.stroke ?? "rgba(59,130,246,0.6)"}
-                  strokeWidth={1}
-                />
-                {z.label && z.centroid && (
-                  <text
-                    x={z.centroid.x}
-                    y={z.centroid.y}
-                    textAnchor="middle"
-                    dy="-0.3em"
-                    fontSize={11}
-                    fill="hsl(var(--foreground))"
-                  >
-                    {z.label}
-                  </text>
-                )}
-              </g>
-            ))}
-          </g>
-        )}
-
-        {/* Givoni comfort zone (fallback when library zones aren't available) */}
-        {(!zones || zones.length === 0) && givoniPolygon && (
+        {/* Givoni comfort zone */}
+        {givoniPolygon && (
           <g aria-label="Givoni comfort zone">
             <polygon
               points={givoniPolygon}
