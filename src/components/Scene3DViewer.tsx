@@ -58,7 +58,7 @@ export const Scene3DViewer = () => {
   const idwPower = useAppStore((state) => state.idwPower);
   const meshResolution = useAppStore((state) => state.meshResolution);
   const visualizationType = useAppStore((state) => state.visualizationType);
-  const interpolationRange = useAppStore((state) => state.setInterpolationRange ? useAppStore.getState().interpolationRange : null);
+  const interpolationRange = useAppStore((state) => state.interpolationRange);
   const setInterpolationRange = useAppStore((state) => state.setInterpolationRange);
   const hasOutdoorData = useAppStore((state) => state.hasOutdoorData);
   const setOutdoorData = useAppStore((state) => state.setOutdoorData);
@@ -114,7 +114,7 @@ export const Scene3DViewer = () => {
     sensorData,
     currentTimestamp,
     selectedMetric,
-    interpolationRange: useAppStore.getState().interpolationRange,
+    interpolationRange,
     dataReady,
     smoothingWindowSec
   });
