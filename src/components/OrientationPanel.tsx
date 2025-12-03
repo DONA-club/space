@@ -83,9 +83,18 @@ export const OrientationPanel = () => {
         <div className={`flex items-center justify-between ${locked ? "h-10" : "mb-2"}`}>
           <div className="flex items-center gap-2">
             <Compass size={14} className="text-indigo-600" />
-            <h3 className="text-sm font-medium">Orientation géographique</h3>
+            <h3 className="text-sm font-medium">Orientation</h3>
           </div>
           <div className="flex items-center gap-2">
+            {currentSpace?.latitude != null && currentSpace?.longitude != null && (
+              <Badge
+                variant="outline"
+                className="text-[10px] h-5 px-1.5"
+                title="Coordonnées GPS"
+              >
+                {currentSpace.latitude.toFixed(5)}, {currentSpace.longitude.toFixed(5)}
+              </Badge>
+            )}
             <Badge
               variant="outline"
               className="text-[10px] h-5 px-1.5"

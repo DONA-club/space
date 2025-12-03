@@ -1535,7 +1535,7 @@ export const SensorPanel = () => {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <FlaskConical size={14} className="text-rose-600" />
-                <h3 className="text-sm font-medium">Monitoring scientifique</h3>
+                <h3 className="text-sm font-medium">Monitoring</h3>
                 <Badge variant="outline" className="text-[10px] h-5 px-1.5">
                   P 1013 hPa • non corrélée
                 </Badge>

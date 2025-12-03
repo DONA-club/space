@@ -56,8 +56,31 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentSpace.latitude}&lon=${currentSpace.longitude}&zoom=18&addressdetails=1`
       );
       const data = await response.json();
-      
-      if (data.display_name) {
+
+      const formatAddress = (addr: any) => {
+        if (!addr || typeof addr !== 'object') return '';
+        const number = addr.house_number || '';
+        const road = addr.road || addr.pedestrian || addr.footway || addr.cycleway || addr.path || '';
+        const postcode = addr.postcode || '';
+        const city = addr.city || addr.town || addr.village || addr.hamlet || addr.municipality || '';
+        const region = addr.state || addr.region || addr.county || '';
+        const country = addr.country || '';
+
+        const street = [number, road].filter(Boolean).join(' ').trim();
+        const cityPart = [postcode, city].filter(Boolean).join(' ').trim();
+        const regionPart = [region, country].filter(Boolean).join(', ').trim();
+
+        return [street, cityPart, regionPart].filter(Boolean).join(', ');
+      };
+
+      if (data?.address) {
+        const formatted = formatAddress(data.address);
+        if (formatted) {
+          setSpaceAddress(formatted);
+        } else if (data.display_name) {
+          setSpaceAddress(data.display_name);
+        }
+      } else if (data?.display_name) {
         setSpaceAddress(data.display_name);
       }
     } catch (error) {
