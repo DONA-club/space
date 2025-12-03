@@ -3,6 +3,7 @@
 import React from "react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/FixedTooltip";
 import { motion } from "framer-motion";
+import usePsychroZones from "@/hooks/usePsychroZones";
 
 type ChartPoint = {
   name: string;
@@ -80,6 +81,8 @@ function rhCurveAngleDeg(rhPercent: number, tC: number): number {
 }
 
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
+  const { zones } = usePsychroZones(typeof outdoorTemp === "number" ? outdoorTemp : null);
+
   const circles = points
     .map(p => {
       const wGkg = ahGm3ToMixingRatioGkg(p.absoluteHumidity, p.temperature);
@@ -151,8 +154,36 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
 
-        {/* Givoni comfort zone */}
-        {givoniPolygon && (
+        {/* Library-driven Givoni/comfort zones (exact shapes) */}
+        {zones && zones.length > 0 && (
+          <g aria-label="Psychrometric comfort zones (library)">
+            {zones.map((z, idx) => (
+              <g key={z.id ?? idx}>
+                <polygon
+                  points={z.points}
+                  fill={z.fill ?? "rgba(59,130,246,0.15)"}
+                  stroke={z.stroke ?? "rgba(59,130,246,0.6)"}
+                  strokeWidth={1}
+                />
+                {z.label && z.centroid && (
+                  <text
+                    x={z.centroid.x}
+                    y={z.centroid.y}
+                    textAnchor="middle"
+                    dy="-0.3em"
+                    fontSize={11}
+                    fill="hsl(var(--foreground))"
+                  >
+                    {z.label}
+                  </text>
+                )}
+              </g>
+            ))}
+          </g>
+        )}
+
+        {/* Givoni comfort zone (fallback when library zones aren't available) */}
+        {(!zones || zones.length === 0) && givoniPolygon && (
           <g aria-label="Givoni comfort zone">
             <polygon
               points={givoniPolygon}
