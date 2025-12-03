@@ -14,6 +14,7 @@ import { FileUploadPanel } from './FileUploadPanel';
 import { DataControlPanel } from './DataControlPanel';
 import { supabase } from '@/integrations/supabase/client';
 import PsychrometricSvgChart from './PsychrometricSvgChart';
+import { useChartPoints } from '@/hooks/useChartPoints';
 
 interface DashboardProps {
   onBackToSpaces: () => void;
@@ -34,6 +35,9 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   const setScienceExpanded = useAppStore((state) => state.setScienceExpanded);
   
   const [spaceAddress, setSpaceAddress] = useState<string>('');
+
+  // Calcul/MAJ centralisés des points du diagramme (live & replay)
+  useChartPoints();
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [showMobilePanel, setShowMobilePanel] = useState(false);
 

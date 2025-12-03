@@ -50,12 +50,12 @@
   font-size: 18px;      /* larger axis labels */
   font-weight: 700;
   stroke: none;
-  visibility: hidden;   /* hide axis unit names (°C, g/kg) */
+  /* visible: reactivation to show RH percentages */
 }
 
 /* Lines (light) */
 .line-grid {
-  stroke: #D1D5DB;      /* gray-300 */
+  stroke: #E5E7EB;      /* gray-200 for softer light grid */
   stroke-width: 1px;
   stroke-opacity: 0.9;
   fill: none;
@@ -79,23 +79,27 @@
 
 /* Dark theme adjustments via media query */
 @media (prefers-color-scheme: dark) {
-  .text-grid { fill: #9CA3AF; }          /* gray-400 */
-  .text-axis { visibility: hidden; }     /* keep axis names hidden */
+  .text-grid { fill: #CBD5E1; }          /* slate-300 for readability */
+  .text-axis {
+    fill: #E2E8F0;                       /* slate-200 */
+    /* show axis labels (including RH) */
+  }
 
   .line-grid {
-    stroke: #374151;                      /* gray-700 */
-    stroke-opacity: 0.6;
+    stroke: #475569;                      /* slate-600 for higher contrast than background */
+    stroke-opacity: 0.7;
   }
   .line-axis {
-    stroke: #6B7280;                      /* gray-600 */
+    stroke: #94A3B8;                      /* slate-400 */
   }
   .stroke-dashed,
   .line-axis.stroke-dashed {
-    stroke: #64748B;                      /* slate-500 */
-    stroke-opacity: 0.8;
+    stroke: #94A3B8;                      /* slate-400 */
+    stroke-opacity: 0.85;
   }
   .svg-chart .fill-white {
-    fill: #0B1220;                        /* deep slate background */
+    /* a bit lighter than deep black for better contrast harmony */
+    fill: #0F172A;                        /* slate-900 */
   }
 }
 
