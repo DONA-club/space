@@ -2,6 +2,7 @@
 
 import React from "react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/FixedTooltip";
+import { motion } from "framer-motion";
 
 type ChartPoint = {
   name: string;
@@ -72,16 +73,27 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
 
         {typeof outdoorX === "number" && (
-          <line
-            x1={outdoorX}
-            y1={40}
-            x2={outdoorX}
-            y2={691}
-            stroke="hsl(var(--primary))"
-            strokeOpacity={0.9}
-            strokeDasharray="4 3"
-            strokeWidth={2}
-          />
+          <>
+            <line
+              x1={outdoorX}
+              y1={40}
+              x2={outdoorX}
+              y2={691}
+              stroke="hsl(var(--primary))"
+              strokeOpacity={0.9}
+              strokeDasharray="4 3"
+              strokeWidth={2}
+            />
+            <text
+              x={outdoorX + 8}
+              y={52}
+              fontSize={12}
+              fill="hsl(var(--primary))"
+              style={{ paintOrder: 'stroke' }}
+            >
+              {typeof outdoorTemp === "number" ? `${outdoorTemp.toFixed(1)}°C` : ''}
+            </text>
+          </>
         )}
 
         <g>
@@ -92,9 +104,10 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
               <TooltipProvider delayDuration={150} key={`${c.name}-${i}`}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <circle
-                      cx={c.cx}
-                      cy={c.cy}
+                    <motion.circle
+                      animate={{ cx: c.cx, cy: c.cy }}
+                      initial={false}
+                      transition={{ duration: 0.25, ease: "easeInOut" }}
                       r={7}
                       fill={fillColor}
                       stroke="hsl(var(--background))"

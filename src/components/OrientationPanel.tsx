@@ -43,9 +43,13 @@ export const OrientationPanel = () => {
 
   const handlePanelMouseLeave = () => {
     window.dispatchEvent(new CustomEvent('windRoseHide'));
-    // Reverrouille le panneau et l’azimut
-    setLocked(true);
-    showSuccess("Azimut verrouillé");
+    // Ne montrer le toast que si le panneau était déverrouillé avant la sortie
+    if (!locked) {
+      setLocked(true);
+      showSuccess("Azimut verrouillé");
+    } else {
+      setLocked(true);
+    }
   };
 
   const handleUnlockClick = () => {

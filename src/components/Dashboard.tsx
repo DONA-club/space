@@ -7,7 +7,7 @@ import { Scene3DViewer } from './Scene3DViewer';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Radio, History, LogOut, ArrowLeft, Menu, X } from 'lucide-react';
+import { Radio, History, LogOut, ArrowLeft, Menu, X, Minimize2 } from 'lucide-react';
 import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
 import { FileUploadPanel } from './FileUploadPanel';
@@ -31,6 +31,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   const scienceExpanded = useAppStore((state) => state.scienceExpanded);
   const chartPoints = useAppStore((state) => state.chartPoints);
   const outdoorData = useAppStore((state) => state.outdoorData);
+  const setScienceExpanded = useAppStore((state) => state.setScienceExpanded);
   
   const [spaceAddress, setSpaceAddress] = useState<string>('');
   const [loadingAddress, setLoadingAddress] = useState(false);
@@ -234,10 +235,24 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                 <LiquidGlassCard className="p-4 h-full">
                   <div className="relative w-full h-full">
                     {scienceExpanded ? (
-                      <PsychrometricSvgChart
-                        points={chartPoints}
-                        outdoorTemp={outdoorData ? outdoorData.temperature : null}
-                      />
+                      <>
+                        <PsychrometricSvgChart
+                          points={chartPoints}
+                          outdoorTemp={outdoorData ? outdoorData.temperature : null}
+                        />
+                        <div className="absolute top-2 right-2 z-10">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 bg-white/70 dark:bg-black/40 backdrop-blur"
+                            onClick={() => setScienceExpanded(false)}
+                            aria-label="Réduire"
+                            title="Réduire"
+                          >
+                            <Minimize2 size={16} />
+                          </Button>
+                        </div>
+                      </>
                     ) : (
                       <Scene3DViewer />
                     )}

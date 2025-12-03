@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Maximize2, Minimize2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -52,28 +52,23 @@ export const SensorPanel = () => {
   const [isDataExpanded, setIsDataExpanded] = useState(true);
   const [isInterpolationExpanded, setIsInterpolationExpanded] = useState(true);
   const [lastInteraction, setLastInteraction] = useState<number>(Date.now());
+  const [interpHovered, setInterpHovered] = useState(false);
 
-  // Track global interaction to keep interpolation panel open
+  // Initialiser le timer d'inactivité (le suivi se fait via le survol du panneau)
   useEffect(() => {
-    const onInteract = () => setLastInteraction(Date.now());
-    window.addEventListener('mousemove', onInteract);
-    window.addEventListener('keydown', onInteract);
-    return () => {
-      window.removeEventListener('mousemove', onInteract);
-      window.removeEventListener('keydown', onInteract);
-    };
+    setLastInteraction(Date.now());
   }, []);
 
-  // Auto-collapse interpolation after 12s of inactivity
+  // Replie le panneau Interpolation si non survolé > 12s
   useEffect(() => {
     if (!isInterpolationExpanded) return;
     const id = setInterval(() => {
-      if (Date.now() - lastInteraction > 12000) {
+      if (!interpHovered && Date.now() - lastInteraction > 12000) {
         setIsInterpolationExpanded(false);
       }
-    }, 2000);
+    }, 1000);
     return () => clearInterval(id);
-  }, [isInterpolationExpanded, lastInteraction]);
+  }, [isInterpolationExpanded, interpHovered, lastInteraction]);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [sensorDataCounts, setSensorDataCounts] = useState<Map<number, number>>(new Map());
@@ -1267,7 +1262,11 @@ export const SensorPanel = () => {
       {dataReady && (
         <>
         <LiquidGlassCard className="flex-shrink-0">
-          <div className={`${isInterpolationExpanded ? "p-3" : "px-3 py-2"}`}>
+          <div
+            className={`${isInterpolationExpanded ? "p-3" : "px-3 py-2"}`}
+            onMouseEnter={() => { setInterpHovered(true); setLastInteraction(Date.now()); }}
+            onMouseLeave={() => { setInterpHovered(false); setLastInteraction(Date.now()); }}
+          >
             <div className={`flex items-center justify-between ${isInterpolationExpanded ? "mb-2" : "h-10"}`}>
               <div className="flex items-center gap-2">
                 <Sparkles size={14} className="text-purple-600" />
@@ -1537,14 +1536,19 @@ export const SensorPanel = () => {
               <div className="flex items-center gap-2">
                 <FlaskConical size={14} className="text-rose-600" />
                 <h3 className="text-sm font-medium">Monitoring scientifique</h3>
+                <Badge variant="outline" className="text-[10px] h-5 px-1.5">
+                  P 1013 hPa • non corrélée
+                </Badge>
               </div>
               <Button
-                size="sm"
-                variant="outline"
-                className="h-7 px-2"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
                 onClick={() => setScienceExpanded(!scienceExpanded)}
+                aria-label={scienceExpanded ? "Réduire" : "Agrandir"}
+                title={scienceExpanded ? "Réduire" : "Agrandir"}
               >
-                {scienceExpanded ? "Réduire" : "Agrandir"}
+                {scienceExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </Button>
             </div>
 
