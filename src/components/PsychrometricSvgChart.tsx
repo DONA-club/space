@@ -84,62 +84,97 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
-  // Givoni zone parameters
-  const GIVONI_T_MIN = 20;
-  const GIVONI_T_MAX = 27;
-  const GIVONI_RH_MIN = 30;
-  const GIVONI_RH_MAX = 70;
+  // Zones de Givoni (simplifiées) avec plages de T (°C) et RH (%)
+  type ZoneDef = {
+    id: string;
+    name: string;
+    tMin: number;
+    tMax: number;
+    rhMin: number;
+    rhMax: number;
+    color: string; // "r,g,b"
+    labelOffsetY?: number;
+  };
 
-  function buildGivoniPolygonPoints(): string {
+  const ZONES: ZoneDef[] = [
+    { id: "comfort", name: "Confort", tMin: 20, tMax: 27, rhMin: 30, rhMax: 70, color: "59,130,246", labelOffsetY: -6 },
+    { id: "nat-vent", name: "Ventilation naturelle", tMin: 27, tMax: 32, rhMin: 30, rhMax: 70, color: "34,197,94", labelOffsetY: -6 },
+    { id: "passive-solar", name: "Chauffage solaire passif", tMin: 18, tMax: 20, rhMin: 30, rhMax: 70, color: "245,158,11", labelOffsetY: -6 },
+    { id: "active-solar", name: "Chauffage solaire actif", tMin: 15, tMax: 18, rhMin: 30, rhMax: 70, color: "251,191,36", labelOffsetY: -6 },
+    { id: "evap-cool", name: "Refroidissement évaporatif", tMin: 27, tMax: 35, rhMin: 40, rhMax: 85, color: "16,185,129", labelOffsetY: -6 },
+    { id: "mass-cool", name: "Refroidissement inertiel", tMin: 25, tMax: 32, rhMin: 30, rhMax: 60, color: "14,165,233", labelOffsetY: -6 },
+    { id: "night-vent", name: "Refroidissement + Ventilation nocturne", tMin: 25, tMax: 32, rhMin: 60, rhMax: 80, color: "99,102,241", labelOffsetY: -6 },
+    { id: "dehumidif-ac", name: "Climatisation & déshumidification", tMin: 25, tMax: 40, rhMin: 70, rhMax: 100, color: "168,85,247", labelOffsetY: -6 },
+    { id: "humidification", name: "Humidification", tMin: 10, tMax: 20, rhMin: 0, rhMax: 30, color: "6,182,212", labelOffsetY: -6 },
+  ];
+
+  function buildZonePolygonPoints(z: ZoneDef): { points: string; labelX: number; labelY: number } {
     const step = 0.5;
     const top: string[] = [];
-    for (let t = GIVONI_T_MIN; t <= GIVONI_T_MAX + 1e-6; t += step) {
-      const wTop = mixingRatioFromRH(t, GIVONI_RH_MAX, P_ATM);
+    for (let t = z.tMin; t <= z.tMax + 1e-6; t += step) {
+      const wTop = mixingRatioFromRH(t, z.rhMax, P_ATM);
       if (!Number.isFinite(wTop)) continue;
       top.push(`${tempToX(t)},${gkgToY(wTop)}`);
     }
     const bottom: string[] = [];
-    for (let t = GIVONI_T_MAX; t >= GIVONI_T_MIN - 1e-6; t -= step) {
-      const wBot = mixingRatioFromRH(t, GIVONI_RH_MIN, P_ATM);
+    for (let t = z.tMax; t >= z.tMin - 1e-6; t -= step) {
+      const wBot = mixingRatioFromRH(t, z.rhMin, P_ATM);
       if (!Number.isFinite(wBot)) continue;
       bottom.push(`${tempToX(t)},${gkgToY(wBot)}`);
     }
-    const pts = [...top, ...bottom].join(" ");
-    return pts;
+    const points = [...top, ...bottom].join(" ");
+
+    // Label au centre
+    const tMid = (z.tMin + z.tMax) / 2;
+    const rhMid = (z.rhMin + z.rhMax) / 2;
+    const wMid = mixingRatioFromRH(tMid, rhMid, P_ATM);
+    const labelX = tempToX(tMid);
+    const labelY = Number.isFinite(wMid) ? gkgToY(wMid) + (z.labelOffsetY ?? 0) : 120;
+
+    return { points, labelX, labelY };
   }
 
-  const givoniPolygon = buildGivoniPolygonPoints();
-  const givoniLabelT = (GIVONI_T_MIN + GIVONI_T_MAX) / 2;
-  const givoniLabelW = mixingRatioFromRH(givoniLabelT, (GIVONI_RH_MIN + GIVONI_RH_MAX) / 2, P_ATM);
-  const givoniLabelX = tempToX(givoniLabelT);
-  const givoniLabelY = Number.isFinite(givoniLabelW) ? gkgToY(givoniLabelW) - 6 : 120;
+  const computedZones = ZONES.map((z) => {
+    const poly = buildZonePolygonPoints(z);
+    return { ...z, ...poly };
+  });
 
   return (
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
 
-        {/* Zone de Givoni (20–27°C, 30–70% RH) */}
-        {givoniPolygon && (
-          <g>
-            <polygon
-              points={givoniPolygon}
-              fill="rgba(59,130,246,0.12)"
-              stroke="rgba(59,130,246,0.6)"
-              strokeWidth={1}
-            />
-            <text
-              x={givoniLabelX}
-              y={givoniLabelY}
-              fontSize={11}
-              textAnchor="middle"
-              fill="rgba(59,130,246,0.9)"
-              style={{ pointerEvents: 'none' }}
-            >
-              Zone de Givoni
-            </text>
-          </g>
-        )}
+        {/* Zones de Givoni pilotées par la température extérieure */}
+        <g>
+          {computedZones.map((z) => {
+            if (!z.points || z.points.length === 0) return null;
+            const isActive = typeof outdoorTemp === "number" && outdoorTemp >= z.tMin && outdoorTemp <= z.tMax;
+            const fillOpacity = isActive ? 0.18 : 0.06;
+            const strokeOpacity = isActive ? 0.9 : 0.35;
+            const strokeWidth = isActive ? 1.8 : 1;
+
+            return (
+              <g key={z.id}>
+                <polygon
+                  points={z.points}
+                  fill={`rgba(${z.color},${fillOpacity})`}
+                  stroke={`rgba(${z.color},${strokeOpacity})`}
+                  strokeWidth={strokeWidth}
+                />
+                <text
+                  x={z.labelX}
+                  y={z.labelY}
+                  fontSize={10}
+                  textAnchor="middle"
+                  fill={`rgba(${z.color},${isActive ? 0.95 : 0.55})`}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {z.name}
+                </text>
+              </g>
+            );
+          })}
+        </g>
 
         {typeof outdoorX === "number" && (
           <>
@@ -168,7 +203,8 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
         <g>
           {circles.map((c, i) => {
             const isVolumetric = c.name.toLowerCase().includes("moyenne volumétrique");
-            const fillColor = c.color ?? "rgba(16,185,129,0.92)";
+            const isOutdoor = c.name.toLowerCase().includes("ext");
+            const fillColor = c.color ?? (isOutdoor ? "rgba(59,130,246,0.95)" : "rgba(16,185,129,0.92)");
             return (
               <TooltipProvider delayDuration={150} key={`${c.name}-${i}`}>
                 <Tooltip>
