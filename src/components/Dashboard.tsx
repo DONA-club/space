@@ -175,158 +175,149 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
           </LiquidGlassCard>
         </motion.div>
 
-        {/* Mobile: Stacked layout */}
-        <div className="flex-1 min-h-0 flex flex-col lg:hidden gap-2">
-          {/* Zone principale mobile: 3D ou Diagramme agrandi */}
+        {showFileUpload ? (
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-            className={`${showMobilePanel ? 'h-1/3' : 'flex-1'} min-h-[200px] transition-all duration-300`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-2xl mx-auto flex-1 overflow-y-auto w-full"
           >
-            <LiquidGlassCard className="p-2 h-full">
-              <div className="relative w-full h-full">
-                {scienceExpanded ? (
-                  <>
-                    <PsychrometricSvgChart
-                      points={chartPoints}
-                      outdoorTemp={outdoorData ? outdoorData.temperature : null}
-                    />
-                    <div className="absolute top-2 right-2 z-10">
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="h-8 w-8 bg-white/70 dark:bg-black/40 backdrop-blur"
-                        onClick={() => setScienceExpanded(false)}
-                        aria-label="Réduire"
-                        title="Réduire"
-                      >
-                        <Minimize2 size={16} />
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <Scene3DViewer />
-                )}
-              </div>
-            </LiquidGlassCard>
+            <FileUploadPanel />
           </motion.div>
-
-          {/* Mobile Panel */}
-          {showMobilePanel && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex-1 overflow-y-auto"
-            >
-              <SensorPanel />
-            </motion.div>
-          )}
-
-          {/* Timeline - always visible on mobile */}
-          {mode === 'replay' && (
-            <div className="flex-shrink-0 space-y-2">
-              <DataControlPanel />
-              {dataReady && <TimelineControl />}
-            </div>
-          )}
-
-          {mode === 'live' && (
-            <div className="flex-shrink-0">
-              <TimelineControl />
-            </div>
-          )}
-        </div>
-
-        {/* Desktop/Tablet: Side-by-side layout */}
-        <div className="hidden lg:grid lg:grid-cols-3 gap-4 flex-1 min-h-0">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-            className="lg:col-span-2 h-full min-h-0"
-          >
-            <LiquidGlassCard className="p-4 h-full">
-              <div className="relative w-full h-full">
-                {scienceExpanded ? (
-                  <>
-                    <PsychrometricSvgChart
-                      points={chartPoints}
-                      outdoorTemp={outdoorData ? outdoorData.temperature : null}
-                    />
-                    <div className="absolute top-2 right-2 z-10">
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="h-8 w-8 bg-white/70 dark:bg-black/40 backdrop-blur"
-                        onClick={() => setScienceExpanded(false)}
-                        aria-label="Réduire"
-                        title="Réduire"
-                      >
-                        <Minimize2 size={16} />
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <Scene3DViewer />
-                )}
-              </div>
-            </LiquidGlassCard>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="h-full min-h-0 space-y-4 overflow-y-auto"
-          >
-            {scienceExpanded ? (
-              <LiquidGlassCard className="p-2">
-                <div className="relative w-full h-[360px]">
-                  <Scene3DViewer />
-                </div>
-              </LiquidGlassCard>
-            ) : (
-              <SensorPanel />
-            )}
-          </motion.div>
-        </div>
-
-        {/* Desktop Timeline */}
-        <div className="hidden lg:block flex-shrink-0 space-y-4">
-          {mode === 'replay' && (
-            <>
+        ) : (
+          <>
+            {/* Mobile: Stacked layout */}
+            <div className="flex-1 min-h-0 flex flex-col lg:hidden gap-2">
+              {/* 3D Scene */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+                className={`${showMobilePanel ? 'h-1/3' : 'flex-1'} min-h-[200px] transition-all duration-300`}
               >
-                <DataControlPanel />
+                <LiquidGlassCard className="p-2 h-full">
+                  <div className="relative w-full h-full">
+                    <Scene3DViewer />
+                  </div>
+                </LiquidGlassCard>
               </motion.div>
-              
-              {dataReady && (
+
+              {/* Mobile Panel */}
+              {showMobilePanel && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex-1 overflow-y-auto"
+                >
+                  <SensorPanel />
+                </motion.div>
+              )}
+
+              {/* Timeline - always visible on mobile */}
+              {mode === 'replay' && (
+                <div className="flex-shrink-0 space-y-2">
+                  <DataControlPanel />
+                  {dataReady && <TimelineControl />}
+                </div>
+              )}
+
+              {mode === 'live' && (
+                <div className="flex-shrink-0">
+                  <TimelineControl />
+                </div>
+              )}
+            </div>
+
+            {/* Desktop/Tablet: Side-by-side layout */}
+            <div className="hidden lg:grid lg:grid-cols-3 gap-4 flex-1 min-h-0">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+                className="lg:col-span-2 h-full min-h-0"
+              >
+                <LiquidGlassCard className="p-4 h-full">
+                  <div className="relative w-full h-full">
+                    {scienceExpanded ? (
+                      <>
+                        <PsychrometricSvgChart
+                          points={chartPoints}
+                          outdoorTemp={outdoorData ? outdoorData.temperature : null}
+                        />
+                        <div className="absolute top-2 right-2 z-10">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 bg-white/70 dark:bg-black/40 backdrop-blur"
+                            onClick={() => setScienceExpanded(false)}
+                            aria-label="Réduire"
+                            title="Réduire"
+                          >
+                            <Minimize2 size={16} />
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <Scene3DViewer />
+                    )}
+                  </div>
+                </LiquidGlassCard>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className="h-full min-h-0 space-y-4 overflow-y-auto"
+              >
+                {scienceExpanded ? (
+                  <LiquidGlassCard className="p-2">
+                    <div className="relative w-full h-[360px]">
+                      <Scene3DViewer />
+                    </div>
+                  </LiquidGlassCard>
+                ) : (
+                  <SensorPanel />
+                )}
+              </motion.div>
+            </div>
+
+            {/* Desktop Timeline */}
+            <div className="hidden lg:block flex-shrink-0 space-y-4">
+              {mode === 'replay' && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <DataControlPanel />
+                  </motion.div>
+                  
+                  {dataReady && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 }}
+                    >
+                      <TimelineControl />
+                    </motion.div>
+                  )}
+                </>
+              )}
+
+              {mode === 'live' && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
+                  transition={{ delay: 0.3 }}
                 >
                   <TimelineControl />
                 </motion.div>
               )}
-            </>
-          )}
-
-          {mode === 'live' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <TimelineControl />
-            </motion.div>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

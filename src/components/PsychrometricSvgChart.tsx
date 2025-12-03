@@ -49,36 +49,6 @@ function gkgToY(wGkg: number): number {
   return Y_AT_0_GKG - clamped * Y_PER_GKG;
 }
 
-// Saturation vapor pressure over water (Pa) using Tetens formula
-function saturationVaporPressurePa(tC: number): number {
-  return 610.94 * Math.exp((17.625 * tC) / (tC + 243.04));
-}
-
-// Mixing ratio (g/kg) for a given RH% and temperature (°C)
-function mixingRatioFromRH(rhPercent: number, tC: number, pressurePa: number = P_ATM): number {
-  const rh = Math.max(0, Math.min(100, rhPercent)) / 100;
-  const e_s = saturationVaporPressurePa(tC);
-  const e = rh * e_s;
-  if (e <= 0 || e >= pressurePa) return NaN;
-  return 0.62198 * e / (pressurePa - e) * 1000;
-}
-
-// Approximate local angle of the RH curve at temperature tC (degrees)
-function rhCurveAngleDeg(rhPercent: number, tC: number): number {
-  const t1 = tC;
-  const t2 = tC + 1; // 1°C step for slope
-  const w1 = mixingRatioFromRH(rhPercent, t1);
-  const w2 = mixingRatioFromRH(rhPercent, t2);
-  if (!Number.isFinite(w1) || !Number.isFinite(w2)) return 0;
-  const x1 = tempToX(t1);
-  const x2 = tempToX(t2);
-  const y1 = gkgToY(w1);
-  const y2 = gkgToY(w2);
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  return (Math.atan2(dy, dx) * 180) / Math.PI;
-}
-
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
   const circles = points
     .map(p => {
@@ -97,109 +67,10 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
-  // Compute label positions for RH% curves (10% to 100%)
-  const RH_LEVELS = [10,20,30,40,50,60,70,80,90,100];
-  const rhLabels = RH_LEVELS.map((rh) => {
-    // Try several candidate temperatures to place the label inside the visible area
-    const candidates = [30, 24, 18, 12, 6, 0, 35];
-    for (const tC of candidates) {
-      const w = mixingRatioFromRH(rh, tC);
-      if (!Number.isFinite(w)) continue;
-      const x = tempToX(tC);
-      const y = gkgToY(w);
-      if (x >= X_AT_MIN - 5 && x <= X_AT_40 + 5 && y >= 40 && y <= 691) {
-        const angle = rhCurveAngleDeg(rh, tC);
-        return { rh, x, y, angle };
-      }
-    }
-    return null;
-  }).filter(Boolean) as { rh: number; x: number; y: number; angle: number }[];
-
-  // Givoni comfort zone (driven by outdoor temperature)
-  const meanOutdoor = typeof outdoorTemp === "number" ? outdoorTemp : 20; // fallback
-  const baseT = Math.max(X_MIN, Math.min(X_MAX - 5, 17.6 + 0.31 * meanOutdoor - 3.5)); // o .. o+5
-  function pointFor(Tc: number, rhPercent: number) {
-    const w = mixingRatioFromRH(rhPercent, Tc);
-    if (!Number.isFinite(w)) return null;
-    return [tempToX(Tc), gkgToY(w)] as [number, number];
-  }
-  const gP1 = pointFor(baseT, 80);
-  const gP2 = pointFor(baseT + 5, 80);
-  const gP3 = pointFor(baseT + 5, 20);
-  const gP4 = pointFor(baseT, 20);
-  const givoniPts = [gP1, gP2, gP3, gP4].filter(Boolean) as [number, number][];
-  const givoniPolygon = givoniPts.length === 4
-    ? givoniPts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ")
-    : null;
-  const givoniLabel = givoniPts.length === 4
-    ? { x: (givoniPts[0][0] + givoniPts[1][0] + givoniPts[2][0] + givoniPts[3][0]) / 4,
-        y: (givoniPts[0][1] + givoniPts[1][1] + givoniPts[2][1] + givoniPts[3][1]) / 4 }
-    : null;
-
   return (
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
-
-        {/* Givoni comfort zone */}
-        {givoniPolygon && (
-          <g aria-label="Givoni comfort zone">
-            <polygon
-              points={givoniPolygon}
-              fill="rgba(34,197,94,0.18)"   /* green-500 with alpha */
-              stroke="rgba(34,197,94,0.8)"
-              strokeWidth={1}
-            />
-            {givoniLabel && (
-              <text
-                x={givoniLabel.x}
-                y={givoniLabel.y}
-                textAnchor="middle"
-                dy="-0.4em"
-                fontSize={12}
-                fill="hsl(var(--foreground))"
-              >
-                Zone de confort (Givoni)
-              </text>
-            )}
-          </g>
-        )}
-
-        {/* RH% labels overlay */}
-        <g aria-label="Relative Humidity labels">
-          {rhLabels.map((lbl) => (
-            <g key={`rh-${lbl.rh}`}>
-              {/* Outline for readability on any background */}
-              <text
-                x={lbl.x}
-                y={lbl.y}
-                fontSize={12}
-                transform={`rotate(${lbl.angle.toFixed(2)}, ${lbl.x}, ${lbl.y})`}
-                fill="hsl(var(--foreground))"
-                stroke="hsl(var(--background))"
-                strokeWidth={2}
-                strokeOpacity={0.85}
-                style={{ paintOrder: 'stroke' }}
-                textAnchor="middle"
-                dominantBaseline="middle"
-              >
-                {lbl.rh}%
-              </text>
-              {/* Fill on top to sharpen the text */}
-              <text
-                x={lbl.x}
-                y={lbl.y}
-                fontSize={12}
-                transform={`rotate(${lbl.angle.toFixed(2)}, ${lbl.x}, ${lbl.y})`}
-                fill="hsl(var(--foreground))"
-                textAnchor="middle"
-                dominantBaseline="middle"
-              >
-                {lbl.rh}%
-              </text>
-            </g>
-          ))}
-        </g>
 
         {typeof outdoorX === "number" && (
           <>
