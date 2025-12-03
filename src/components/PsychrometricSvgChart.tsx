@@ -115,18 +115,28 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
     return null;
   }).filter(Boolean) as { rh: number; x: number; y: number; angle: number }[];
 
-  // Givoni comfort zone (driven by outdoor temperature)
+  // Givoni comfort zone (adaptive, driven by outdoor temperature)
   const meanOutdoor = typeof outdoorTemp === "number" ? outdoorTemp : 20; // fallback
   const baseT = Math.max(X_MIN, Math.min(X_MAX - 5, 17.6 + 0.31 * meanOutdoor - 3.5)); // o .. o+5
+  const topT = baseT + 5;
+
   function pointFor(Tc: number, rhPercent: number) {
     const w = mixingRatioFromRH(rhPercent, Tc);
     if (!Number.isFinite(w)) return null;
     return [tempToX(Tc), gkgToY(w)] as [number, number];
   }
-  const gP1 = pointFor(baseT, 80);
-  const gP2 = pointFor(baseT + 5, 80);
-  const gP3 = pointFor(baseT + 5, 20);
-  const gP4 = pointFor(baseT, 20);
+
+  // Bornes RH inspirées de Givoni: RH haute décroît, RH basse croît légèrement
+  const RH_UP_LOW = 80; // à T_base
+  const RH_UP_HIGH = Math.max(50, RH_UP_LOW - 3 * (topT - baseT)); // ~65% à +5°C
+  const RH_LOW_LOW = 20; // à T_base
+  const RH_LOW_HIGH = Math.min(40, RH_LOW_LOW + 2 * (topT - baseT)); // ~30% à +5°C
+
+  const gP1 = pointFor(baseT, RH_UP_LOW);
+  const gP2 = pointFor(topT, RH_UP_HIGH);
+  const gP3 = pointFor(topT, RH_LOW_HIGH);
+  const gP4 = pointFor(baseT, RH_LOW_LOW);
+
   const givoniPts = [gP1, gP2, gP3, gP4].filter(Boolean) as [number, number][];
   const givoniPolygon = givoniPts.length === 4
     ? givoniPts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ")
