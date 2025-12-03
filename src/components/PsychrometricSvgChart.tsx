@@ -49,6 +49,23 @@ function gkgToY(wGkg: number): number {
   return Y_AT_0_GKG - clamped * Y_PER_GKG;
 }
 
+// Saturation vapor pressure (Tetens) in Pa
+function saturationVaporPressurePa(temperatureC: number): number {
+  // 610.94 Pa * exp(17.625*T / (T + 243.04))
+  return 610.94 * Math.exp((17.625 * temperatureC) / (temperatureC + 243.04));
+}
+
+// Mixing ratio from RH (%) and T (°C) → g/kg
+function mixingRatioFromRH(temperatureC: number, rhPercent: number, pressurePa: number = P_ATM): number {
+  if (!Number.isFinite(temperatureC) || !Number.isFinite(rhPercent)) return NaN;
+  const es = saturationVaporPressurePa(temperatureC);
+  const rh = Math.max(0, Math.min(100, rhPercent)) / 100;
+  const Pv = rh * es;
+  if (Pv <= 0 || Pv >= pressurePa) return NaN;
+  const w_kgkg = 0.62198 * Pv / (pressurePa - Pv);
+  return w_kgkg * 1000;
+}
+
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
   const circles = points
     .map(p => {
@@ -67,10 +84,62 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
+  // Givoni zone parameters
+  const GIVONI_T_MIN = 20;
+  const GIVONI_T_MAX = 27;
+  const GIVONI_RH_MIN = 30;
+  const GIVONI_RH_MAX = 70;
+
+  function buildGivoniPolygonPoints(): string {
+    const step = 0.5;
+    const top: string[] = [];
+    for (let t = GIVONI_T_MIN; t <= GIVONI_T_MAX + 1e-6; t += step) {
+      const wTop = mixingRatioFromRH(t, GIVONI_RH_MAX, P_ATM);
+      if (!Number.isFinite(wTop)) continue;
+      top.push(`${tempToX(t)},${gkgToY(wTop)}`);
+    }
+    const bottom: string[] = [];
+    for (let t = GIVONI_T_MAX; t >= GIVONI_T_MIN - 1e-6; t -= step) {
+      const wBot = mixingRatioFromRH(t, GIVONI_RH_MIN, P_ATM);
+      if (!Number.isFinite(wBot)) continue;
+      bottom.push(`${tempToX(t)},${gkgToY(wBot)}`);
+    }
+    const pts = [...top, ...bottom].join(" ");
+    return pts;
+  }
+
+  const givoniPolygon = buildGivoniPolygonPoints();
+  const givoniLabelT = (GIVONI_T_MIN + GIVONI_T_MAX) / 2;
+  const givoniLabelW = mixingRatioFromRH(givoniLabelT, (GIVONI_RH_MIN + GIVONI_RH_MAX) / 2, P_ATM);
+  const givoniLabelX = tempToX(givoniLabelT);
+  const givoniLabelY = Number.isFinite(givoniLabelW) ? gkgToY(givoniLabelW) - 6 : 120;
+
   return (
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
+
+        {/* Zone de Givoni (20–27°C, 30–70% RH) */}
+        {givoniPolygon && (
+          <g>
+            <polygon
+              points={givoniPolygon}
+              fill="rgba(59,130,246,0.12)"
+              stroke="rgba(59,130,246,0.6)"
+              strokeWidth={1}
+            />
+            <text
+              x={givoniLabelX}
+              y={givoniLabelY}
+              fontSize={11}
+              textAnchor="middle"
+              fill="rgba(59,130,246,0.9)"
+              style={{ pointerEvents: 'none' }}
+            >
+              Zone de Givoni
+            </text>
+          </g>
+        )}
 
         {typeof outdoorX === "number" && (
           <>
