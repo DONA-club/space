@@ -154,16 +154,9 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
 
-        {/* Enveloppe psychrométrique pour clipper les zones (forme exacte) */}
-        <defs>
-          <clipPath id="psychroClipPath">
-            <path fill="black" d="M5.0,671.0 L20.7,669.0 L36.3,666.9 L52.0,664.6 L67.6,662.2 L83.3,659.5 L98.9,656.5 L114.6,653.4 L130.2,649.9 L145.9,646.2 L161.5,642.2 L177.2,637.8 L192.8,633.1 L208.5,628.0 L224.1,622.5 L239.8,616.6 L255.5,610.9 L271.1,605.0 L286.8,598.6 L302.4,591.7 L318.1,584.5 L333.7,576.7 L349.4,568.5 L365.0,559.8 L380.7,550.4 L396.3,540.5 L412.0,530.0 L427.6,518.8 L443.3,507.0 L458.9,494.4 L474.6,481.0 L490.3,466.9 L505.9,451.9 L521.6,435.9 L537.2,419.1 L552.9,401.2 L568.5,382.3 L584.2,362.3 L599.8,341.1 L615.5,318.7 L631.1,295.0 L646.8,270.0 L662.4,243.5 L678.1,215.5 L693.7,185.9 L709.4,154.6 L725.1,121.6 L740.7,86.7 L756.4,49.8 L760.0,40.0 L944.2,40.0 L944.2,691.0 L5.0,691.0 Z"></path>
-          </clipPath>
-        </defs>
-
         {/* Library-driven Givoni/comfort zones (exact shapes) */}
         {zones && zones.length > 0 && (
-          <g aria-label="Psychrometric comfort zones (library)" clipPath="url(#psychroClipPath)">
+          <g aria-label="Psychrometric comfort zones (library)">
             {zones.map((z, idx) => (
               <g key={z.id ?? idx}>
                 <polygon
@@ -191,7 +184,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
 
         {/* Givoni comfort zone (fallback when library zones aren't available) */}
         {(!zones || zones.length === 0) && givoniPolygon && (
-          <g aria-label="Givoni comfort zone" clipPath="url(#psychroClipPath)">
+          <g aria-label="Givoni comfort zone">
             <polygon
               points={givoniPolygon}
               fill="rgba(34,197,94,0.18)"   /* green-500 with alpha */

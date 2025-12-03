@@ -100,11 +100,11 @@ export const SensorPanel = () => {
   }, [interpolationRange]);
 
   useEffect(() => {
-    if (currentSpace && mode === 'replay' && sensors.length > 0) {
+    if (currentSpace && mode === 'replay') {
       loadSensorDataInfo();
       loadOutdoorDataInfo();
     }
-  }, [currentSpace, mode, sensors]);
+  }, [currentSpace, mode]);
 
   const loadSensorDataInfo = async () => {
     if (!currentSpace) return;
@@ -851,14 +851,6 @@ export const SensorPanel = () => {
     }
   }, [mode, currentTimestamp, sensors, currentSpace, hasOutdoorData, outdoorSensorName, smoothingWindowSec, meshingEnabled, volumetricPoint, interpolationRange, selectedMetric, outdoorData]);
 
-  // Refresh sensor counters again once analysis has marked data ready
-  useEffect(() => {
-    if (currentSpace && mode === 'replay' && dataReady) {
-      loadSensorDataInfo();
-      loadOutdoorDataInfo();
-    }
-  }, [dataReady, currentSpace, mode]);
-
   return (
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
       <OrientationPanel />
@@ -1518,8 +1510,6 @@ export const SensorPanel = () => {
                         >
                           <Label className="text-xs text-gray-600 dark:text-gray-400">Fonction</Label>
                           <select
-                            id="rbf-kernel"
-                            name="rbf-kernel"
                             value={rbfKernel}
                             onChange={(e) => setRbfKernel(e.target.value as any)}
                             className="w-full text-xs bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-lg px-2 py-2 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"

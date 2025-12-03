@@ -3,9 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { loadPsychroLib, isPsychroLoaded } from "@/lib/psychro/loader";
 
-// Désactiver la lib psychro (UI DOM instable) et utiliser le fallback SVG
-const ENABLE_PSYCHRO_LIB = false;
-
 /* Conversions identiques à celles du composant SVG */
 const X_MIN = -15;
 const X_MAX = 40;
@@ -81,11 +78,10 @@ const DEFAULT_COLORS = [
 ];
 
 export default function usePsychroZones(outdoorTemp: number | null) {
-  const [apiReady, setApiReady] = useState<boolean>(ENABLE_PSYCHRO_LIB && isPsychroLoaded());
+  const [apiReady, setApiReady] = useState<boolean>(isPsychroLoaded());
   const [zonesRaw, setZonesRaw] = useState<any[] | null>(null);
 
   useEffect(() => {
-    if (!ENABLE_PSYCHRO_LIB) return;
     let active = true;
     if (apiReady) return;
     loadPsychroLib().then(() => {
@@ -95,15 +91,9 @@ export default function usePsychroZones(outdoorTemp: number | null) {
   }, [apiReady]);
 
   useEffect(() => {
-    if (!ENABLE_PSYCHRO_LIB || !apiReady) {
-      setZonesRaw(null);
-      return;
-    }
+    if (!apiReady) return;
     const api: any = (window as any).PsychroChart2D;
-    if (!api) {
-      setZonesRaw(null);
-      return;
-    }
+    if (!api) return;
 
     const Tout = typeof outdoorTemp === "number" ? outdoorTemp : 20;
 
