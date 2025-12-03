@@ -27,7 +27,7 @@ export function useChartPoints() {
   const setChartPoints = useAppStore((s) => s.setChartPoints);
 
   // Suivi de la moyenne volumétrique (via événement global)
-  const volumetricRef = useRef<{ temperature: number; absoluteHumidity: number; color?: string } | null>(null);
+  const volumetricRef = useRef<{ temperature: number; absoluteHumidity: number; metricValue?: number } | null>(null);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -36,14 +36,9 @@ export function useChartPoints() {
         volumetricRef.current = null;
         return;
       }
-      const { avgTemp, avgAbsHumidity, metricAverage, selectedMetric: sm } = detail;
+      const { avgTemp, avgAbsHumidity, metricAverage } = detail;
       if (typeof avgTemp === "number" && typeof avgAbsHumidity === "number") {
-        let colorHex: string | undefined = undefined;
-        if (typeof metricAverage === "number" && interpolationRange && sm) {
-          const c = getColorFromValueSaturated(metricAverage, interpolationRange.min, interpolationRange.max, sm);
-          colorHex = `#${c.getHexString()}`;
-        }
-        volumetricRef.current = { temperature: avgTemp, absoluteHumidity: avgAbsHumidity, color: colorHex };
+        volumetricRef.current = { temperature: avgTemp, absoluteHumidity: avgAbsHumidity, metricValue: typeof metricAverage === "number" ? metricAverage : undefined };
       } else {
         volumetricRef.current = null;
       }
@@ -62,89 +57,93 @@ export function useChartPoints() {
 
       // LIVE: utiliser directement les valeurs courantes
       if (mode === "live") {
-        const pts: ChartPoint[] = [];
+        type Item = { name: string; temperature: number; absoluteHumidity: number; metricValue: number };
+        let items: Item[] = [];
 
         // Intérieur (capteurs avec currentData)
         sensors.forEach((s) => {
           if (!s.currentData) return;
-          let colorHex: string | undefined = undefined;
-          if (interpolationRange) {
-            const v = getMetricValue(
-              {
-                timestamp: s.currentData.timestamp,
-                temperature: s.currentData.temperature,
-                humidity: s.currentData.humidity,
-                absoluteHumidity: s.currentData.absoluteHumidity,
-                dewPoint: s.currentData.dewPoint,
-              },
-              selectedMetric
-            );
-            const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
-            colorHex = `#${c.getHexString()}`;
-          }
-          pts.push({
+          const metricValue = getMetricValue(
+            {
+              timestamp: s.currentData.timestamp,
+              temperature: s.currentData.temperature,
+              humidity: s.currentData.humidity,
+              absoluteHumidity: s.currentData.absoluteHumidity,
+              dewPoint: s.currentData.dewPoint,
+            },
+            selectedMetric
+          );
+          items.push({
             name: s.name,
             temperature: s.currentData.temperature,
             absoluteHumidity: s.currentData.absoluteHumidity,
-            color: colorHex,
+            metricValue,
           });
         });
 
         // Extérieur (si présent)
         if (hasOutdoorData && outdoorData) {
-          let colorHex: string | undefined = undefined;
-          if (interpolationRange) {
-            const v = getMetricValue(
-              {
-                timestamp: outdoorData.timestamp,
-                temperature: outdoorData.temperature,
-                humidity: outdoorData.humidity,
-                absoluteHumidity: outdoorData.absoluteHumidity,
-                dewPoint: outdoorData.dewPoint,
-              },
-              selectedMetric
-            );
-            const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
-            colorHex = `#${c.getHexString()}`;
-          }
-          pts.push({
+          const metricValue = getMetricValue(
+            {
+              timestamp: outdoorData.timestamp,
+              temperature: outdoorData.temperature,
+              humidity: outdoorData.humidity,
+              absoluteHumidity: outdoorData.absoluteHumidity,
+              dewPoint: outdoorData.dewPoint,
+            },
+            selectedMetric
+          );
+          items.push({
             name: "Extérieur",
             temperature: outdoorData.temperature,
             absoluteHumidity: outdoorData.absoluteHumidity,
-            color: colorHex,
+            metricValue,
           });
         }
 
         // Si l’interpolation est active, ne garder que “Moyenne volumétrique” + Extérieur (si dispo)
         const vol = volumetricRef.current;
-        let outPts = pts;
-        if (meshingEnabled && (vol || (hasOutdoorData && outdoorData))) {
-          outPts = [];
-          if (vol) outPts.push({ name: "Moyenne volumétrique", ...vol });
-          if (hasOutdoorData && outdoorData) {
-            const v = getMetricValue(
-              {
-                timestamp: outdoorData.timestamp,
-                temperature: outdoorData.temperature,
-                humidity: outdoorData.humidity,
-                absoluteHumidity: outdoorData.absoluteHumidity,
-                dewPoint: outdoorData.dewPoint,
-              },
-              selectedMetric
-            );
-            let colorHex: string | undefined = undefined;
-            if (interpolationRange) {
-              const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
-              colorHex = `#${c.getHexString()}`;
-            }
-            outPts.push({
-              name: "Extérieur",
-              temperature: outdoorData.temperature,
-              absoluteHumidity: outdoorData.absoluteHumidity,
-              color: colorHex,
+        if (meshingEnabled) {
+          const filtered: Item[] = [];
+          if (vol && typeof vol.metricValue === "number") {
+            filtered.push({
+              name: "Moyenne volumétrique",
+              temperature: vol.temperature,
+              absoluteHumidity: vol.absoluteHumidity,
+              metricValue: vol.metricValue,
             });
           }
+          const out = items.find((i) => i.name.toLowerCase().includes("ext"));
+          if (out) filtered.push(out);
+          items = filtered.length > 0 ? filtered : items;
         }
+
+        // Déterminer la plage de couleur
+        let minV: number;
+        let maxV: number;
+        if (interpolationRange) {
+          minV = interpolationRange.min;
+          maxV = interpolationRange.max;
+        } else {
+          const values = items.map((i) => i.metricValue).filter((v) => Number.isFinite(v));
+          minV = Math.min(...values);
+          maxV = Math.max(...values);
+          if (minV === maxV) {
+            minV -= 0.001;
+            maxV += 0.001;
+          }
+        }
+
+        // Coloriser et publier
+        const outPts: ChartPoint[] = items.map((i) => {
+          const c = getColorFromValueSaturated(i.metricValue, minV, maxV, selectedMetric);
+          return {
+            name: i.name,
+            temperature: i.temperature,
+            absoluteHumidity: i.absoluteHumidity,
+            color: `#${c.getHexString()}`
+          };
+        });
 
         if (!cancelled) setChartPoints(outPts);
         return;
@@ -207,8 +206,8 @@ export function useChartPoints() {
           name: sensor.name,
           temperature: chosen.temperature,
           absoluteHumidity: chosen.absolute_humidity,
-          color: colorHex,
-        } as ChartPoint | null;
+          metricValue: v,
+        };
       });
 
       // Extérieur (si présent)
@@ -265,25 +264,60 @@ export function useChartPoints() {
               name: chosen.sensor_name || "Extérieur",
               temperature: chosen.temperature,
               absoluteHumidity: chosen.absolute_humidity,
-              color: colorHex,
-            } as ChartPoint | null;
+              metricValue: v,
+            };
           })()
         : Promise.resolve<ChartPoint | null>(null);
 
       // Attendre toutes les promesses
       const results = await Promise.all([...sensorPromises, outdoorPromise]);
-      const ptsRaw = results.filter(Boolean) as ChartPoint[];
+      const itemsRaw = results.filter(Boolean) as { name: string; temperature: number; absoluteHumidity: number; metricValue: number }[];
 
-      let outPts = ptsRaw;
+      let items = itemsRaw;
 
       // Si interpolation active: ne garder que volumétrique + extérieur
       const vol = volumetricRef.current;
-      const outPoint = ptsRaw.find((p) => p.name.toLowerCase().includes("ext"));
-      if (meshingEnabled && (vol || outPoint)) {
-        outPts = [];
-        if (vol) outPts.push({ name: "Moyenne volumétrique", ...vol });
-        if (outPoint) outPts.push(outPoint);
+      const outPoint = itemsRaw.find((p) => p.name.toLowerCase().includes("ext"));
+      if (meshingEnabled) {
+        const filtered: typeof items = [];
+        if (vol && typeof vol.metricValue === "number") {
+          filtered.push({
+            name: "Moyenne volumétrique",
+            temperature: vol.temperature,
+            absoluteHumidity: vol.absoluteHumidity,
+            metricValue: vol.metricValue,
+          });
+        }
+        if (outPoint) filtered.push(outPoint);
+        items = filtered.length > 0 ? filtered : items;
       }
+
+      // Déterminer la plage de couleur
+      let minV: number;
+      let maxV: number;
+      if (interpolationRange) {
+        minV = interpolationRange.min;
+        maxV = interpolationRange.max;
+      } else {
+        const values = items.map((i) => i.metricValue).filter((v) => Number.isFinite(v));
+        minV = Math.min(...values);
+        maxV = Math.max(...values);
+        if (minV === maxV) {
+          minV -= 0.001;
+          maxV += 0.001;
+        }
+      }
+
+      // Coloriser et publier
+      const outPts: ChartPoint[] = items.map((i) => {
+        const c = getColorFromValueSaturated(i.metricValue, minV, maxV, selectedMetric);
+        return {
+          name: i.name,
+          temperature: i.temperature,
+          absoluteHumidity: i.absoluteHumidity,
+          color: `#${c.getHexString()}`
+        };
+      });
 
       if (!cancelled) setChartPoints(outPts);
     };
