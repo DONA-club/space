@@ -3,6 +3,7 @@
 import React from "react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/FixedTooltip";
 import { motion } from "framer-motion";
+import { useTheme } from "@/components/theme-provider";
 
 type ChartPoint = {
   name: string;
@@ -67,6 +68,14 @@ function mixingRatioFromRH(temperatureC: number, rhPercent: number, pressurePa: 
 }
 
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
+  const { theme } = useTheme();
+  const isDarkMode =
+    theme === "dark" ||
+    (theme === "system" &&
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
+
   const circles = points
     .map(p => {
       const wGkg = ahGm3ToMixingRatioGkg(p.absoluteHumidity, p.temperature);
@@ -160,7 +169,17 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
   return (
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
-        <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
+        <image
+          href="/psychrometric_template.svg"
+          x={-15}
+          y={0}
+          width={1000}
+          height={730}
+          style={{
+            filter: isDarkMode ? "brightness(1.15) contrast(1.2)" : "none",
+            opacity: 1
+          }}
+        />
         {/* Fond de la zone du graphique (adaptatif au thème) */}
         <rect
           x={0}
@@ -168,7 +187,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
           width={960}
           height={651}
           fill="hsl(var(--muted))"
-          fillOpacity={0.18}
+          fillOpacity={isDarkMode ? 0.12 : 0.18}
           style={{ pointerEvents: 'none' }}
         />
 
