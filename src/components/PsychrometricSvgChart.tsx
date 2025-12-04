@@ -4,6 +4,7 @@ import React from "react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/FixedTooltip";
 import { motion } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
+import { useSmoothedValue } from "@/hooks/useSmoothedValue";
 
 type ChartPoint = {
   name: string;
@@ -123,28 +124,32 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
       .then((text) => setSvgContent(injectStyle(text)));
   }, [isDarkMode]);
 
-  const circles = points
-    .map(p => {
-      const wGkg = ahGm3ToMixingRatioGkg(p.absoluteHumidity, p.temperature);
-      if (!Number.isFinite(wGkg)) return null;
-      return {
-        name: p.name,
-        temperature: p.temperature,
-        absoluteHumidity: p.absoluteHumidity,
-        cx: tempToX(p.temperature),
-        cy: gkgToY(wGkg),
-        color: p.color
-      };
-    })
-    .filter(Boolean) as { name: string; temperature: number; absoluteHumidity: number; cx: number; cy: number; color?: string }[];
+  const circles = React.useMemo(() => {
+    return points
+      .map(p => {
+        const wGkg = ahGm3ToMixingRatioGkg(p.absoluteHumidity, p.temperature);
+        if (!Number.isFinite(wGkg)) return null;
+        return {
+          name: p.name,
+          temperature: p.temperature,
+          absoluteHumidity: p.absoluteHumidity,
+          cx: tempToX(p.temperature),
+          cy: gkgToY(wGkg),
+          color: p.color
+        };
+      })
+      .filter(Boolean) as { name: string; temperature: number; absoluteHumidity: number; cx: number; cy: number; color?: string }[];
+  }, [points]);
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
   // Température de la moyenne volumétrique (si disponible dans les points)
-  const volumetricTemp = (() => {
+  const volumetricTempRaw = React.useMemo(() => {
     const vol = points.find((p) => p.name.toLowerCase().includes("moyenne volumétrique"));
-    return typeof vol?.temperature === "number" ? vol.temperature : undefined;
-  })();
+    return typeof vol?.temperature === "number" ? vol.temperature : null;
+  }, [points]);
+
+  const volumetricTemp = useSmoothedValue(volumetricTempRaw, { stiffness: 160, damping: 24, enabled: true });
 
   // Zones de Givoni (simplifiées) avec plages de T (°C) et RH (%)
   type ZoneDef = {
@@ -174,13 +179,15 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   // Référence 25°C, facteur 0.6 (même logique que le composant Recharts)
   const SHIFT_REF = 25;
   const SHIFT_FACTOR = 0.6;
-  const shift = typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0;
+  const shift = React.useMemo(() => (
+    typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0
+  ), [outdoorTemp]);
 
-  const shiftedZones: ZoneDef[] = ZONES.map((z) => ({
+  const shiftedZones: ZoneDef[] = React.useMemo(() => ZONES.map((z) => ({
     ...z,
     tMin: z.tMin + shift,
     tMax: z.tMax + shift,
-  }));
+  })), [shift]);
 
   function buildZonePolygonPoints(z: ZoneDef): { points: string; labelX: number; labelY: number } {
     const step = 0.5;
@@ -208,10 +215,10 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     return { points, labelX, labelY };
   }
 
-  const computedZones = shiftedZones.map((z) => {
+  const computedZones = React.useMemo(() => shiftedZones.map((z) => {
     const poly = buildZonePolygonPoints(z);
     return { ...z, ...poly };
-  });
+  }), [shiftedZones]);
 
   return (
     <div className="relative w-full h-full">
