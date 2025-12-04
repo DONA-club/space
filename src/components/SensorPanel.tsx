@@ -258,6 +258,17 @@ export const SensorPanel = () => {
     if (!currentSpace) return;
     if (isEphemeral) { showError('En mode démo, les espaces supplémentaires ne permettent pas l\'import CSV.'); return; }
 
+    // Admin gate
+    if (localStorage.getItem('adminUnlocked') !== 'true') {
+      const pwd = window.prompt('Mot de passe administrateur ?');
+      if (pwd !== 'admin') {
+        showError('Mot de passe incorrect');
+        return;
+      }
+      localStorage.setItem('adminUnlocked', 'true');
+      showSuccess('Mode administrateur activé');
+    }
+
     setLoading(true);
 
     try {
@@ -316,6 +327,16 @@ export const SensorPanel = () => {
     if (!currentSpace) return;
     if (isEphemeral) { showError('Import extérieur indisponible pour un espace éphémère.'); return; }
 
+    if (localStorage.getItem('adminUnlocked') !== 'true') {
+      const pwd = window.prompt('Mot de passe administrateur ?');
+      if (pwd !== 'admin') {
+        showError('Mot de passe incorrect');
+        return;
+      }
+      localStorage.setItem('adminUnlocked', 'true');
+      showSuccess('Mode administrateur activé');
+    }
+
     const text = await file.text();
     const lines = text.split('\n').filter(line => line.trim());
     const dataLines = lines.slice(1);
@@ -367,6 +388,16 @@ export const SensorPanel = () => {
   const handleCSVUpload = async (sensorId: number, file: File, showToast: boolean = true) => {
     if (!currentSpace) return;
     if (isEphemeral) { showError('Import CSV indisponible pour un espace éphémère.'); return; }
+
+    if (localStorage.getItem('adminUnlocked') !== 'true') {
+      const pwd = window.prompt('Mot de passe administrateur ?');
+      if (pwd !== 'admin') {
+        showError('Mot de passe incorrect');
+        return;
+      }
+      localStorage.setItem('adminUnlocked', 'true');
+      showSuccess('Mode administrateur activé');
+    }
 
     const text = await file.text();
     const lines = text.split('\n').filter(line => line.trim());

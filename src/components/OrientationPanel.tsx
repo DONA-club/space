@@ -71,6 +71,16 @@ export const OrientationPanel = () => {
   };
 
   const handleUnlockClick = () => {
+    const unlocked = typeof window !== 'undefined' && localStorage.getItem('adminUnlocked') === 'true';
+    if (!unlocked) {
+      const pwd = window.prompt('Mot de passe administrateur ?');
+      if (pwd !== 'admin') {
+        showError('Mot de passe incorrect');
+        return;
+      }
+      localStorage.setItem('adminUnlocked', 'true');
+      showSuccess('Mode administrateur activé');
+    }
     setLocked(false);
     window.dispatchEvent(new CustomEvent('windRoseShow'));
   };

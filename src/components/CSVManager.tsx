@@ -112,6 +112,16 @@ export const CSVManager = () => {
   const handleBulkCSVUpload = async (files: FileList) => {
     if (!currentSpace) return;
 
+    if (localStorage.getItem('adminUnlocked') !== 'true') {
+      const pwd = window.prompt('Mot de passe administrateur ?');
+      if (pwd !== 'admin') {
+        showError('Mot de passe incorrect');
+        return;
+      }
+      localStorage.setItem('adminUnlocked', 'true');
+      showSuccess('Mode administrateur activé');
+    }
+
     setLoading(true);
 
     try {
@@ -178,6 +188,16 @@ export const CSVManager = () => {
 
   const handleCSVUpload = async (sensorId: number, file: File, showToast: boolean = true) => {
     if (!currentSpace) return;
+
+    if (localStorage.getItem('adminUnlocked') !== 'true') {
+      const pwd = window.prompt('Mot de passe administrateur ?');
+      if (pwd !== 'admin') {
+        showError('Mot de passe incorrect');
+        return;
+      }
+      localStorage.setItem('adminUnlocked', 'true');
+      showSuccess('Mode administrateur activé');
+    }
 
     try {
       const text = await file.text();
