@@ -134,7 +134,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         const hasShowroom = visibleList.some((s) => s.name === 'Show-room');
         if (!hasShowroom && user) {
           // Charger depuis /public puis uploader vers le bucket Supabase pour que les CSV soient persistants via RLS.
-          const gltfResp = await fetch('/45bdVoltaire_SalonVesta.gltf');
+          const gltfResp = await fetch('/45bdVoltaire_SalonVesta.glb');
           const jsonResp = await fetch('/45bdVoltaire_SalonVesta.points.json');
 
           if (!gltfResp.ok || !jsonResp.ok) {
@@ -146,12 +146,12 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           jsonText = jsonText.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
 
           const timestamp = Date.now();
-          const gltfPath = `${user.id}/demo_showroom_${timestamp}.gltf`;
+          const gltfPath = `${user.id}/demo_showroom_${timestamp}.glb`;
           const jsonPath = `${user.id}/demo_showroom_${timestamp}.json`;
 
           const { error: gltfError } = await supabase.storage
             .from('models')
-            .upload(gltfPath, gltfBlob, { contentType: 'model/gltf+json', upsert: false });
+            .upload(gltfPath, gltfBlob, { contentType: 'model/gltf-binary', upsert: false });
           if (gltfError) throw gltfError;
 
           const { error: jsonError } = await supabase.storage
@@ -166,7 +166,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
               name: 'Show-room',
               description: 'Espace de démonstration',
               gltf_file_path: gltfPath,
-              gltf_file_name: '45bdVoltaire_SalonVesta.gltf',
+              gltf_file_name: '45bdVoltaire_SalonVesta.glb',
               json_file_path: jsonPath,
               json_file_name: '45bdVoltaire_SalonVesta.points.json',
               latitude: 48.8566,
