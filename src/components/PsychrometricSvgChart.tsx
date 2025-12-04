@@ -305,10 +305,64 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     return { points, labelX, labelY };
   }
 
-  const computedZones = React.useMemo(() => shiftedZones.map((z) => {
-    const poly = buildZonePolygonPoints(z);
-    return { ...z, ...poly };
-  }), [shiftedZones]);
+  type OverlayShape = { kind: 'polygon' | 'polyline'; id: string; points: string; fill?: boolean };
+
+  const colorById: Record<string, string> = {
+    comfort: "59,130,246",
+    "nat-vent": "34,197,94",
+    "passive-solar": "245,158,11",
+    "active-solar": "251,191,36",
+    "evap-cool": "16,185,129",
+    "mass-cool": "14,165,233",
+    "night-vent": "99,102,241",
+    "dehumidif-ac": "168,85,247",
+    humidification: "6,182,212",
+  };
+
+  const overlayCases: Record<"14.5" | "25.5" | "38.5", OverlayShape[]> = React.useMemo(() => ({
+    "14.5": [
+      { kind: "polygon", id: "comfort", fill: true, points: "482.6,668.5 504.0,653.2 525.4,637.3 546.8,620.6 568.2,603.0 589.6,584.6 611.0,565.3 662.4,677.1 662.4,839.1 662.4,839.1 636.7,845.5 611.0,851.6 585.4,857.3 559.7,862.8 534.0,867.9 508.3,872.8 482.6,877.4" },
+      { kind: "polygon", id: "nat-vent", points: "482.6,598.8 508.3,575.9 534.0,551.6 559.7,525.9 585.4,498.7 611.0,469.9 636.7,439.5 662.4,407.3 790.8,581.8 790.8,800.9 790.8,800.9 765.1,809.4 739.4,817.4 713.8,825.1 688.1,832.3 662.4,839.1 636.7,845.5 611.0,851.6 585.4,857.3 559.7,862.8 534.0,867.9 508.3,872.8 482.6,877.4" },
+      { kind: "polyline", id: "passive-solar", points: "572.5,947.0 174.5,947.0 174.5,790.5 174.5,790.5 200.2,779.3 225.8,767.3 251.5,754.6 277.2,741.2 302.9,726.8 328.6,711.6 354.2,695.5 379.9,678.3 405.6,660.2 431.3,640.9 457.0,620.5" },
+      { kind: "polyline", id: "active-solar", points: "148.8,947.0 71.8,947.0 71.8,829.0 71.8,829.0 84.6,824.7 97.4,820.3 110.3,815.7 123.1,811.0 136.0,806.1 148.8,801.0" },
+      { kind: "polyline", id: "evap-cool", points: "611.0,565.3 893.5,669.4 970.6,726.5 1021.9,823.3 1021.9,947.0 651.9,947.0 482.6,877.4" },
+      { kind: "polyline", id: "mass-cool", points: "611.0,565.3 816.5,565.3 919.2,652.6 919.2,877.4 482.6,877.4" },
+      { kind: "polyline", id: "night-vent", points: "816.5,565.3 996.2,565.3 1099.0,653.1 1099.0,877.4 482.6,877.4" },
+      { kind: "polyline", id: "dehumidif-ac", points: "996.2,565.3 1289.0,565.3 1289.0,947.0 1021.9,947.0" },
+    ],
+    "25.5": [
+      { kind: "polygon", id: "comfort", fill: true, points: "570.0,601.6 591.4,583.1 612.8,563.8 634.2,543.5 645.4,532.4 655.6,532.4 677.0,532.4 698.4,532.4 749.7,615.2 749.7,814.3 749.7,814.3 724.0,822.1 698.4,829.4 672.7,836.4 647.0,843.0 621.3,849.2 595.6,855.1 570.0,860.6" },
+      { kind: "polygon", id: "nat-vent", points: "570.0,515.2 595.6,487.4 621.3,458.0 647.0,426.8 672.7,393.9 698.4,359.1 724.0,322.3 749.7,283.4 878.1,500.3 878.1,768.3 878.1,768.3 852.4,778.5 826.8,788.2 801.1,797.4 775.4,806.1 749.7,814.3 724.0,822.1 698.4,829.4 672.7,836.4 647.0,843.0 621.3,849.2 595.6,855.1 570.0,860.6" },
+      { kind: "polyline", id: "passive-solar", points: "659.8,947.0 261.8,947.0 261.8,749.4 261.8,749.4 287.5,735.5 313.2,720.9 338.8,705.3 364.5,688.7 390.2,671.2 415.9,652.6 441.6,632.9 467.2,611.9 492.9,589.8 518.6,566.3 544.3,541.5" },
+      { kind: "polyline", id: "active-solar", points: "236.1,947.0 159.1,947.0 159.1,796.9 159.1,796.9 171.9,791.6 184.8,786.1 197.6,780.4 210.4,774.6 223.3,768.6 236.1,762.4" },
+      { kind: "polyline", id: "evap-cool", points: "698.4,532.4 980.8,608.5 1057.9,678.8 1109.2,796.6 1109.2,947.0 779.9,947.0 570.0,860.6" },
+      { kind: "polyline", id: "mass-cool", points: "698.4,532.4 903.8,532.4 1006.5,588.4 1006.5,860.6 570.0,860.6" },
+      { kind: "polyline", id: "night-vent", points: "903.8,532.4 1083.6,532.4 1186.3,590.4 1186.3,860.6 570.0,860.6" },
+      { kind: "polyline", id: "dehumidif-ac", points: "1083.6,532.4 1289.0,532.4 1289.0,947.0 1109.2,947.0" },
+    ],
+    "38.5": [
+      { kind: "polyline", id: "comfort", fill: true, points: "672.7,532.4 694.1,532.4 715.5,532.4 736.9,532.4 758.3,532.4 779.7,532.4 801.1,532.4 852.4,532.4 852.4,778.5 852.4,778.5 826.8,788.2 801.1,797.4 775.4,806.1 749.7,814.3 724.0,822.1 698.4,829.4 672.7,836.4 672.7,504.5" },
+      { kind: "polygon", id: "nat-vent", points: "672.7,393.9 698.4,359.1 724.0,322.3 749.7,283.4 775.4,242.4 801.1,199.0 826.8,153.1 852.4,104.7 980.8,382.9 980.8,721.4 980.8,721.4 955.2,734.1 929.5,746.1 903.8,757.5 878.1,768.3 852.4,778.5 826.8,788.2 801.1,797.4 775.4,806.1 749.7,814.3 724.0,822.1 698.4,829.4 672.7,836.4" },
+      { kind: "polyline", id: "passive-solar", points: "762.6,947.0 364.5,947.0 364.5,688.7 364.5,688.7 390.2,671.2 415.9,652.6 441.6,632.9 467.2,611.9 492.9,589.8 518.6,566.3 544.3,541.5 570.0,515.2 595.6,487.4 621.3,458.0 647.0,426.8" },
+      { kind: "polyline", id: "active-solar", points: "338.8,947.0 261.8,947.0 261.8,749.4 261.8,749.4 274.6,742.5 287.5,735.5 300.3,728.3 313.2,720.9 326.0,713.2 338.8,705.3" },
+      { kind: "polyline", id: "evap-cool", points: "801.1,532.4 1083.6,532.4 1160.6,610.0 1212.0,758.3 1212.0,947.0 941.6,947.0 672.7,836.4" },
+      { kind: "polyline", id: "mass-cool", points: "801.1,532.4 1006.5,532.4 1109.2,532.4 1109.2,836.4 672.7,836.4" },
+      { kind: "polyline", id: "night-vent", points: "1006.5,532.4 1186.3,532.4 1289.0,532.4 1289.0,836.4 672.7,836.4" },
+      { kind: "polyline", id: "dehumidif-ac", points: "1186.3,532.4 1327.5,532.4 1327.5,947.0 1212.0,947.0" },
+    ],
+  }), []);
+
+  function pickOverlayCase(t?: number): "14.5" | "25.5" | "38.5" {
+    if (typeof t !== "number") return "25.5";
+    if (t < 20) return "14.5";
+    if (t > 32) return "38.5";
+    return "25.5";
+  }
+
+  const overlayShapes: OverlayShape[] = React.useMemo(
+    () => overlayCases[pickOverlayCase(outdoorTemp)],
+    [outdoorTemp, overlayCases]
+  );
 
   // Hystérésis pour éviter les bascules rapides (clignotements) aux bords des zones
   const ACTIVE_HYST = 0.4; // marge en °C
@@ -376,34 +430,34 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         />
 
 
-        {/* Zones de Givoni pilotées par la température extérieure */}
+        {/* Zones de Givoni: rendu exact des polygones/polylines fournis, avec nos couleurs */}
         <g>
-          {computedZones.map((z) => {
-            if (!z.points || z.points.length === 0) return null;
-            const isActive = activeZoneIds.has(z.id);
-            const fillOpacity = isActive ? 0.18 : 0.06;
-            const strokeOpacity = isActive ? 0.9 : 0.35;
-            const strokeWidth = isActive ? 1.8 : 1;
+          {overlayShapes.map((s, idx) => {
+            const col = colorById[s.id] ?? "59,130,246";
+            const stroke = `rgba(${col},0.85)`;
+            const fillCol = s.fill ? `rgba(${col},0.2)` : "none";
 
-            return (
-              <g key={z.id}>
+            if (s.kind === "polygon") {
+              return (
                 <polygon
-                  points={z.points}
-                  fill={`rgba(${z.color},${fillOpacity})`}
-                  stroke={`rgba(${z.color},${strokeOpacity})`}
-                  strokeWidth={strokeWidth}
+                  key={`${s.id}-${idx}`}
+                  points={s.points}
+                  stroke={stroke}
+                  strokeWidth={3}
+                  strokeLinejoin="round"
+                  fill={fillCol}
                 />
-                <text
-                  x={z.labelX}
-                  y={z.labelY}
-                  fontSize={10}
-                  textAnchor="middle"
-                  fill={`rgba(${z.color},${isActive ? 0.95 : 0.55})`}
-                  style={{ pointerEvents: 'none' }}
-                >
-                  {z.name}
-                </text>
-              </g>
+              );
+            }
+            return (
+              <polyline
+                key={`${s.id}-${idx}`}
+                points={s.points}
+                stroke={stroke}
+                strokeWidth={3}
+                strokeLinejoin="round"
+                fill="none"
+              />
             );
           })}
         </g>
