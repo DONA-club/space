@@ -29,9 +29,11 @@ const ZoneAdjustPanel: React.FC = () => {
   const setPsychroWidthScale = useAppStore((s) => s.setPsychroWidthScale);
   const setPsychroYOffsetPx = useAppStore((s) => s.setPsychroYOffsetPx);
   const setPsychroCurvatureGain = useAppStore((s) => s.setPsychroCurvatureGain);
+  const setPsychroHeightScale = useAppStore((s) => s.setPsychroHeightScale);
 
   const xShiftDisplay = useMemo(() => `${formatNum(psychroAdjust.xShiftDeg, 1)} °C`, [psychroAdjust.xShiftDeg]);
   const widthDisplay = useMemo(() => `${formatNum(psychroAdjust.widthScale, 2)}×`, [psychroAdjust.widthScale]);
+  const heightDisplay = useMemo(() => `${formatNum(psychroAdjust.heightScale, 2)}×`, [psychroAdjust.heightScale]);
   const yOffsetDisplay = useMemo(() => `${formatNum(psychroAdjust.yOffsetPx, 1)} px`, [psychroAdjust.yOffsetPx]);
   const curvatureDisplay = useMemo(() => `${formatNum(psychroAdjust.curvatureGain, 2)}×`, [psychroAdjust.curvatureGain]);
 
@@ -58,6 +60,16 @@ const ZoneAdjustPanel: React.FC = () => {
               max={1.4}
               step={0.01}
               onValueChange={(v) => setPsychroWidthScale(v[0] ?? 1)}
+            />
+          </Row>
+
+          <Row label="Échelle de hauteur" valueText={heightDisplay}>
+            <Slider
+              value={[psychroAdjust.heightScale]}
+              min={0.7}
+              max={1.4}
+              step={0.01}
+              onValueChange={(v) => setPsychroHeightScale(v[0] ?? 1)}
             />
           </Row>
 

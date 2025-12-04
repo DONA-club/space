@@ -379,7 +379,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     if (!points) return points;
 
     // Réglages utilisateurs (panneau sliders)
-    const { xShiftDeg, widthScale, yOffsetPx, curvatureGain } = psychroAdjust;
+    const { xShiftDeg, widthScale, yOffsetPx, curvatureGain, heightScale } = psychroAdjust;
 
     // Repère source (ton chart)
     const SRC_X_MIN = 5;
@@ -429,6 +429,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         // Humidité absolue en g/kg dans le repère source
         const yClamped = Math.max(SRC_Y_TOP, Math.min(SRC_Y_BOTTOM, y));
         const wGkg = ((SRC_Y_BOTTOM - yClamped) / (SRC_Y_BOTTOM - SRC_Y_TOP)) * SRC_W_MAX;
+        const wGkgAdj = wGkg * ((Number.isFinite(heightScale) && heightScale > 0) ? heightScale : 1);
 
         // Appliquer déformation/translation sur la température
         const tCAdj = T_PIVOT + (tC - T_PIVOT) * widthFactor + tShift + fanBoost;
@@ -437,7 +438,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         const tx = tempToX(tCAdj);
         const yOffsetDyn = curvatureOffsetPxAtTemp(tCAdj);
         const extraY = Number.isFinite(yOffsetPx) ? yOffsetPx : 0;
-        const ty = gkgToY(wGkg) + yOffsetDyn + extraY;
+        const ty = gkgToY(wGkgAdj) + yOffsetDyn + extraY;
 
         return `${tx.toFixed(1)},${ty.toFixed(1)}`;
       })
