@@ -88,8 +88,8 @@ const ZoneAdjustPanel: React.FC = () => {
           <Row label="Décalage vertical" valueText={yOffsetDisplay}>
             <Slider
               value={[psychroAdjust.yOffsetPx]}
-              min={-12}
-              max={12}
+              min={-600}
+              max={600}
               step={0.5}
               onValueChange={(v) => setPsychroYOffsetPx(v[0] ?? 0)}
             />
@@ -99,7 +99,7 @@ const ZoneAdjustPanel: React.FC = () => {
             <Slider
               value={[psychroAdjust.curvatureGain]}
               min={0}
-              max={1.5}
+              max={75}
               step={0.05}
               onValueChange={(v) => setPsychroCurvatureGain(v[0] ?? 0.7)}
             />
