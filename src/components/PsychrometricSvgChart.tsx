@@ -350,6 +350,114 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     return "25.5";
   }
 
+  // Ajustements calibrés fournis par l'utilisateur pour différentes T extérieures
+  type AdjustParams = {
+    xShiftDeg: number;
+    widthScale: number;
+    heightScale: number;
+    zoomScale: number;
+    yOffsetPx: number;
+    curvatureGain: number;
+  };
+
+  const CALIBRATIONS: { t: number; adjust: AdjustParams }[] = [
+    { t: 5.4, adjust: { xShiftDeg: 2.8, widthScale: 0.72, heightScale: 0.84, zoomScale: 0.8, yOffsetPx: 35.5, curvatureGain: 0 } },
+    { t: 8.6, adjust: { xShiftDeg: 2.5, widthScale: 0.73, heightScale: 0.91, zoomScale: 0.8, yOffsetPx: 34,   curvatureGain: 0 } },
+    { t: 11.0, adjust: { xShiftDeg: 1.6, widthScale: 0.75, heightScale: 0.94, zoomScale: 0.8, yOffsetPx: 38,   curvatureGain: 0.2 } },
+  ];
+
+  function interpolateAdjust(outT?: number): AdjustParams {
+    const mid = CALIBRATIONS[1].adjust;
+    if (typeof outT !== "number") return mid;
+    const sorted = CALIBRATIONS.slice().sort((a,b)=> a.t-b.t);
+    if (outT <= sorted[0].t) return sorted[0].adjust;
+    if (outT >= sorted[sorted.length-1].t) return sorted[sorted.length-1].adjust;
+
+    let a = sorted[0], b = sorted[1];
+    for (let i=0; i<sorted.length-1; i++){
+      if (outT >= sorted[i].t && outT <= sorted[i+1].t) { a = sorted[i]; b = sorted[i+1]; break; }
+    }
+    const ratio = (outT - a.t) / (b.t - a.t);
+    const lerp = (pA:number, pB:number) => pA + (pB - pA) * ratio;
+
+    return {
+      xShiftDeg:     lerp(a.adjust.xShiftDeg,     b.adjust.xShiftDeg),
+      widthScale:    lerp(a.adjust.widthScale,    b.adjust.widthScale),
+      heightScale:   lerp(a.adjust.heightScale,   b.adjust.heightScale),
+      zoomScale:     lerp(a.adjust.zoomScale,     b.adjust.zoomScale),
+      yOffsetPx:     lerp(a.adjust.yOffsetPx,     b.adjust.yOffsetPx),
+      curvatureGain: lerp(a.adjust.curvatureGain, b.adjust.curvatureGain),
+    };
+  }
+
+  // Transformation dédiée pour le calque figé: utilise uniquement les paramètres calibrés
+  function transformOverlayCalibrated(points: string, zoneId?: string): string {
+    if (!points) return points;
+
+    const adj = interpolateAdjust(typeof outdoorTemp === "number" ? outdoorTemp : undefined);
+
+    // Repère source (template SVG fourni)
+    const SRC_X_MIN = 5;
+    const SRC_X_MAX = 859;
+    const SRC_Y_BOTTOM = 947;
+    const SRC_Y_TOP = 40;
+    const SRC_W_MAX = 33;
+
+    // Correction verticale dynamique liée à la courbure 100% RH (contrôlée par le gain calibré)
+    function curvatureOffsetPxAtTemp(t: number): number {
+      const yA = gkgToY(mixingRatioFromRH(t - 0.5, 100, P_ATM));
+      const yB = gkgToY(mixingRatioFromRH(t + 0.5, 100, P_ATM));
+      const slope = Math.abs(yB - yA);
+      const base = 3;
+      const gain = Number.isFinite(adj.curvatureGain) ? adj.curvatureGain : 0;
+      const max = 7;
+      return -Math.min(max, base + gain * slope);
+    }
+
+    // Déformation horizontale centrée autour d’un pivot
+    const T_PIVOT = 25.5;
+
+    // Extension du confort si ventilateur (≈+3°C par m/s, max 1.5 m/s)
+    const fanBoost = zoneId === "comfort" ? Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3 : 0;
+
+    return points
+      .trim()
+      .split(/\s+/)
+      .map(pair => {
+        const [xs, ys] = pair.split(',');
+        const x = parseFloat(xs);
+        const y = parseFloat(ys);
+
+        // Température en °C dans le repère source
+        const xClamped = Math.max(SRC_X_MIN, Math.min(SRC_X_MAX, x));
+        const tC = -15 + ((xClamped - SRC_X_MIN) * 60) / (SRC_X_MAX - SRC_X_MIN);
+
+        // Humidité absolue en g/kg dans le repère source
+        const yClamped = Math.max(SRC_Y_TOP, Math.min(SRC_Y_BOTTOM, y));
+        const wGkg = ((SRC_Y_BOTTOM - yClamped) / (SRC_Y_BOTTOM - SRC_Y_TOP)) * SRC_W_MAX;
+        const wGkgAdj = wGkg * ((Number.isFinite(adj.heightScale) && adj.heightScale > 0) ? adj.heightScale : 1);
+
+        // Appliquer déformation/translation sur la température avec paramètres calibrés
+        const widthFactor = (Number.isFinite(adj.widthScale) && adj.widthScale > 0) ? adj.widthScale : 1;
+        const tCAdj = T_PIVOT + (tC - T_PIVOT) * widthFactor + (Number.isFinite(adj.xShiftDeg) ? adj.xShiftDeg : 0) + fanBoost;
+
+        // Zoom uniforme autour des pivots (température et humidité)
+        const z = (Number.isFinite(adj.zoomScale) && adj.zoomScale > 0) ? adj.zoomScale : 1;
+        const W_PIVOT = 8.5; // g/kg
+        const tZoomed = T_PIVOT + (tCAdj - T_PIVOT) * z;
+        const wZoomed = W_PIVOT + (wGkgAdj - W_PIVOT) * z;
+
+        // Conversion vers notre SVG courant
+        const tx = tempToX(tZoomed);
+        const yOffsetDyn = curvatureOffsetPxAtTemp(tZoomed);
+        const extraY = Number.isFinite(adj.yOffsetPx) ? adj.yOffsetPx : 0;
+        const ty = gkgToY(wZoomed) + yOffsetDyn + extraY;
+
+        return `${tx.toFixed(1)},${ty.toFixed(1)}`;
+      })
+      .join(' ');
+  }
+
   // Polygones dynamiques des zones (calculés à partir de RH et T, suivront les iso-RH du fond)
   type ZonePoly = { id: string; points: string; labelX: number; labelY: number; fill: boolean };
   const zonePolys: ZonePoly[] = React.useMemo(() => {
@@ -523,19 +631,19 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         </defs>
 
 
-        {/* Zones Givoni: polygones/traits fournis par l'utilisateur, transformés vers notre repère et clipés */}
+        {/* Calque figé (calibré) : se superpose automatiquement au graphe */}
         <g clipPath="url(#dyad-psychro-clip)">
           {overlayShapes.map((s, idx) => {
             const col = colorById[s.id] ?? "59,130,246";
-            const stroke = `rgba(${col},0.85)`;
-            const fillCol = s.fill ? `rgba(${col},0.2)` : "none";
-            const pts = transformOverlayPoints(s.points, s.id);
+            const stroke = `rgba(${col},0.88)`;
+            const fillCol = s.fill ? `rgba(${col},0.22)` : "none";
+            const ptsFixed = transformOverlayCalibrated(s.points, s.id);
 
             if (s.kind === "polygon") {
               return (
                 <polygon
-                  key={`${s.id}-${idx}`}
-                  points={pts}
+                  key={`fixed-${s.id}-${idx}`}
+                  points={ptsFixed}
                   stroke={stroke}
                   strokeWidth={3}
                   strokeLinejoin="round"
@@ -546,10 +654,43 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
 
             return (
               <polyline
-                key={`${s.id}-${idx}`}
-                points={pts}
+                key={`fixed-${s.id}-${idx}`}
+                points={ptsFixed}
                 stroke={stroke}
                 strokeWidth={3}
+                strokeLinejoin="round"
+                fill="none"
+              />
+            );
+          })}
+
+          {/* Calque ajustable (discret): utile pour fine-tuning, n’écrase pas le calque figé */}
+          {overlayShapes.map((s, idx) => {
+            const col = colorById[s.id] ?? "59,130,246";
+            const strokeAdj = `rgba(${col},0.28)`;
+            const ptsAdj = transformOverlayPoints(s.points, s.id);
+
+            if (s.kind === "polygon") {
+              return (
+                <polygon
+                  key={`adj-${s.id}-${idx}`}
+                  points={ptsAdj}
+                  stroke={strokeAdj}
+                  strokeDasharray="6 4"
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              );
+            }
+
+            return (
+              <polyline
+                key={`adj-${s.id}-${idx}`}
+                points={ptsAdj}
+                stroke={strokeAdj}
+                strokeDasharray="6 4"
+                strokeWidth={2}
                 strokeLinejoin="round"
                 fill="none"
               />
