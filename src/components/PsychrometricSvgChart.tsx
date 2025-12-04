@@ -78,7 +78,7 @@ function rhMaxComfortPercentAtT(tC: number): number {
   return 80 - ((tC - 18) * 2); // 2 %RH par °C
 }
 
-const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animationMs }) => {
+const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animationMs, airSpeed = 0 }) => {
   const { theme } = useTheme();
   const isDarkMode =
     theme === "dark" ||
