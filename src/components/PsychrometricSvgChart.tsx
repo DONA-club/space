@@ -382,8 +382,16 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     const SRC_Y_TOP = 40;
     const SRC_W_MAX = 33;
 
-    // Légère remontée des zones pour éviter la coupe sur l’axe du bas et mieux coller à la 100% RH
-    const SHAPE_Y_OFFSET_PIX = -4;
+    // Correction verticale dynamique pour coller à la courbure (référence 100% RH)
+    function curvatureOffsetPxAtTemp(t: number): number {
+      const yA = gkgToY(mixingRatioFromRH(t - 0.5, 100, P_ATM));
+      const yB = gkgToY(mixingRatioFromRH(t + 0.5, 100, P_ATM));
+      const slope = Math.abs(yB - yA); // pente locale (px par °C)
+      const base = 3;       // correction minimale
+      const gain = 0.7;     // amplification liée à la pente
+      const max = 7;        // limite supérieure
+      return -Math.min(max, base + gain * slope);
+    }
 
     // Déplacement horizontal en fonction de la T extérieure
     const tShift = typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0;
@@ -419,7 +427,8 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
 
         // Conversion vers notre SVG courant
         const tx = tempToX(tCAdj);
-        const ty = gkgToY(wGkg) + SHAPE_Y_OFFSET_PIX;
+        const yOffset = curvatureOffsetPxAtTemp(tCAdj);
+        const ty = gkgToY(wGkg) + yOffset;
 
         return `${tx.toFixed(1)},${ty.toFixed(1)}`;
       })
