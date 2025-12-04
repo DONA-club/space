@@ -652,6 +652,10 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   };
 
   const handleDeleteGltf = async (space: Space) => {
+    if (space.name === 'Show-room') {
+      showError('Suppression du modèle 3D interdite pour le Show-room');
+      return;
+    }
     if (!confirm('Êtes-vous sûr de vouloir supprimer le modèle 3D ?')) {
       return;
     }
@@ -748,6 +752,10 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   };
 
   const handleDeleteJson = async (space: Space) => {
+    if (space.name === 'Show-room') {
+      showError('Suppression du mapping des capteurs interdite pour le Show-room');
+      return;
+    }
     if (!confirm('Êtes-vous sûr de vouloir supprimer le mapping des capteurs ?')) {
       return;
     }
@@ -777,6 +785,10 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   };
 
   const openRenameDialog = (space: Space) => {
+    if (space.name === 'Show-room') {
+      showError('Le Show-room ne peut pas être renommé');
+      return;
+    }
     setSelectedSpaceForRename(space);
     setNewName(space.name);
     setShowRenameDialog(true);
@@ -784,6 +796,11 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
   const handleRename = async () => {
     if (!selectedSpaceForRename || !newName.trim()) return;
+    if (selectedSpaceForRename.name === 'Show-room') {
+      showError('Le Show-room ne peut pas être renommé');
+      setShowRenameDialog(false);
+      return;
+    }
 
     setRenaming(true);
     try {
@@ -1156,10 +1173,12 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openRenameDialog(space)}>
-                            <Edit2 size={14} className="mr-2" />
-                            Renommer l'espace
-                          </DropdownMenuItem>
+                          {space.name !== 'Show-room' && (
+                            <DropdownMenuItem onClick={() => openRenameDialog(space)}>
+                              <Edit2 size={14} className="mr-2" />
+                              Renommer l'espace
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem>
                             <Link2 size={14} className="mr-2" />
                             Rattacher un système
@@ -1169,29 +1188,29 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                             Changer la localisation
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          {space.gltf_file_path ? (
+                          {space.gltf_file_path && space.name !== 'Show-room' ? (
                             <DropdownMenuItem onClick={() => handleDeleteGltf(space)}>
                               <FileX size={14} className="mr-2" />
                               Effacer modèle 3D
                             </DropdownMenuItem>
-                          ) : (
+                          ) : !space.gltf_file_path ? (
                             <DropdownMenuItem onClick={() => handleUploadGltf(space)}>
                               <FileUp size={14} className="mr-2" />
                               Charger modèle 3D
                             </DropdownMenuItem>
-                          )}
+                          ) : null}
                           <DropdownMenuSeparator />
-                          {space.json_file_path ? (
+                          {space.json_file_path && space.name !== 'Show-room' ? (
                             <DropdownMenuItem onClick={() => handleDeleteJson(space)}>
                               <FileX size={14} className="mr-2" />
                               Effacer mapping capteurs
                             </DropdownMenuItem>
-                          ) : (
+                          ) : !space.json_file_path ? (
                             <DropdownMenuItem onClick={() => handleUploadJson(space)}>
                               <FileUp size={14} className="mr-2" />
                               Charger mapping capteurs
                             </DropdownMenuItem>
-                          )}
+                          ) : null}
                           <DropdownMenuSeparator />
                           {space.name !== 'Show-room' && (
                             <DropdownMenuItem
