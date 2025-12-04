@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/FixedTooltip";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { motion } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
 import { useSmoothedValue } from "@/hooks/useSmoothedValue";
