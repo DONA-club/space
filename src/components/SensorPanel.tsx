@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Maximize2, Minimize2, Gauge, Focus, Scan, Wrench } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Gauge, Scan, Wrench } from 'lucide-react';
+import { TbMaximize, TbMinimize } from 'react-icons/tb';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -1271,7 +1272,7 @@ export const SensorPanel = () => {
                       className="text-[9px] h-5 px-1.5 flex items-center gap-1 bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-400 dark:border-indigo-600"
                       title="Résolution"
                     >
-                      <Maximize2 size={10} className="text-indigo-600" />
+                      <TbMaximize size={12} className="text-indigo-600" />
                       {(meshResolution * meshResolution * meshResolution).toLocaleString()}
                     </Badge>
                     <Badge
@@ -1616,7 +1617,7 @@ export const SensorPanel = () => {
                     aria-label={scienceExpanded ? "Réduire" : "Agrandir"}
                     title={scienceExpanded ? "Réduire" : "Agrandir"}
                   >
-                    {scienceExpanded ? <Focus size={16} strokeWidth={2.5} /> : <Maximize2 size={16} strokeWidth={2.5} />}
+                    {scienceExpanded ? <TbMinimize size={16} /> : <TbMaximize size={16} />}
                   </Button>
                 )}
               </div>
