@@ -96,6 +96,9 @@ interface AppState {
   // Monitoring scientifique & diagramme
   scienceExpanded: boolean;
   chartPoints: { name: string; temperature: number; absoluteHumidity: number; color?: string }[];
+
+  // Psychrometric overlay adjustments
+  psychroAdjust: { xShiftDeg: number; widthScale: number; yOffsetPx: number };
   
   // Actions
   setAuth: (user: any | null) => void;
@@ -131,6 +134,11 @@ interface AppState {
   // Monitoring actions
   setScienceExpanded: (expanded: boolean) => void;
   setChartPoints: (points: { name: string; temperature: number; absoluteHumidity: number; color?: string }[]) => void;
+
+  // Psychrometric adjustments actions
+  setPsychroXShiftDeg: (deg: number) => void;
+  setPsychroWidthScale: (scale: number) => void;
+  setPsychroYOffsetPx: (px: number) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -164,6 +172,8 @@ export const useAppStore = create<AppState>((set) => ({
 
   scienceExpanded: false,
   chartPoints: [],
+
+  psychroAdjust: { xShiftDeg: 0, widthScale: 1, yOffsetPx: 0 },
   
   setAuth: (user) => set({ 
     isAuthenticated: !!user, 
@@ -225,4 +235,8 @@ export const useAppStore = create<AppState>((set) => ({
 
   setScienceExpanded: (expanded) => set({ scienceExpanded: expanded }),
   setChartPoints: (points) => set({ chartPoints: points }),
+
+  setPsychroXShiftDeg: (deg) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, xShiftDeg: deg } })),
+  setPsychroWidthScale: (scale) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, widthScale: scale } })),
+  setPsychroYOffsetPx: (px) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, yOffsetPx: px } })),
 }));

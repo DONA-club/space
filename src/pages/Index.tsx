@@ -8,6 +8,7 @@ import { SpaceManager } from '@/components/SpaceManager';
 import { Dashboard } from '@/components/Dashboard';
 import { Loader2 } from 'lucide-react';
 import { showError } from '@/utils/toast';
+import ZoneAdjustPanel from '@/components/ZoneAdjustPanel';
 
 const Index = () => {
   const [loading, setLoading] = useState(true);
@@ -149,7 +150,12 @@ const Index = () => {
     );
   }
 
-  return <Dashboard onBackToSpaces={() => setShowSpaceManager(true)} />;
+  return (
+    <>
+      <Dashboard onBackToSpaces={() => setShowSpaceManager(true)} />
+      <ZoneAdjustPanel />
+    </>
+  );
 };
 
 export default Index;

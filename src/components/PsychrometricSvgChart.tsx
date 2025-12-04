@@ -5,6 +5,7 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/comp
 import { motion } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
 import { useSmoothedValue } from "@/hooks/useSmoothedValue";
+import { useAppStore } from "@/store/appStore";
 
 type ChartPoint = {
   name: string;
@@ -375,6 +376,9 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   function transformOverlayPoints(points: string, zoneId?: string): string {
     if (!points) return points;
 
+    // Réglages utilisateurs (panneau sliders)
+    const { xShiftDeg, widthScale, yOffsetPx } = useAppStore.getState().psychroAdjust;
+
     // Repère source (ton chart)
     const SRC_X_MIN = 5;
     const SRC_X_MAX = 859;
@@ -393,15 +397,17 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
       return -Math.min(max, base + gain * slope);
     }
 
-    // Déplacement horizontal en fonction de la T extérieure
-    const tShift = typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0;
+    // Déplacement horizontal en fonction de la T extérieure + ajustement manuel
+    const tShiftBase = typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0;
+    const tShift = tShiftBase + (Number.isFinite(xShiftDeg) ? xShiftDeg : 0);
 
     // Déformation horizontale (élargissement/rétrécissement) autour d’un pivot
     const T_PIVOT = 25.5;
     const baseComfort = ZONES.find(z => z.id === "comfort")!;
     const baseWidth = baseComfort.tMax - baseComfort.tMin;
     const interp = interpolateComfortBounds(outdoorTemp);
-    const widthFactor = interp ? (interp.width / baseWidth) : 1;
+    const widthFactorBase = interp ? (interp.width / baseWidth) : 1;
+    const widthFactor = widthFactorBase * (Number.isFinite(widthScale) && widthScale > 0 ? widthScale : 1);
 
     // Extension de confort si ventilateur (≈+3°C par m/s, max 1.5 m/s)
     const fanBoost = zoneId === "comfort" ? Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3 : 0;
@@ -427,8 +433,9 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
 
         // Conversion vers notre SVG courant
         const tx = tempToX(tCAdj);
-        const yOffset = curvatureOffsetPxAtTemp(tCAdj);
-        const ty = gkgToY(wGkg) + yOffset;
+        const yOffsetDyn = curvatureOffsetPxAtTemp(tCAdj);
+        const extraY = Number.isFinite(yOffsetPx) ? yOffsetPx : 0;
+        const ty = gkgToY(wGkg) + yOffsetDyn + extraY;
 
         return `${tx.toFixed(1)},${ty.toFixed(1)}`;
       })

@@ -1,0 +1,81 @@
+"use client";
+
+import React, { useMemo } from "react";
+import { Card } from "@/components/ui/card";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
+import { useAppStore } from "@/store/appStore";
+
+function formatNum(n: number, digits = 2) {
+  const f = Number.isFinite(n) ? n : 0;
+  return f.toFixed(digits);
+}
+
+const Row: React.FC<{ label: string; valueText: string; children: React.ReactNode }> = ({ label, valueText, children }) => {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs">
+        <Label className="text-muted-foreground">{label}</Label>
+        <span className="text-[11px] text-muted-foreground">{valueText}</span>
+      </div>
+      {children}
+    </div>
+  );
+};
+
+const ZoneAdjustPanel: React.FC = () => {
+  const psychroAdjust = useAppStore((s) => s.psychroAdjust);
+  const setPsychroXShiftDeg = useAppStore((s) => s.setPsychroXShiftDeg);
+  const setPsychroWidthScale = useAppStore((s) => s.setPsychroWidthScale);
+  const setPsychroYOffsetPx = useAppStore((s) => s.setPsychroYOffsetPx);
+
+  const xShiftDisplay = useMemo(() => `${formatNum(psychroAdjust.xShiftDeg, 1)} °C`, [psychroAdjust.xShiftDeg]);
+  const widthDisplay = useMemo(() => `${formatNum(psychroAdjust.widthScale, 2)}×`, [psychroAdjust.widthScale]);
+  const yOffsetDisplay = useMemo(() => `${formatNum(psychroAdjust.yOffsetPx, 1)} px`, [psychroAdjust.yOffsetPx]);
+
+  return (
+    <div className="fixed bottom-4 right-4 z-40">
+      <Card className="w-[280px] p-4 shadow-lg border border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div className="space-y-4">
+          <div className="text-xs font-medium text-muted-foreground">Ajustements zones (Givoni)</div>
+
+          <Row label="Décalage horizontal" valueText={xShiftDisplay}>
+            <Slider
+              value={[psychroAdjust.xShiftDeg]}
+              min={-20}
+              max={20}
+              step={0.1}
+              onValueChange={(v) => setPsychroXShiftDeg(v[0] ?? 0)}
+            />
+          </Row>
+
+          <Row label="Échelle de largeur" valueText={widthDisplay}>
+            <Slider
+              value={[psychroAdjust.widthScale]}
+              min={0.7}
+              max={1.4}
+              step={0.01}
+              onValueChange={(v) => setPsychroWidthScale(v[0] ?? 1)}
+            />
+          </Row>
+
+          <Row label="Décalage vertical" valueText={yOffsetDisplay}>
+            <Slider
+              value={[psychroAdjust.yOffsetPx]}
+              min={-12}
+              max={12}
+              step={0.5}
+              onValueChange={(v) => setPsychroYOffsetPx(v[0] ?? 0)}
+            />
+          </Row>
+
+          <p className="text-[11px] text-muted-foreground">
+            Utilise ces sliders, puis donne-moi les valeurs pour caler les polygones sur le diagramme.
+          </p>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+export default ZoneAdjustPanel;
