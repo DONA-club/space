@@ -1611,12 +1611,12 @@ export const SensorPanel = () => {
                   <Button
                     size="icon"
                     variant="outline"
-                    className="h-7 w-7 rounded-md bg-gradient-to-br from-rose-500/20 to-pink-500/20 border border-rose-400 dark:border-rose-600 text-rose-600 dark:text-rose-300 hover:from-rose-500/30 hover:to-pink-500/30"
+                    className="h-7 w-7 rounded-md border border-gray-300 dark:border-gray-700 bg-white/50 dark:bg-black/40 text-gray-700 dark:text-gray-200 hover:bg-white/70 dark:hover:bg-black/60"
                     onClick={() => setScienceExpanded(!scienceExpanded)}
                     aria-label={scienceExpanded ? "Réduire" : "Agrandir"}
                     title={scienceExpanded ? "Réduire" : "Agrandir"}
                   >
-                    {scienceExpanded ? <Focus size={16} strokeWidth={2.5} /> : <Scan size={16} strokeWidth={2.5} />}
+                    {scienceExpanded ? <Focus size={16} strokeWidth={2.5} /> : <Maximize2 size={16} strokeWidth={2.5} />}
                   </Button>
                 )}
               </div>
