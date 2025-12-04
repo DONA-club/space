@@ -626,7 +626,6 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
             );
           })}
         </g>
-        </g>
 
         {typeof outdoorX === "number" && (
           <>
