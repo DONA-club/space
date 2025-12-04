@@ -364,6 +364,50 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     [outdoorTemp, overlayCases]
   );
 
+  // Transformation pour superposer parfaitement les polygones du SVG source sur notre graphique
+  // 1) X: affine via deux ancres (25.5°C et 38.5°C) -> nos x calculés
+  const mapX = React.useMemo(() => {
+    const x25_src = 659.8;
+    const x38_src = 993.7;
+    const x25_dst = tempToX(25.5);
+    const x38_dst = tempToX(38.5);
+    const a = (x38_dst - x25_dst) / (x38_src - x25_src);
+    const b = x25_dst - a * x25_src;
+    return (x: number) => a * x + b;
+  }, []);
+
+  // 2) Y: rééchelonner la plage du SVG source vers notre zone chart [40, 691], par cas
+  const caseAnchorsY = React.useMemo(() => ({
+    "14.5": { top: 635.1, bottom: 962.0 },
+    "25.5": { top: 365.6, bottom: 962.0 },
+    "38.5": { top: -5.0, bottom: 962.0 },
+  }), []);
+
+  const mapY = React.useMemo(() => {
+    const key = pickOverlayCase(outdoorTemp);
+    const anchors = caseAnchorsY[key];
+    const dstTop = 40;
+    const dstBot = 691;
+    const sy = (dstBot - dstTop) / (anchors.bottom - anchors.top);
+    return (y: number) => dstTop + (y - anchors.top) * sy;
+  }, [outdoorTemp, caseAnchorsY]);
+
+  function transformPointsString(points: string): string {
+    if (!points) return points;
+    return points
+      .trim()
+      .split(/\s+/)
+      .map(pair => {
+        const [xs, ys] = pair.split(',');
+        const x = parseFloat(xs);
+        const y = parseFloat(ys);
+        const tx = mapX(x);
+        const ty = mapY(y);
+        return `${tx.toFixed(1)},${ty.toFixed(1)}`;
+      })
+      .join(' ');
+  }
+
   // Hystérésis pour éviter les bascules rapides (clignotements) aux bords des zones
   const ACTIVE_HYST = 0.4; // marge en °C
   const [activeZoneIds, setActiveZoneIds] = React.useState<Set<string>>(new Set());
@@ -430,18 +474,19 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         />
 
 
-        {/* Zones de Givoni: rendu exact des polygones/polylines fournis, avec nos couleurs */}
+        {/* Zones de Givoni: polygones/polylines source transformés pour se superposer au graphique */}
         <g>
           {overlayShapes.map((s, idx) => {
             const col = colorById[s.id] ?? "59,130,246";
             const stroke = `rgba(${col},0.85)`;
             const fillCol = s.fill ? `rgba(${col},0.2)` : "none";
+            const pts = transformPointsString(s.points);
 
             if (s.kind === "polygon") {
               return (
                 <polygon
                   key={`${s.id}-${idx}`}
-                  points={s.points}
+                  points={pts}
                   stroke={stroke}
                   strokeWidth={3}
                   strokeLinejoin="round"
@@ -452,7 +497,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
             return (
               <polyline
                 key={`${s.id}-${idx}`}
-                points={s.points}
+                points={pts}
                 stroke={stroke}
                 strokeWidth={3}
                 strokeLinejoin="round"
