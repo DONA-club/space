@@ -370,15 +370,33 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   // Décalage du repère interne: le SVG template est inséré à x=-15, on compense pour l'overlay
   const OFFSET_X = -15;
 
-  // Transformer les points depuis le repère fourni (x en pixels, y en pixels) vers notre graphe:
-  // Source: x=5→-15°C, x=859→45°C ; y=947→0 g/kg, y=40→33 g/kg
-  function transformOverlayPoints(points: string): string {
+  // Transformer les points depuis le repère fourni (x:-15..45°C, y:0..33 g/kg) vers notre graphe,
+  // en appliquant un léger offset vertical et une déformation/translation liées à la T extérieure.
+  function transformOverlayPoints(points: string, zoneId?: string): string {
     if (!points) return points;
+
+    // Repère source (ton chart)
     const SRC_X_MIN = 5;
     const SRC_X_MAX = 859;
     const SRC_Y_BOTTOM = 947;
     const SRC_Y_TOP = 40;
     const SRC_W_MAX = 33;
+
+    // Légère remontée des zones pour éviter la coupe sur l’axe du bas et mieux coller à la 100% RH
+    const SHAPE_Y_OFFSET_PIX = -4;
+
+    // Déplacement horizontal en fonction de la T extérieure
+    const tShift = typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0;
+
+    // Déformation horizontale (élargissement/rétrécissement) autour d’un pivot
+    const T_PIVOT = 25.5;
+    const baseComfort = ZONES.find(z => z.id === "comfort")!;
+    const baseWidth = baseComfort.tMax - baseComfort.tMin;
+    const interp = interpolateComfortBounds(outdoorTemp);
+    const widthFactor = interp ? (interp.width / baseWidth) : 1;
+
+    // Extension de confort si ventilateur (≈+3°C par m/s, max 1.5 m/s)
+    const fanBoost = zoneId === "comfort" ? Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3 : 0;
 
     return points
       .trim()
@@ -396,9 +414,12 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         const yClamped = Math.max(SRC_Y_TOP, Math.min(SRC_Y_BOTTOM, y));
         const wGkg = ((SRC_Y_BOTTOM - yClamped) / (SRC_Y_BOTTOM - SRC_Y_TOP)) * SRC_W_MAX;
 
+        // Appliquer déformation/translation sur la température
+        const tCAdj = T_PIVOT + (tC - T_PIVOT) * widthFactor + tShift + fanBoost;
+
         // Conversion vers notre SVG courant
-        const tx = tempToX(tC);
-        const ty = gkgToY(wGkg);
+        const tx = tempToX(tCAdj);
+        const ty = gkgToY(wGkg) + SHAPE_Y_OFFSET_PIX;
 
         return `${tx.toFixed(1)},${ty.toFixed(1)}`;
       })
@@ -483,7 +504,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
             const col = colorById[s.id] ?? "59,130,246";
             const stroke = `rgba(${col},0.85)`;
             const fillCol = s.fill ? `rgba(${col},0.2)` : "none";
-            const pts = transformOverlayPoints(s.points);
+            const pts = transformOverlayPoints(s.points, s.id);
 
             if (s.kind === "polygon") {
               return (
