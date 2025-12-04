@@ -1255,9 +1255,26 @@ export const SensorPanel = () => {
                 <Sparkles size={14} className="text-purple-600" />
                 <h3 className="text-sm font-medium">Interpolation</h3>
                 {!isInterpolationExpanded && meshingEnabled && (
-                  <Badge variant="outline" className="text-[9px] h-5 px-1.5">
-                    Activé
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-[9px] h-5 px-1.5">
+                      Activé
+                    </Badge>
+                    <Badge variant="outline" className="text-[9px] h-5 px-1.5">
+                      {meshResolution}³ • {(meshResolution * meshResolution * meshResolution).toLocaleString()} pts
+                    </Badge>
+                    <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1">
+                      {visualizationType === 'points' && <Sparkles size={10} className="text-blue-600" />}
+                      {visualizationType === 'vectors' && <GitBranch size={10} className="text-green-600" />}
+                      {visualizationType === 'isosurface' && <Layers size={10} className="text-purple-600" />}
+                      {visualizationType === 'mesh' && <Box size={10} className="text-orange-600" />}
+                      <span className="capitalize">{visualizationType}</span>
+                    </Badge>
+                    <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1">
+                      {interpolationMethod === 'idw' && <Zap size={10} className="text-blue-600" />}
+                      {interpolationMethod === 'rbf' && <Waves size={10} className="text-purple-600" />}
+                      <span className="uppercase">{interpolationMethod}</span>
+                    </Badge>
+                  </div>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -1329,7 +1346,12 @@ export const SensorPanel = () => {
                             <TooltipPrimitive.Root>
                               <TooltipPrimitive.Trigger asChild>
                                 <button
-                                  onClick={() => setVisualizationType('vectors')}
+                                  onClick={() => {
+                                    if (meshResolution !== 15) setMeshResolution(15);
+                                    setVisualizationType('vectors');
+                                    setMeshingEnabled(true);
+                                    showSuccess('Vecteurs activés • résolution 15³');
+                                  }}
                                   className={`relative p-2 rounded-lg transition-all ${
                                     visualizationType === 'vectors'
                                       ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-2 border-green-400 dark:border-green-600'
