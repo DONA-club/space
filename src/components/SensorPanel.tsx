@@ -25,6 +25,7 @@ export const SensorPanel = () => {
   const sensors = useAppStore((state) => state.sensors);
   const mode = useAppStore((state) => state.mode);
   const currentSpace = useAppStore((state) => state.currentSpace);
+  const isEphemeral = Boolean((currentSpace as any)?.isEphemeral);
   const dataReady = useAppStore((state) => state.dataReady);
   const meshingEnabled = useAppStore((state) => state.meshingEnabled);
   const setMeshingEnabled = useAppStore((state) => state.setMeshingEnabled);
@@ -255,6 +256,7 @@ export const SensorPanel = () => {
 
   const handleBulkCSVUpload = async (files: FileList) => {
     if (!currentSpace) return;
+    if (isEphemeral) { showError('En mode démo, les espaces supplémentaires ne permettent pas l\'import CSV.'); return; }
 
     setLoading(true);
 
@@ -312,6 +314,7 @@ export const SensorPanel = () => {
 
   const handleOutdoorCSVUpload = async (file: File, showToast: boolean = true, detectedName: string = 'Extérieur') => {
     if (!currentSpace) return;
+    if (isEphemeral) { showError('Import extérieur indisponible pour un espace éphémère.'); return; }
 
     const text = await file.text();
     const lines = text.split('\n').filter(line => line.trim());
@@ -363,6 +366,7 @@ export const SensorPanel = () => {
 
   const handleCSVUpload = async (sensorId: number, file: File, showToast: boolean = true) => {
     if (!currentSpace) return;
+    if (isEphemeral) { showError('Import CSV indisponible pour un espace éphémère.'); return; }
 
     const text = await file.text();
     const lines = text.split('\n').filter(line => line.trim());
@@ -426,6 +430,7 @@ export const SensorPanel = () => {
 
   const downloadAllData = async (sensorId: number) => {
     if (!currentSpace) return;
+    if (isEphemeral) { showError('Téléchargement indisponible pour un espace éphémère.'); return; }
 
     const sensor = sensors.find(s => s.id === sensorId);
     if (!sensor) return;
@@ -471,6 +476,7 @@ export const SensorPanel = () => {
 
   const downloadOutdoorData = async () => {
     if (!currentSpace) return;
+    if (isEphemeral) { showError('Téléchargement indisponible pour un espace éphémère.'); return; }
 
     const { data, error } = await supabase
       .from('sensor_data')
@@ -513,6 +519,7 @@ export const SensorPanel = () => {
 
   const deleteAllData = async (sensorId: number) => {
     if (!currentSpace) return;
+    if (isEphemeral) { showError('Suppression indisponible pour un espace éphémère.'); return; }
 
     const sensor = sensors.find(s => s.id === sensorId);
     if (!sensor) return;
@@ -535,6 +542,7 @@ export const SensorPanel = () => {
 
   const deleteOutdoorData = async () => {
     if (!currentSpace) return;
+    if (isEphemeral) { showError('Suppression indisponible pour un espace éphémère.'); return; }
 
     if (!confirm(`Supprimer toutes les données de ${outdoorSensorName} ?`)) {
       return;

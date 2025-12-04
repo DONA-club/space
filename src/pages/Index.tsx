@@ -58,7 +58,54 @@ const Index = () => {
     try {
       setCurrentSpace(space);
 
-      // Load GLTF model
+      // Espace éphémère (local) : charger depuis les données locales
+      if ((space as any).isEphemeral) {
+        const localGltfUrl: string | null = (space as any).localGltfUrl || null;
+        const localJsonText: string | null = (space as any).localJsonText || null;
+
+        if (localGltfUrl) {
+          setGltfModel(localGltfUrl);
+        } else {
+          setGltfModel(null);
+        }
+
+        if (localJsonText) {
+          let text = localJsonText.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+          const data = JSON.parse(text);
+
+          if (data.points && Array.isArray(data.points)) {
+            const sensors = data.points.map((point: any, index: number) => {
+              const x = parseNumber(point.x);
+              const y = parseNumber(point.y);
+              const z = parseNumber(point.z);
+
+              if (isNaN(x) || isNaN(y) || isNaN(z)) {
+                console.error(`Invalid coordinates for point ${index}:`, point);
+                throw new Error(`Coordonnées invalides pour le point ${index + 1}`);
+              }
+
+              return {
+                id: index + 1,
+                position: [x, y, z] as [number, number, number],
+                name: point.name || `Capteur ${index + 1}`,
+              };
+            });
+
+            if (sensors.length === 0) {
+              throw new Error('Aucun capteur trouvé dans le fichier JSON');
+            }
+
+            setSensors(sensors);
+          } else {
+            throw new Error('Format JSON invalide : le fichier doit contenir un tableau "points"');
+          }
+        }
+
+        setShowSpaceManager(false);
+        return;
+      }
+
+      // Espace persistant: charger depuis Supabase
       if (space.gltf_file_path) {
         const { data: gltfData, error: gltfError } = await supabase.storage
           .from('models')
@@ -72,7 +119,6 @@ const Index = () => {
         }
       }
 
-      // Load JSON positions
       if (space.json_file_path) {
         const { data: jsonData, error: jsonError } = await supabase.storage
           .from('models')
@@ -82,13 +128,7 @@ const Index = () => {
 
         if (jsonData) {
           let text = await jsonData.text();
-          
-          // Fix JSON: replace commas with dots in numeric values
-          // This regex finds patterns like "x": 1,234 or "y": -2,456
           text = text.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
-          
-          console.log('Fixed JSON text:', text);
-          
           const data = JSON.parse(text);
 
           if (data.points && Array.isArray(data.points)) {
@@ -96,12 +136,12 @@ const Index = () => {
               const x = parseNumber(point.x);
               const y = parseNumber(point.y);
               const z = parseNumber(point.z);
-              
+
               if (isNaN(x) || isNaN(y) || isNaN(z)) {
                 console.error(`Invalid coordinates for point ${index}:`, point);
                 throw new Error(`Coordonnées invalides pour le point ${index + 1}`);
               }
-              
+
               return {
                 id: index + 1,
                 position: [x, y, z] as [number, number, number],
@@ -113,7 +153,6 @@ const Index = () => {
               throw new Error('Aucun capteur trouvé dans le fichier JSON');
             }
 
-            console.log('Loaded sensors:', sensors);
             setSensors(sensors);
           } else {
             throw new Error('Format JSON invalide : le fichier doit contenir un tableau "points"');

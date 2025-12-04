@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from './ui/alert';
 
 export const CSVManager = () => {
   const currentSpace = useAppStore((state) => state.currentSpace);
+  const isEphemeral = Boolean((currentSpace as any)?.isEphemeral);
   const sensors = useAppStore((state) => state.sensors);
   const [loading, setLoading] = useState(false);
   const [lastDate, setLastDate] = useState<Date | null>(null);
@@ -331,6 +332,20 @@ export const CSVManager = () => {
   };
 
   if (!currentSpace) return null;
+
+  if (isEphemeral) {
+    return (
+      <LiquidGlassCard className="p-4">
+        <h3 className="font-semibold mb-4">Gestion des données CSV</h3>
+        <Alert className="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
+          <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertDescription className="text-sm text-amber-800 dark:text-amber-200">
+            En mode démo, les espaces ajoutés hors “Show-room” sont éphémères : les chargements CSV sont désactivés et ne sont jamais sauvegardés.
+          </AlertDescription>
+        </Alert>
+      </LiquidGlassCard>
+    );
+  }
 
   return (
     <LiquidGlassCard className="p-4">

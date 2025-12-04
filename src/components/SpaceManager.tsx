@@ -72,6 +72,8 @@ const getRandomSpaceExample = () => {
   return SPACE_NAME_EXAMPLES[Math.floor(Math.random() * SPACE_NAME_EXAMPLES.length)];
 };
 
+const DEMO_MODE = true;
+
 export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,7 +118,75 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      setSpaces(data || []);
+
+      const list = data || [];
+      setSpaces(list);
+
+      // En mode démo, s'assurer que l'espace Show-room existe pour cet utilisateur.
+      if (DEMO_MODE) {
+        const hasShowroom = list.some((s) => s.name === 'Show-room');
+        if (!hasShowroom) {
+          const { data: userData } = await supabase.auth.getUser();
+          const user = userData?.user || null;
+
+          if (user) {
+            // Charger depuis /public puis uploader vers le bucket Supabase pour que les CSV soient persistants via RLS.
+            const gltfResp = await fetch('/45bdVoltaire_SalonVesta.gltf');
+            const jsonResp = await fetch('/45bdVoltaire_SalonVesta.points.json');
+
+            if (!gltfResp.ok || !jsonResp.ok) {
+              throw new Error('Impossible de charger les fichiers de démonstration depuis /public');
+            }
+
+            const gltfBlob = await gltfResp.blob();
+            let jsonText = await jsonResp.text();
+            jsonText = jsonText.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+
+            const timestamp = Date.now();
+            const gltfPath = `${user.id}/demo_showroom_${timestamp}.gltf`;
+            const jsonPath = `${user.id}/demo_showroom_${timestamp}.json`;
+
+            const { error: gltfError } = await supabase.storage
+              .from('models')
+              .upload(gltfPath, gltfBlob, { contentType: 'model/gltf+json', upsert: false });
+
+            if (gltfError) throw gltfError;
+
+            const { error: jsonError } = await supabase.storage
+              .from('models')
+              .upload(jsonPath, new Blob([jsonText], { type: 'application/json' }), { upsert: false });
+
+            if (jsonError) throw jsonError;
+
+            const { error: insertError } = await supabase
+              .from('spaces')
+              .insert({
+                user_id: user.id,
+                name: 'Show-room',
+                description: 'Espace de démonstration',
+                gltf_file_path: gltfPath,
+                gltf_file_name: '45bdVoltaire_SalonVesta.gltf',
+                json_file_path: jsonPath,
+                json_file_name: '45bdVoltaire_SalonVesta.points.json',
+                latitude: 48.8566,
+                longitude: 2.3522,
+              })
+              .select()
+              .single();
+
+            if (insertError) throw insertError;
+
+            // Recharger la liste avec le Show-room
+            const { data: data2, error: err2 } = await supabase
+              .from('spaces')
+              .select('*')
+              .order('updated_at', { ascending: false });
+
+            if (err2) throw err2;
+            setSpaces(data2 || []);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error loading spaces:', error);
       showError('Erreur lors du chargement des espaces');
@@ -311,6 +381,45 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     setCreating(true);
 
     try {
+      // En mode démo: tout espace autre que "Show-room" est éphémère (local), visible mais non sauvegardé.
+      if (DEMO_MODE && newSpaceName.trim() !== 'Show-room') {
+        const localGltfUrl = URL.createObjectURL(gltfFile);
+        let jsonText = await jsonFile.text();
+        jsonText = jsonText.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+
+        const nowIso = new Date().toISOString();
+        const ephemeralSpace: any = {
+          id: `ephemeral-${Date.now()}`,
+          name: newSpaceName.trim(),
+          description: newSpaceDescription || null,
+          gltf_file_path: null,
+          gltf_file_name: gltfFile.name,
+          json_file_path: null,
+          json_file_name: jsonFile.name,
+          last_csv_date: null,
+          created_at: nowIso,
+          updated_at: nowIso,
+          latitude: newSpaceLatitude,
+          longitude: newSpaceLongitude,
+          isEphemeral: true,
+          localGltfUrl,
+          localJsonText: jsonText,
+        };
+
+        setSpaces((prev) => [ephemeralSpace, ...prev]);
+        showSuccess('Espace local créé (non sauvegardé)');
+        setShowCreateForm(false);
+        setNewSpaceName('');
+        setNewSpaceDescription('');
+        setNewSpaceLatitude(48.8566);
+        setNewSpaceLongitude(2.3522);
+        setGltfFile(null);
+        setJsonFile(null);
+        setJsonValidation(null);
+        return;
+      }
+
+      // Chemin standard (persisté) – utile si DEMO_MODE désactivé ou pour Show-room explicitement
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non authentifié');
 
@@ -318,17 +427,15 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
       const { error: gltfError } = await supabase.storage
         .from('models')
         .upload(gltfPath, gltfFile);
-
       if (gltfError) throw gltfError;
 
       const jsonPath = `${user.id}/${Date.now()}_${jsonFile.name}`;
       const { error: jsonError } = await supabase.storage
         .from('models')
         .upload(jsonPath, jsonFile);
-
       if (jsonError) throw jsonError;
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('spaces')
         .insert({
           user_id: user.id,
@@ -343,7 +450,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         })
         .select()
         .single();
-
       if (error) throw error;
 
       showSuccess('Espace créé avec succès');
@@ -365,6 +471,19 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   };
 
   const deleteSpace = async (space: Space) => {
+    // Protection: le Show-room ne peut pas être supprimé
+    if (space.name === 'Show-room') {
+      showError('L\'espace de démonstration "Show-room" ne peut pas être supprimé');
+      return;
+    }
+
+    // Espaces éphémères: suppression locale uniquement
+    if ((space as any).isEphemeral) {
+      setSpaces((prev) => prev.filter((s) => s.id !== space.id));
+      showSuccess('Espace supprimé (non sauvegardé)');
+      return;
+    }
+
     if (!confirm(`Êtes-vous sûr de vouloir supprimer l'espace "${space.name}" ?\n\nCette action supprimera également toutes les données associées.`)) {
       return;
     }
@@ -399,6 +518,20 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
+
+      // Mise à jour locale pour un espace éphémère (pas de sauvegarde)
+      if ((space as any).isEphemeral) {
+        const localUrl = URL.createObjectURL(file);
+        setSpaces((prev) =>
+          prev.map((s) =>
+            s.id === space.id
+              ? { ...(s as any), gltf_file_name: file.name, localGltfUrl: localUrl, updated_at: new Date().toISOString() }
+              : s
+          )
+        );
+        showSuccess('Modèle 3D mis à jour (local)');
+        return;
+      }
 
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -472,6 +605,21 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
+
+      // Mise à jour locale pour espace éphémère
+      if ((space as any).isEphemeral) {
+        let text = await file.text();
+        text = text.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+        setSpaces((prev) =>
+          prev.map((s) =>
+            s.id === space.id
+              ? { ...(s as any), json_file_name: file.name, localJsonText: text, updated_at: new Date().toISOString() }
+              : s
+          )
+        );
+        showSuccess('Mapping des capteurs mis à jour (local)');
+        return;
+      }
 
       try {
         let text = await file.text();
@@ -963,13 +1111,15 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => deleteSpace(space)}
-                            className="text-red-600 dark:text-red-400"
-                          >
-                            <Trash2 size={14} className="mr-2" />
-                            Supprimer l'espace
-                          </DropdownMenuItem>
+                          {space.name !== 'Show-room' && (
+                            <DropdownMenuItem
+                              onClick={() => deleteSpace(space)}
+                              className="text-red-600 dark:text-red-400"
+                            >
+                              <Trash2 size={14} className="mr-2" />
+                              Supprimer l'espace
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
