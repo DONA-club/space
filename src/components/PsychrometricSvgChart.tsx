@@ -320,38 +320,25 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     humidification: "6,182,212",
   };
 
-  const overlayCases: Record<"14.5" | "25.5" | "38.5", OverlayShape[]> = React.useMemo(() => ({
-    "14.5": [
-      { kind: "polygon", id: "comfort", fill: true, points: "482.6,668.5 504.0,653.2 525.4,637.3 546.8,620.6 568.2,603.0 589.6,584.6 611.0,565.3 662.4,677.1 662.4,839.1 662.4,839.1 636.7,845.5 611.0,851.6 585.4,857.3 559.7,862.8 534.0,867.9 508.3,872.8 482.6,877.4" },
-      { kind: "polygon", id: "nat-vent", points: "482.6,598.8 508.3,575.9 534.0,551.6 559.7,525.9 585.4,498.7 611.0,469.9 636.7,439.5 662.4,407.3 790.8,581.8 790.8,800.9 790.8,800.9 765.1,809.4 739.4,817.4 713.8,825.1 688.1,832.3 662.4,839.1 636.7,845.5 611.0,851.6 585.4,857.3 559.7,862.8 534.0,867.9 508.3,872.8 482.6,877.4" },
-      { kind: "polyline", id: "passive-solar", points: "572.5,947.0 174.5,947.0 174.5,790.5 174.5,790.5 200.2,779.3 225.8,767.3 251.5,754.6 277.2,741.2 302.9,726.8 328.6,711.6 354.2,695.5 379.9,678.3 405.6,660.2 431.3,640.9 457.0,620.5" },
-      { kind: "polyline", id: "active-solar", points: "148.8,947.0 71.8,947.0 71.8,829.0 71.8,829.0 84.6,824.7 97.4,820.3 110.3,815.7 123.1,811.0 136.0,806.1 148.8,801.0" },
-      { kind: "polyline", id: "evap-cool", points: "611.0,565.3 893.5,669.4 970.6,726.5 1021.9,823.3 1021.9,947.0 651.9,947.0 482.6,877.4" },
-      { kind: "polyline", id: "mass-cool", points: "611.0,565.3 816.5,565.3 919.2,652.6 919.2,877.4 482.6,877.4" },
-      { kind: "polyline", id: "night-vent", points: "816.5,565.3 996.2,565.3 1099.0,653.1 1099.0,877.4 482.6,877.4" },
-      { kind: "polyline", id: "dehumidif-ac", points: "996.2,565.3 1289.0,565.3 1289.0,947.0 1021.9,947.0" },
-    ],
-    "25.5": [
-      { kind: "polygon", id: "comfort", fill: true, points: "570.0,601.6 591.4,583.1 612.8,563.8 634.2,543.5 645.4,532.4 655.6,532.4 677.0,532.4 698.4,532.4 749.7,615.2 749.7,814.3 749.7,814.3 724.0,822.1 698.4,829.4 672.7,836.4 647.0,843.0 621.3,849.2 595.6,855.1 570.0,860.6" },
-      { kind: "polygon", id: "nat-vent", points: "570.0,515.2 595.6,487.4 621.3,458.0 647.0,426.8 672.7,393.9 698.4,359.1 724.0,322.3 749.7,283.4 878.1,500.3 878.1,768.3 878.1,768.3 852.4,778.5 826.8,788.2 801.1,797.4 775.4,806.1 749.7,814.3 724.0,822.1 698.4,829.4 672.7,836.4 647.0,843.0 621.3,849.2 595.6,855.1 570.0,860.6" },
-      { kind: "polyline", id: "passive-solar", points: "659.8,947.0 261.8,947.0 261.8,749.4 261.8,749.4 287.5,735.5 313.2,720.9 338.8,705.3 364.5,688.7 390.2,671.2 415.9,652.6 441.6,632.9 467.2,611.9 492.9,589.8 518.6,566.3 544.3,541.5" },
-      { kind: "polyline", id: "active-solar", points: "236.1,947.0 159.1,947.0 159.1,796.9 159.1,796.9 171.9,791.6 184.8,786.1 197.6,780.4 210.4,774.6 223.3,768.6 236.1,762.4" },
-      { kind: "polyline", id: "evap-cool", points: "698.4,532.4 980.8,608.5 1057.9,678.8 1109.2,796.6 1109.2,947.0 779.9,947.0 570.0,860.6" },
-      { kind: "polyline", id: "mass-cool", points: "698.4,532.4 903.8,532.4 1006.5,588.4 1006.5,860.6 570.0,860.6" },
-      { kind: "polyline", id: "night-vent", points: "903.8,532.4 1083.6,532.4 1186.3,590.4 1186.3,860.6 570.0,860.6" },
-      { kind: "polyline", id: "dehumidif-ac", points: "1083.6,532.4 1289.0,532.4 1289.0,947.0 1109.2,947.0" },
-    ],
-    "38.5": [
-      { kind: "polyline", id: "comfort", fill: true, points: "672.7,532.4 694.1,532.4 715.5,532.4 736.9,532.4 758.3,532.4 779.7,532.4 801.1,532.4 852.4,532.4 852.4,778.5 852.4,778.5 826.8,788.2 801.1,797.4 775.4,806.1 749.7,814.3 724.0,822.1 698.4,829.4 672.7,836.4 672.7,504.5" },
-      { kind: "polygon", id: "nat-vent", points: "672.7,393.9 698.4,359.1 724.0,322.3 749.7,283.4 775.4,242.4 801.1,199.0 826.8,153.1 852.4,104.7 980.8,382.9 980.8,721.4 980.8,721.4 955.2,734.1 929.5,746.1 903.8,757.5 878.1,768.3 852.4,778.5 826.8,788.2 801.1,797.4 775.4,806.1 749.7,814.3 724.0,822.1 698.4,829.4 672.7,836.4" },
-      { kind: "polyline", id: "passive-solar", points: "762.6,947.0 364.5,947.0 364.5,688.7 364.5,688.7 390.2,671.2 415.9,652.6 441.6,632.9 467.2,611.9 492.9,589.8 518.6,566.3 544.3,541.5 570.0,515.2 595.6,487.4 621.3,458.0 647.0,426.8" },
-      { kind: "polyline", id: "active-solar", points: "338.8,947.0 261.8,947.0 261.8,749.4 261.8,749.4 274.6,742.5 287.5,735.5 300.3,728.3 313.2,720.9 326.0,713.2 338.8,705.3" },
-      { kind: "polyline", id: "evap-cool", points: "801.1,532.4 1083.6,532.4 1160.6,610.0 1212.0,758.3 1212.0,947.0 941.6,947.0 672.7,836.4" },
-      { kind: "polyline", id: "mass-cool", points: "801.1,532.4 1006.5,532.4 1109.2,532.4 1109.2,836.4 672.7,836.4" },
-      { kind: "polyline", id: "night-vent", points: "1006.5,532.4 1186.3,532.4 1289.0,532.4 1289.0,836.4 672.7,836.4" },
-      { kind: "polyline", id: "dehumidif-ac", points: "1186.3,532.4 1327.5,532.4 1327.5,947.0 1212.0,947.0" },
-    ],
-  }), []);
+  // Zones exactes fournies par l'utilisateur (dans son repère x:-15..45°C, y:0..33 g/kg)
+  const overlayShapes: OverlayShape[] = [
+    // Confort (rempli)
+    { kind: "polygon", id: "comfort", fill: true, points: "531.6,580.6 543.5,561.1 555.4,540.5 567.2,519.0 573.4,507.2 579.1,507.2 590.9,507.2 602.8,507.2 631.3,595.1 631.3,806.2 631.3,806.2 617.0,814.5 602.8,822.3 588.6,829.7 574.3,836.7 560.1,843.3 545.9,849.5 531.6,855.4" },
+    // Ventilation naturelle
+    { kind: "polygon", id: "nat-vent", points: "531.6,489.0 545.9,459.5 560.1,428.3 574.3,395.3 588.6,360.4 602.8,323.5 617.0,284.5 631.3,243.2 702.4,473.2 702.4,757.5 702.4,757.5 688.2,768.3 674.0,778.6 659.7,788.3 645.5,797.5 631.3,806.2 617.0,814.5 602.8,822.3 588.6,829.7 574.3,836.7 560.1,843.3 545.9,849.5 531.6,855.4" },
+    // Chauffage solaire passif
+    { kind: "polyline", id: "passive-solar", points: "581.4,947.0 360.8,947.0 360.8,737.4 360.8,737.4 375.1,722.7 389.3,707.2 403.5,690.6 417.8,673.1 432.0,654.5 446.2,634.7 460.5,613.8 474.7,591.6 488.9,568.2 503.2,543.3 517.4,516.9" },
+    // Chauffage solaire actif
+    { kind: "polyline", id: "active-solar", points: "346.6,947.0 303.9,947.0 303.9,787.8 303.9,787.8 311.0,782.2 318.1,776.3 325.3,770.3 332.4,764.1 339.5,757.8 346.6,751.2" },
+    // Refroidissement évaporatif
+    { kind: "polyline", id: "evap-cool", points: "602.8,507.2 759.4,588.0 802.1,662.5 830.5,787.5 830.5,947.0 648.0,947.0 531.6,855.4" },
+    // Refroidissement inertiel (mass cooling)
+    { kind: "polyline", id: "mass-cool", points: "602.8,507.2 716.7,507.2 773.6,566.7 773.6,855.4 531.6,855.4" },
+    // Refroidissement + ventilation nocturne
+    { kind: "polyline", id: "night-vent", points: "716.7,507.2 816.3,507.2 873.2,568.8 873.2,855.4 531.6,855.4" },
+    // Climatisation & déshumidification
+    { kind: "polyline", id: "dehumidif-ac", points: "816.3,507.2 894.6,507.2 894.6,947.0 830.5,947.0" },
+  ];
 
   function pickOverlayCase(t?: number): "14.5" | "25.5" | "38.5" {
     if (typeof t !== "number") return "25.5";
@@ -383,8 +370,16 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   // Décalage du repère interne: le SVG template est inséré à x=-15, on compense pour l'overlay
   const OFFSET_X = -15;
 
-  function transformPointsString(points: string, dx: number): string {
+  // Transformer les points depuis le repère fourni (x en pixels, y en pixels) vers notre graphe:
+  // Source: x=5→-15°C, x=859→45°C ; y=947→0 g/kg, y=40→33 g/kg
+  function transformOverlayPoints(points: string): string {
     if (!points) return points;
+    const SRC_X_MIN = 5;
+    const SRC_X_MAX = 859;
+    const SRC_Y_BOTTOM = 947;
+    const SRC_Y_TOP = 40;
+    const SRC_W_MAX = 33;
+
     return points
       .trim()
       .split(/\s+/)
@@ -392,8 +387,19 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         const [xs, ys] = pair.split(',');
         const x = parseFloat(xs);
         const y = parseFloat(ys);
-        const tx = x + OFFSET_X + dx; // translation horizontale + compensation de l'offset du template
-        const ty = y;                 // on garde Y tel quel et on clippe visuellement
+
+        // Température en °C dans le repère source
+        const xClamped = Math.max(SRC_X_MIN, Math.min(SRC_X_MAX, x));
+        const tC = -15 + ((xClamped - SRC_X_MIN) * 60) / (SRC_X_MAX - SRC_X_MIN);
+
+        // Humidité absolue en g/kg dans le repère source
+        const yClamped = Math.max(SRC_Y_TOP, Math.min(SRC_Y_BOTTOM, y));
+        const wGkg = ((SRC_Y_BOTTOM - yClamped) / (SRC_Y_BOTTOM - SRC_Y_TOP)) * SRC_W_MAX;
+
+        // Conversion vers notre SVG courant
+        const tx = tempToX(tC);
+        const ty = gkgToY(wGkg);
+
         return `${tx.toFixed(1)},${ty.toFixed(1)}`;
       })
       .join(' ');
@@ -471,20 +477,35 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         </defs>
 
 
-        {/* Zones de Givoni: polygones dynamiques (alignés sur les courbes du fond), clipés à la zone */}
+        {/* Zones Givoni: polygones/traits fournis par l'utilisateur, transformés vers notre repère et clipés */}
         <g clipPath="url(#dyad-psychro-clip)">
-          {zonePolys.map((zp) => {
-            const col = colorById[zp.id] ?? "59,130,246";
+          {overlayShapes.map((s, idx) => {
+            const col = colorById[s.id] ?? "59,130,246";
             const stroke = `rgba(${col},0.85)`;
-            const fillCol = zp.fill ? `rgba(${col},0.2)` : "none";
+            const fillCol = s.fill ? `rgba(${col},0.2)` : "none";
+            const pts = transformOverlayPoints(s.points);
+
+            if (s.kind === "polygon") {
+              return (
+                <polygon
+                  key={`${s.id}-${idx}`}
+                  points={pts}
+                  stroke={stroke}
+                  strokeWidth={3}
+                  strokeLinejoin="round"
+                  fill={fillCol}
+                />
+              );
+            }
+
             return (
-              <polygon
-                key={`zone-${zp.id}`}
-                points={zp.points}
+              <polyline
+                key={`${s.id}-${idx}`}
+                points={pts}
                 stroke={stroke}
                 strokeWidth={3}
                 strokeLinejoin="round"
-                fill={fillCol}
+                fill="none"
               />
             );
           })}
