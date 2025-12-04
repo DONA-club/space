@@ -513,20 +513,9 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
       .join(' ');
   }
 
-  // Polygones dynamiques des zones (calculés à partir de RH et T, suivront les iso-RH du fond)
+  // Polygones dynamiques des zones (désactivés pour stabilité; on utilise le calque figé calibré)
   type ZonePoly = { id: string; points: string; labelX: number; labelY: number; fill: boolean };
-  const zonePolys: ZonePoly[] = React.useMemo(() => {
-    return shiftedZones.map((z) => {
-      const built = buildZonePolygonPoints(z);
-      return {
-        id: z.id,
-        points: built.points,
-        labelX: built.labelX,
-        labelY: built.labelY,
-        fill: z.id === "comfort",
-      };
-    });
-  }, [shiftedZones]);
+  const zonePolys: ZonePoly[] = React.useMemo(() => [], []);
 
   // Translation horizontale continue des zones selon la température extérieure (shift en °C converti en pixels)
   const dx = React.useMemo(() => shift * X_PER_DEG, [shift]);
