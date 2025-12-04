@@ -5,6 +5,9 @@ import { useAppStore } from "@/store/appStore";
 import { useSensorData } from "@/hooks/useSensorData";
 import { getMetricValue } from "@/utils/metricUtils";
 import { getColorFromValueSaturated } from "@/utils/colorUtils";
+import { getAverageDataPointInWindow } from "@/utils/sensorUtils";
+import { getAverageDataPointInWindow } from "@/utils/sensorUtils";
+import { getAverageDataPointInWindow } from "@/utils/sensorUtils";
 
 type ChartPoint = {
   name: string;
