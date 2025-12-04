@@ -102,15 +102,46 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   const [adminUnlocked, setAdminUnlocked] = useState<boolean>(
     typeof window !== 'undefined' && localStorage.getItem('adminUnlocked') === 'true'
   );
+  const [isAnonSession, setIsAnonSession] = useState<boolean>(false);
+  const [authReady, setAuthReady] = useState<boolean>(false);
+
   useEffect(() => {
     const handler = () => setAdminUnlocked(localStorage.getItem('adminUnlocked') === 'true');
     window.addEventListener('storage', handler);
     return () => window.removeEventListener('storage', handler);
   }, []);
 
+  // S'assurer d'une session avant de charger les espaces:
+  // - si VITE_DEMO_EMAIL/PASSWORD sont fournis et aucune session: connexion au compte démo partagé
+  // - sinon: session anonyme Supabase
   useEffect(() => {
-    loadSpaces();
+    const ensureSession = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        const demoEmail = import.meta.env.VITE_DEMO_EMAIL as string | undefined;
+        const demoPassword = import.meta.env.VITE_DEMO_PASSWORD as string | undefined;
+        if (demoEmail && demoPassword) {
+          await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPassword });
+        } else {
+          await supabase.auth.signInAnonymously();
+        }
+      }
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user || null;
+      const isAnonymous =
+        !!(user && ((user as any).is_anonymous || (user as any).app_metadata?.provider === 'anonymous'));
+      setIsAnonSession(!!isAnonymous);
+      setAuthReady(true);
+    };
+    ensureSession();
   }, []);
+
+  useEffect(() => {
+    if (authReady) {
+      loadSpaces();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady]);
 
   useEffect(() => {
     if (spaces.length > 0) {
@@ -133,6 +164,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
       const user = userData?.user || null;
       const isAnonymous =
         !!(user && ((user as any).is_anonymous || (user as any).app_metadata?.provider === 'anonymous'));
+      setIsAnonSession(!!isAnonymous);
 
       const list = data || [];
       const visibleList = isAnonymous ? list : list.filter((s) => s.name !== 'Show-room');
@@ -354,10 +386,10 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         let dataDelayDays: number | null = null;
         let lastDataDate: Date | null = null;
         if (maxData) {
-          lastDataDate = new Date(maxData.timestamp);
-          const now = new Date();
-          const diffMs = now.getTime() - lastDataDate.getTime();
-          dataDelayDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            lastDataDate = new Date(maxData.timestamp);
+            const now = new Date();
+            const diffMs = now.getTime() - lastDataDate.getTime();
+            dataDelayDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
         }
 
         const hasDataGaps = false;
@@ -661,8 +693,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   };
 
   const handleDeleteGltf = async (space: Space) => {
-    if (space.name === 'Show-room' && !adminUnlocked) {
-      showError('Suppression du modèle 3D interdite pour le Show-room');
+    if (space.name === 'Show-room' && isAnonSession && !adminUnlocked) {
+      showError('Suppression du modèle 3D interdite pour le Show-room (démo verrouillée)');
       return;
     }
     if (!confirm('Êtes-vous sûr de vouloir supprimer le modèle 3D ?')) {
@@ -761,8 +793,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   };
 
   const handleDeleteJson = async (space: Space) => {
-    if (space.name === 'Show-room' && !adminUnlocked) {
-      showError('Suppression du mapping des capteurs interdite pour le Show-room');
+    if (space.name === 'Show-room' && isAnonSession && !adminUnlocked) {
+      showError('Suppression du mapping des capteurs interdite pour le Show-room (démo verrouillée)');
       return;
     }
     if (!confirm('Êtes-vous sûr de vouloir supprimer le mapping des capteurs ?')) {
@@ -794,8 +826,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   };
 
   const openRenameDialog = (space: Space) => {
-    if (space.name === 'Show-room' && !adminUnlocked) {
-      showError('Le Show-room ne peut pas être renommé');
+    if (space.name === 'Show-room' && isAnonSession && !adminUnlocked) {
+      showError('Le Show-room ne peut pas être renommé en mode démo verrouillé');
       return;
     }
     setSelectedSpaceForRename(space);
@@ -805,8 +837,8 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
   const handleRename = async () => {
     if (!selectedSpaceForRename || !newName.trim()) return;
-    if (selectedSpaceForRename.name === 'Show-room' && !adminUnlocked) {
-      showError('Le Show-room ne peut pas être renommé');
+    if (selectedSpaceForRename.name === 'Show-room' && isAnonSession && !adminUnlocked) {
+      showError('Le Show-room ne peut pas être renommé en mode démo verrouillé');
       setShowRenameDialog(false);
       return;
     }
@@ -1175,7 +1207,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         )}
                       </div>
                       
-                      {adminUnlocked ? (
+                      {(!isAnonSession || adminUnlocked) ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
@@ -1183,7 +1215,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {(space.name !== 'Show-room' || adminUnlocked) && (
+                            {(space.name !== 'Show-room' || !isAnonSession || adminUnlocked) && (
                               <DropdownMenuItem onClick={() => openRenameDialog(space)}>
                                 <Edit2 size={14} className="mr-2" />
                                 Renommer l'espace
@@ -1198,7 +1230,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                               Changer la localisation
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            {space.gltf_file_path && (space.name !== 'Show-room' || adminUnlocked) ? (
+                            {space.gltf_file_path && (space.name !== 'Show-room' || !isAnonSession || adminUnlocked) ? (
                               <DropdownMenuItem onClick={() => handleDeleteGltf(space)}>
                                 <FileX size={14} className="mr-2" />
                                 Effacer modèle 3D
@@ -1210,7 +1242,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                               </DropdownMenuItem>
                             ) : null}
                             <DropdownMenuSeparator />
-                            {space.json_file_path && (space.name !== 'Show-room' || adminUnlocked) ? (
+                            {space.json_file_path && (space.name !== 'Show-room' || !isAnonSession || adminUnlocked) ? (
                               <DropdownMenuItem onClick={() => handleDeleteJson(space)}>
                                 <FileX size={14} className="mr-2" />
                                 Effacer mapping capteurs
@@ -1222,7 +1254,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                               </DropdownMenuItem>
                             ) : null}
                             <DropdownMenuSeparator />
-                            {(space.name !== 'Show-room' || adminUnlocked) && (
+                            {(space.name !== 'Show-room') && (
                               <DropdownMenuItem
                                 onClick={() => deleteSpace(space)}
                                 className="text-red-600 dark:text-red-400"

@@ -42,6 +42,7 @@ export const OrientationPanel = () => {
 
   const [localDeg, setLocalDeg] = useState<number>(orientationAzimuth);
   const [locked, setLocked] = useState<boolean>(true);
+  const [isAnonSession, setIsAnonSession] = useState<boolean>(true);
 
   useEffect(() => {
     setLocalDeg(orientationAzimuth);
@@ -54,6 +55,17 @@ export const OrientationPanel = () => {
     }
   }, [currentSpace, setOrientationAzimuth]);
 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data?.user;
+      const anon = !!(u && ((u as any).is_anonymous || (u as any).app_metadata?.provider === 'anonymous'));
+      setIsAnonSession(anon);
+      if (!anon) {
+        setLocked(false);
+      }
+    });
+  }, []);
+
   const handlePanelMouseEnter = () => {
     window.dispatchEvent(new CustomEvent('windRoseShow'));
     // Reste déverrouillé tant que l’on est dans le panneau (si déjà déverrouillé)
@@ -61,7 +73,7 @@ export const OrientationPanel = () => {
 
   const handlePanelMouseLeave = () => {
     window.dispatchEvent(new CustomEvent('windRoseHide'));
-    // Ne montrer le toast que si le panneau était déverrouillé avant la sortie
+    if (!isAnonSession) return; // hors démo: ne pas re-verrouiller
     if (!locked) {
       setLocked(true);
       showSuccess("Azimut verrouillé");
@@ -71,6 +83,11 @@ export const OrientationPanel = () => {
   };
 
   const handleUnlockClick = () => {
+    if (!isAnonSession) {
+      setLocked(false);
+      window.dispatchEvent(new CustomEvent('windRoseShow'));
+      return;
+    }
     const unlocked = typeof window !== 'undefined' && localStorage.getItem('adminUnlocked') === 'true';
     if (!unlocked) {
       const pwd = window.prompt('Mot de passe administrateur ?');
@@ -131,15 +148,17 @@ export const OrientationPanel = () => {
             >
               {degToCardinal(localDeg)} • {Math.round(localDeg)}°
             </Badge>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={handleUnlockClick}
-              aria-label={locked ? "Déverrouiller l'orientation" : "Orientation déverrouillée"}
-            >
-              {locked ? <Lock size={14} /> : <Unlock size={14} className="text-green-600" />}
-            </Button>
+            {isAnonSession && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={handleUnlockClick}
+                aria-label={locked ? "Déverrouiller l'orientation" : "Orientation déverrouillée"}
+              >
+                {locked ? <Lock size={14} /> : <Unlock size={14} className="text-green-600" />}
+              </Button>
+            )}
           </div>
         </div>
 

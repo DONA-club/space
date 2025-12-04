@@ -80,6 +80,7 @@ export const SensorPanel = () => {
   const [outdoorLastDate, setOutdoorLastDate] = useState<Date | null>(null);
   const chartPoints = useAppStore((state) => state.chartPoints);
   const [chartReady, setChartReady] = useState(false);
+  const [isAnonSession, setIsAnonSession] = useState<boolean>(true);
 
   useEffect(() => {
     if (chartPoints && chartPoints.length > 0) {
@@ -89,6 +90,14 @@ export const SensorPanel = () => {
       setChartReady(false);
     }
   }, [chartPoints]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data?.user;
+      const anon = !!(u && ((u as any).is_anonymous || (u as any).app_metadata?.provider === 'anonymous'));
+      setIsAnonSession(anon);
+    });
+  }, []);
   const [volumetricPoint, setVolumetricPoint] = useState<{ temperature: number; absoluteHumidity: number; color?: string } | null>(null);
 
   useEffect(() => {
@@ -259,7 +268,7 @@ export const SensorPanel = () => {
     if (isEphemeral) { showError('En mode démo, les espaces supplémentaires ne permettent pas l\'import CSV.'); return; }
 
     // Admin gate
-    if (localStorage.getItem('adminUnlocked') !== 'true') {
+    if (isAnonSession && localStorage.getItem('adminUnlocked') !== 'true') {
       const pwd = window.prompt('Mot de passe administrateur ?');
       if (pwd !== 'admin') {
         showError('Mot de passe incorrect');
@@ -327,7 +336,7 @@ export const SensorPanel = () => {
     if (!currentSpace) return;
     if (isEphemeral) { showError('Import extérieur indisponible pour un espace éphémère.'); return; }
 
-    if (localStorage.getItem('adminUnlocked') !== 'true') {
+    if (isAnonSession && localStorage.getItem('adminUnlocked') !== 'true') {
       const pwd = window.prompt('Mot de passe administrateur ?');
       if (pwd !== 'admin') {
         showError('Mot de passe incorrect');
@@ -389,7 +398,7 @@ export const SensorPanel = () => {
     if (!currentSpace) return;
     if (isEphemeral) { showError('Import CSV indisponible pour un espace éphémère.'); return; }
 
-    if (localStorage.getItem('adminUnlocked') !== 'true') {
+    if (isAnonSession && localStorage.getItem('adminUnlocked') !== 'true') {
       const pwd = window.prompt('Mot de passe administrateur ?');
       if (pwd !== 'admin') {
         showError('Mot de passe incorrect');
