@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Compass, Lock, Unlock } from 'lucide-react';
+import { Compass, Lock, Unlock, MapPin } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 
@@ -15,6 +15,24 @@ const degToCardinal = (deg: number): string => {
   const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'];
   const idx = Math.round(((deg % 360) / 22.5)) % 16;
   return dirs[idx];
+};
+
+// Couleur de pastille selon l’azimut (N=bleu, E=orange, S=rouge, O=violet)
+const getAzimuthBadgeClasses = (deg: number): string => {
+  const d = ((deg % 360) + 360) % 360;
+  if (d >= 45 && d < 135) {
+    // Est
+    return 'bg-orange-100 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-200';
+  } else if (d >= 135 && d < 225) {
+    // Sud
+    return 'bg-red-100 dark:bg-red-900/20 border-red-300 dark:border-red-700 text-red-700 dark:text-red-200';
+  } else if (d >= 225 && d < 315) {
+    // Ouest
+    return 'bg-purple-100 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-200';
+  } else {
+    // Nord
+    return 'bg-blue-100 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-200';
+  }
 };
 
 export const OrientationPanel = () => {
@@ -89,15 +107,16 @@ export const OrientationPanel = () => {
             {currentSpace?.latitude != null && currentSpace?.longitude != null && (
               <Badge
                 variant="outline"
-                className="text-[10px] h-5 px-1.5"
+                className="text-[10px] h-5 px-1.5 flex items-center gap-1 bg-teal-50 dark:bg-teal-900/20 border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-200"
                 title="Coordonnées GPS"
               >
+                <MapPin size={10} className="text-teal-600" />
                 {currentSpace.latitude.toFixed(5)}, {currentSpace.longitude.toFixed(5)}
               </Badge>
             )}
             <Badge
               variant="outline"
-              className="text-[10px] h-5 px-1.5"
+              className={`text-[10px] h-5 px-1.5 ${getAzimuthBadgeClasses(localDeg)}`}
               title="Azimut verrouillé et enregistré"
             >
               {degToCardinal(localDeg)} • {Math.round(localDeg)}°

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Maximize2, Minimize2 } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Maximize2, Minimize2, Gauge } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -1256,23 +1256,43 @@ export const SensorPanel = () => {
                 <h3 className="text-sm font-medium">Interpolation</h3>
                 {!isInterpolationExpanded && meshingEnabled && (
                   <div className="flex items-center gap-1.5">
-                    <Badge variant="outline" className="text-[9px] h-5 px-1.5">
-                      Activé
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] h-5 px-1.5 flex items-center gap-1 bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border-2 border-indigo-400 dark:border-indigo-600"
+                      title="Résolution"
+                    >
+                      <Maximize2 size={10} className="text-indigo-600" />
+                      {(meshResolution * meshResolution * meshResolution).toLocaleString()}
                     </Badge>
-                    <Badge variant="outline" className="text-[9px] h-5 px-1.5">
-                      {meshResolution}³ • {(meshResolution * meshResolution * meshResolution).toLocaleString()} pts
-                    </Badge>
-                    <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1">
+                    <Badge
+                      variant="outline"
+                      className={`text-[9px] h-5 px-1.5 flex items-center justify-center ${
+                        visualizationType === 'points'
+                          ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-2 border-blue-400 dark:border-blue-600'
+                          : visualizationType === 'vectors'
+                          ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-2 border-green-400 dark:border-green-600'
+                          : visualizationType === 'isosurface'
+                          ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-2 border-purple-400 dark:border-purple-600'
+                          : 'bg-gradient-to-br from-orange-500/20 to-red-500/20 border-2 border-orange-400 dark:border-orange-600'
+                      }`}
+                      title="Type"
+                    >
                       {visualizationType === 'points' && <Sparkles size={10} className="text-blue-600" />}
                       {visualizationType === 'vectors' && <GitBranch size={10} className="text-green-600" />}
                       {visualizationType === 'isosurface' && <Layers size={10} className="text-purple-600" />}
                       {visualizationType === 'mesh' && <Box size={10} className="text-orange-600" />}
-                      <span className="capitalize">{visualizationType}</span>
                     </Badge>
-                    <Badge variant="outline" className="text-[9px] h-5 px-1.5 flex items-center gap-1">
+                    <Badge
+                      variant="outline"
+                      className={`text-[9px] h-5 px-1.5 flex items-center justify-center ${
+                        interpolationMethod === 'idw'
+                          ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-2 border-blue-400 dark:border-blue-600'
+                          : 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-2 border-purple-400 dark:border-purple-600'
+                      }`}
+                      title="Méthode"
+                    >
                       {interpolationMethod === 'idw' && <Zap size={10} className="text-blue-600" />}
                       {interpolationMethod === 'rbf' && <Waves size={10} className="text-purple-600" />}
-                      <span className="uppercase">{interpolationMethod}</span>
                     </Badge>
                   </div>
                 )}
@@ -1541,8 +1561,17 @@ export const SensorPanel = () => {
               <div className="flex items-center gap-2">
                 <FlaskConical size={14} className="text-rose-600" />
                 <h3 className="text-sm font-medium">Monitoring</h3>
-                <Badge variant="outline" className="text-[10px] h-5 px-1.5">
-                  P 1013 hPa • non corrélée
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] h-5 px-1.5 flex items-center gap-1 ${
+                    mode === 'live' && hasOutdoorData
+                      ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-200'
+                      : 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                  title="Pression atmosphérique"
+                >
+                  <Gauge size={10} />
+                  1013 hPa
                 </Badge>
               </div>
               <Button
