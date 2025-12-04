@@ -129,11 +129,89 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
       const visibleList = isAnonymous ? list : list.filter((s) => s.name !== 'Show-room');
       setSpaces(visibleList);
 
-      // Créer le Show-room UNIQUEMENT pour les sessions démo (anonymes)
+      // Créer/Restaurer le Show-room UNIQUEMENT pour les sessions démo (anonymes)
       if (isAnonymous) {
-        const hasShowroom = visibleList.some((s) => s.name === 'Show-room');
-        if (!hasShowroom && user) {
-          // Charger depuis /public puis uploader vers le bucket Supabase pour que les CSV soient persistants via RLS.
+        const showroom = visibleList.find((s) => s.name === 'Show-room');
+
+        if (showroom && user) {
+          // Vérifier si les fichiers existent encore dans le storage
+          let needsRepair = false;
+
+          if (!showroom.gltf_file_path) {
+            needsRepair = true;
+          } else {
+            const { data: gltfCheck, error: gltfCheckError } = await supabase.storage
+              .from('models')
+              .download(showroom.gltf_file_path);
+            if (gltfCheckError || !gltfCheck) {
+              needsRepair = true;
+            }
+          }
+
+          if (!showroom.json_file_path) {
+            needsRepair = true;
+          } else {
+            const { data: jsonCheck, error: jsonCheckError } = await supabase.storage
+              .from('models')
+              .download(showroom.json_file_path);
+            if (jsonCheckError || !jsonCheck) {
+              needsRepair = true;
+            }
+          }
+
+          if (needsRepair) {
+            // Recharger depuis /public puis ré-uploader vers le bucket Supabase
+            const gltfResp = await fetch('/45bdVoltaire_SalonVesta.glb');
+            const jsonResp = await fetch('/45bdVoltaire_SalonVesta.points.json');
+
+            if (!gltfResp.ok || !jsonResp.ok) {
+              throw new Error('Impossible de recharger les fichiers Show-room depuis /public');
+            }
+
+            const gltfBlob = await gltfResp.blob();
+            let jsonText = await jsonResp.text();
+            jsonText = jsonText.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+
+            const timestamp = Date.now();
+            const gltfPath = `${user.id}/demo_showroom_${timestamp}.glb`;
+            const jsonPath = `${user.id}/demo_showroom_${timestamp}.json`;
+
+            const { error: gltfError } = await supabase.storage
+              .from('models')
+              .upload(gltfPath, gltfBlob, { contentType: 'model/gltf-binary', upsert: false });
+            if (gltfError) throw gltfError;
+
+            const { error: jsonError } = await supabase.storage
+              .from('models')
+              .upload(jsonPath, new Blob([jsonText], { type: 'application/json' }), { upsert: false });
+            if (jsonError) throw jsonError;
+
+            const { error: updateError } = await supabase
+              .from('spaces')
+              .update({
+                gltf_file_path: gltfPath,
+                gltf_file_name: '45bdVoltaire_SalonVesta.glb',
+                json_file_path: jsonPath,
+                json_file_name: '45bdVoltaire_SalonVesta.points.json',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', showroom.id);
+            if (updateError) throw updateError;
+
+            showSuccess('Fichiers du Show-room restaurés');
+            // Recharger et filtrer de nouveau
+            const { data: data2, error: err2 } = await supabase
+              .from('spaces')
+              .select('*')
+              .order('updated_at', { ascending: false });
+            if (err2) throw err2;
+
+            const refreshed = data2 || [];
+            const visibleRefreshed = isAnonymous ? refreshed : refreshed.filter((s) => s.name !== 'Show-room');
+            setSpaces(visibleRefreshed);
+          }
+        } else if (!showroom && user) {
+          // Show-room absent: le créer depuis /public
           const gltfResp = await fetch('/45bdVoltaire_SalonVesta.glb');
           const jsonResp = await fetch('/45bdVoltaire_SalonVesta.points.json');
 
