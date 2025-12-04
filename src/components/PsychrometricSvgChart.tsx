@@ -242,69 +242,110 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   }
 
   const shiftedZones: ZoneDef[] = React.useMemo(() => {
-    // Base width du confort (avant ajustement dynamique)
     const baseComfort = ZONES.find(z => z.id === "comfort")!;
-    const baseWidth = baseComfort.tMax - baseComfort.tMin;
-
-    const interp = interpolateComfortBounds(outdoorTemp);
-    // Extension du confort vers des T plus élevées si la vitesse d’air augmente (≈+3°C par m/s, limité à 1.5 m/s)
     const fanBoost = Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3;
 
+    // Ajustement combiné (calibrations + sliders)
+    const baseAdj = interpolateAdjust(typeof outdoorTemp === "number" ? outdoorTemp : undefined);
+    const userAdj = psychroAdjust;
+    const adj = {
+      xShiftDeg: (baseAdj.xShiftDeg ?? 0) + (userAdj.xShiftDeg ?? 0),
+      widthScale: (baseAdj.widthScale ?? 1) * (userAdj.widthScale ?? 1),
+      heightScale: (baseAdj.heightScale ?? 1) * (userAdj.heightScale ?? 1),
+      zoomScale: (baseAdj.zoomScale ?? 1) * (userAdj.zoomScale ?? 1),
+      yOffsetPx: (baseAdj.yOffsetPx ?? 0) + (userAdj.yOffsetPx ?? 0),
+      curvatureGain: (baseAdj.curvatureGain ?? 0) + (userAdj.curvatureGain ?? 0),
+    };
+
+    const T_PIVOT = 25.5;
+
     return ZONES.map((z) => {
-      if (z.id === "comfort" && interp) {
-        // Appliquer les bornes interpolées + décalage + boost ventilateur
-        const tMin = interp.tMin;
-        const tMax = interp.tMax + fanBoost;
-        return { ...z, tMin, tMax };
-      } else {
-        // Les autres zones: appliquer le décalage + homogénéiser la largeur via un facteur
-        // pour suivre l’élargissement relatif observé sur la zone de confort.
-        const widthFactor = interp ? (interp.width / baseWidth) : 1;
-        const mid = (z.tMin + z.tMax) / 2;
-        const half = (z.tMax - z.tMin) / 2;
-        const newHalf = half * widthFactor;
-        const tMin = (mid - newHalf) + shift;
-        const tMax = (mid + newHalf) + shift;
-        return { ...z, tMin, tMax };
+      const mid = (z.tMin + z.tMax) / 2;
+      const half = (z.tMax - z.tMin) / 2;
+
+      // Élargissement/rétrécissement autour du pivot puis déplacement horizontal
+      const scaledMin = T_PIVOT + (z.tMin - T_PIVOT) * (adj.widthScale > 0 ? adj.widthScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
+      const scaledMax = T_PIVOT + (z.tMax - T_PIVOT) * (adj.widthScale > 0 ? adj.widthScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
+
+      let tMin = scaledMin + (Number.isFinite(adj.xShiftDeg) ? adj.xShiftDeg : 0);
+      let tMax = scaledMax + (Number.isFinite(adj.xShiftDeg) ? adj.xShiftDeg : 0);
+
+      // Boost ventilateur seulement pour la zone Confort
+      if (z.id === "comfort") {
+        tMax += fanBoost;
       }
+
+      return { ...z, tMin, tMax };
     });
-  }, [outdoorTemp, airSpeed, shift]);
+  }, [outdoorTemp, airSpeed, psychroAdjust]);
 
   function buildZonePolygonPoints(z: ZoneDef): { points: string; labelX: number; labelY: number } {
     const step = 0.5;
     const top: string[] = [];
-    const W_MAX_COMFORT_GKG = 12; // ≃0.012 kg/kg
-    const W_MIN_COMFORT_GKG = 5;  // ≃0.005 kg/kg
+    const W_MAX_COMFORT_GKG = 12;
+    const W_MIN_COMFORT_GKG = 5;
 
+    // Ajustement combiné: calibrations (en fonction de T ext) + sliders (psychroAdjust)
+    const baseAdj = interpolateAdjust(typeof outdoorTemp === "number" ? outdoorTemp : undefined);
+    const userAdj = psychroAdjust;
+    const adj = {
+      xShiftDeg: (baseAdj.xShiftDeg ?? 0) + (userAdj.xShiftDeg ?? 0),
+      widthScale: (baseAdj.widthScale ?? 1) * (userAdj.widthScale ?? 1),
+      heightScale: (baseAdj.heightScale ?? 1) * (userAdj.heightScale ?? 1),
+      zoomScale: (baseAdj.zoomScale ?? 1) * (userAdj.zoomScale ?? 1),
+      yOffsetPx: (baseAdj.yOffsetPx ?? 0) + (userAdj.yOffsetPx ?? 0),
+      curvatureGain: (baseAdj.curvatureGain ?? 0) + (userAdj.curvatureGain ?? 0),
+    };
+
+    const T_PIVOT = 25.5;
+    const W_PIVOT = 8.5;
+
+    function curvatureOffsetPxAtTemp(t: number): number {
+      const yA = gkgToY(mixingRatioFromRH(t - 0.5, 100, P_ATM));
+      const yB = gkgToY(mixingRatioFromRH(t + 0.5, 100, P_ATM));
+      const slope = Math.abs(yB - yA);
+      const base = 3;
+      const max = 7;
+      const gain = Number.isFinite(adj.curvatureGain) ? adj.curvatureGain : 0;
+      return -Math.min(max, base + gain * slope);
+    }
+
+    // Parcours des T avec zoom horizontal déjà pris en compte dans shiftedZones (éviter double-zoom X)
     for (let t = z.tMin; t <= z.tMax + 1e-6; t += step) {
-      // RH max variable pour la zone de confort, sinon RH max fixe de la zone
       const rhMax = z.id === "comfort" ? rhMaxComfortPercentAtT(t) : z.rhMax;
       const wTopRaw = mixingRatioFromRH(t, rhMax, P_ATM);
-      const wTop = z.id === "comfort" ? Math.min(wTopRaw, W_MAX_COMFORT_GKG) : wTopRaw;
+      const wScaled = W_PIVOT + (wTopRaw - W_PIVOT) * (adj.heightScale > 0 ? adj.heightScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
+      const wTop = z.id === "comfort" ? Math.min(wScaled, W_MAX_COMFORT_GKG) : wScaled;
       if (!Number.isFinite(wTop)) continue;
-      top.push(`${tempToX(t)},${gkgToY(wTop)}`);
+
+      const x = tempToX(t);
+      const y = gkgToY(wTop) + curvatureOffsetPxAtTemp(t) + (Number.isFinite(adj.yOffsetPx) ? adj.yOffsetPx : 0);
+      top.push(`${x},${y}`);
     }
 
     const bottom: string[] = [];
     for (let t = z.tMax; t >= z.tMin - 1e-6; t -= step) {
-      // RH min fixe pour la plupart des zones; pour “Confort” appliquer plancher W
       const wBotRaw = mixingRatioFromRH(t, z.rhMin, P_ATM);
-      const wBot = z.id === "comfort" ? Math.max(wBotRaw, W_MIN_COMFORT_GKG) : wBotRaw;
+      const wScaled = W_PIVOT + (wBotRaw - W_PIVOT) * (adj.heightScale > 0 ? adj.heightScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
+      const wBot = z.id === "comfort" ? Math.max(wScaled, W_MIN_COMFORT_GKG) : wScaled;
       if (!Number.isFinite(wBot)) continue;
-      bottom.push(`${tempToX(t)},${gkgToY(wBot)}`);
+
+      const x = tempToX(t);
+      const y = gkgToY(wBot) + curvatureOffsetPxAtTemp(t) + (Number.isFinite(adj.yOffsetPx) ? adj.yOffsetPx : 0);
+      bottom.push(`${x},${y}`);
     }
 
     const points = [...top, ...bottom].join(" ");
-
-    // Label au centre (utilise RH mid moyenne pour le positionner)
     const tMid = (z.tMin + z.tMax) / 2;
     const rhMid = (z.rhMin + z.rhMax) / 2;
     const wMidRaw = mixingRatioFromRH(tMid, rhMid, P_ATM);
-    const wMid = z.id === "comfort"
-      ? Math.max(Math.min(wMidRaw, W_MAX_COMFORT_GKG), W_MIN_COMFORT_GKG)
-      : wMidRaw;
+    const wMidScaled = W_PIVOT + (wMidRaw - W_PIVOT) * (adj.heightScale > 0 ? adj.heightScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
+    const wMid = z.id === "comfort" ? Math.max(Math.min(wMidScaled, W_MAX_COMFORT_GKG), W_MIN_COMFORT_GKG) : wMidScaled;
+
     const labelX = tempToX(tMid);
-    const labelY = Number.isFinite(wMid) ? gkgToY(wMid) + (z.labelOffsetY ?? 0) : 120;
+    const labelY = Number.isFinite(wMid)
+      ? gkgToY(wMid) + curvatureOffsetPxAtTemp(tMid) + (z.labelOffsetY ?? 0)
+      : 120;
 
     return { points, labelX, labelY };
   }
@@ -631,68 +672,20 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         </defs>
 
 
-        {/* Calque figé (calibré) : se superpose automatiquement au graphe */}
+        {/* Calque figé dynamique (zones Givoni) collé aux iso-RH du graphe */}
         <g clipPath="url(#dyad-psychro-clip)">
-          {overlayShapes.map((s, idx) => {
-            const col = colorById[s.id] ?? "59,130,246";
-            const stroke = `rgba(${col},0.88)`;
-            const fillCol = s.fill ? `rgba(${col},0.22)` : "none";
-            const ptsFixed = transformOverlayCalibrated(s.points, s.id);
-
-            if (s.kind === "polygon") {
-              return (
-                <polygon
-                  key={`fixed-${s.id}-${idx}`}
-                  points={ptsFixed}
-                  stroke={stroke}
-                  strokeWidth={3}
-                  strokeLinejoin="round"
-                  fill={fillCol}
-                />
-              );
-            }
-
+          {zonePolys.map((zp, idx) => {
+            const col = colorById[zp.id] ?? "59,130,246";
+            const stroke = `rgba(${col},0.9)`;
+            const fillCol = zp.fill ? `rgba(${col},0.22)` : "none";
             return (
-              <polyline
-                key={`fixed-${s.id}-${idx}`}
-                points={ptsFixed}
+              <polygon
+                key={`zone-${zp.id}-${idx}`}
+                points={zp.points}
                 stroke={stroke}
                 strokeWidth={3}
                 strokeLinejoin="round"
-                fill="none"
-              />
-            );
-          })}
-
-          {/* Calque ajustable (discret): utile pour fine-tuning, n’écrase pas le calque figé */}
-          {overlayShapes.map((s, idx) => {
-            const col = colorById[s.id] ?? "59,130,246";
-            const strokeAdj = `rgba(${col},0.28)`;
-            const ptsAdj = transformOverlayPoints(s.points, s.id);
-
-            if (s.kind === "polygon") {
-              return (
-                <polygon
-                  key={`adj-${s.id}-${idx}`}
-                  points={ptsAdj}
-                  stroke={strokeAdj}
-                  strokeDasharray="6 4"
-                  strokeWidth={2}
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-              );
-            }
-
-            return (
-              <polyline
-                key={`adj-${s.id}-${idx}`}
-                points={ptsAdj}
-                stroke={strokeAdj}
-                strokeDasharray="6 4"
-                strokeWidth={2}
-                strokeLinejoin="round"
-                fill="none"
+                fill={fillCol}
               />
             );
           })}
