@@ -5,6 +5,7 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/comp
 import { useTheme } from "@/components/theme-provider";
 import { useSmoothedValue } from "@/hooks/useSmoothedValue";
 import { useAppStore } from "@/store/appStore";
+import { interpolateAdjust } from "@/utils/psychroAdjust";
 
 const DEBUG_ENABLED = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug");
 
@@ -464,45 +465,11 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     return "25.5";
   }
 
-  // Ajustements calibrés fournis par l'utilisateur pour différentes T extérieures
-  type AdjustParams = {
-    xShiftDeg: number;
-    widthScale: number;
-    heightScale: number;
-    zoomScale: number;
-    yOffsetPx: number;
-    curvatureGain: number;
-  };
+  // Ajustements calibrés déplacés vers utilitaire: src/utils/psychroAdjust.ts
 
-  const CALIBRATIONS: { t: number; adjust: AdjustParams }[] = [
-    { t: 5.4, adjust: { xShiftDeg: 2.8, widthScale: 0.72, heightScale: 0.84, zoomScale: 0.8, yOffsetPx: 35.5, curvatureGain: 0 } },
-    { t: 8.6, adjust: { xShiftDeg: 2.5, widthScale: 0.73, heightScale: 0.91, zoomScale: 0.8, yOffsetPx: 34,   curvatureGain: 0 } },
-    { t: 11.0, adjust: { xShiftDeg: 1.6, widthScale: 0.75, heightScale: 0.94, zoomScale: 0.8, yOffsetPx: 38,   curvatureGain: 0.2 } },
-  ];
+  // Calibrations déplacées vers utilitaire: src/utils/psychroAdjust.ts
 
-  function interpolateAdjust(outT?: number): AdjustParams {
-    const mid = CALIBRATIONS[1].adjust;
-    if (typeof outT !== "number") return mid;
-    const sorted = CALIBRATIONS.slice().sort((a,b)=> a.t-b.t);
-    if (outT <= sorted[0].t) return sorted[0].adjust;
-    if (outT >= sorted[sorted.length-1].t) return sorted[sorted.length-1].adjust;
-
-    let a = sorted[0], b = sorted[1];
-    for (let i=0; i<sorted.length-1; i++){
-      if (outT >= sorted[i].t && outT <= sorted[i+1].t) { a = sorted[i]; b = sorted[i+1]; break; }
-    }
-    const ratio = (outT - a.t) / (b.t - a.t);
-    const lerp = (pA:number, pB:number) => pA + (pB - pA) * ratio;
-
-    return {
-      xShiftDeg:     lerp(a.adjust.xShiftDeg,     b.adjust.xShiftDeg),
-      widthScale:    lerp(a.adjust.widthScale,    b.adjust.widthScale),
-      heightScale:   lerp(a.adjust.heightScale,   b.adjust.heightScale),
-      zoomScale:     lerp(a.adjust.zoomScale,     b.adjust.zoomScale),
-      yOffsetPx:     lerp(a.adjust.yOffsetPx,     b.adjust.yOffsetPx),
-      curvatureGain: lerp(a.adjust.curvatureGain, b.adjust.curvatureGain),
-    };
-  }
+  // interpolateAdjust importé depuis utilitaire: src/utils/psychroAdjust.ts
 
   // Transformation dédiée pour le calque figé: utilise ancre o(T_out) + paramètres calibrés
   function transformOverlayCalibrated(points: string, zoneId?: string): string {
