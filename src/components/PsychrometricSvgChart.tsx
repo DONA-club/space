@@ -2,7 +2,6 @@
 
 import React from "react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { motion } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
 import { useSmoothedValue } from "@/hooks/useSmoothedValue";
 import { useAppStore } from "@/store/appStore";
@@ -81,6 +80,52 @@ function rhMaxComfortPercentAtT(tC: number): number {
   // interpolation linéaire entre 18 et 28°C
   return 80 - ((tC - 18) * 2); // 2 %RH par °C
 }
+
+const AnimatedCircle: React.FC<{ cx: number; cy: number; r: number; fill: string; stroke: string; strokeWidth: number; durationSec: number }> = (props) => {
+  const [motionModule, setMotionModule] = React.useState<any>(null);
+  const noMotion = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debugNoMotion");
+
+  React.useEffect(() => {
+    let mounted = true;
+    if (noMotion) return;
+    import("framer-motion")
+      .then((mod) => {
+        if (mounted) setMotionModule(mod.motion);
+      })
+      .catch((err) => {
+        console.error("[PsychroSvg] Failed to load framer-motion module", err);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [noMotion]);
+
+  if (!motionModule) {
+    return (
+      <circle
+        cx={props.cx}
+        cy={props.cy}
+        r={props.r}
+        fill={props.fill}
+        stroke={props.stroke}
+        strokeWidth={props.strokeWidth}
+      />
+    );
+  }
+
+  const Motion = motionModule;
+  return (
+    <Motion.circle
+      animate={{ cx: props.cx, cy: props.cy }}
+      initial={false}
+      transition={{ duration: props.durationSec, ease: "easeInOut" }}
+      r={props.r}
+      fill={props.fill}
+      stroke={props.stroke}
+      strokeWidth={props.strokeWidth}
+    />
+  );
+};
 
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animationMs, airSpeed = 0 }) => {
   const { theme } = useTheme();
@@ -777,14 +822,14 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
               <TooltipProvider delayDuration={150} key={`${c.name}-${i}`}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <motion.circle
-                      animate={{ cx: c.cx, cy: c.cy }}
-                      initial={false}
-                      transition={{ duration: durationSec, ease: "easeInOut" }}
+                    <AnimatedCircle
+                      cx={c.cx}
+                      cy={c.cy}
                       r={7}
                       fill={fillColor}
                       stroke="hsl(var(--background))"
                       strokeWidth={1.5}
+                      durationSec={durationSec}
                     />
                   </TooltipTrigger>
                   <TooltipContent side="top">
