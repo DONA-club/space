@@ -246,7 +246,8 @@ export const Scene3DViewer = () => {
 
   useEffect(() => {
     // Conditions préalables
-    if (!sceneRef.current || !dataReady || !modelBounds || !originalModelBounds || sensorData.size === 0 || exactAirVolume === null) {
+    // Cas “bloquants” : pas de scène, pas de bounds, pas de volume -> on retire l’interpolation
+    if (!sceneRef.current || !modelBounds || !originalModelBounds || exactAirVolume === null) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
         disposeInterpolationMesh(sceneRef.current.interpolationMesh);
@@ -262,6 +263,7 @@ export const Scene3DViewer = () => {
       return;
     }
 
+    // Si l’interpolation est désactivée: on retire le mesh
     if (!meshingEnabled) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
@@ -278,11 +280,13 @@ export const Scene3DViewer = () => {
       return;
     }
 
-    const { scene, interpolationMesh, modelScale, originalCenter, modelGroup } = sceneRef.current;
-    if (interpolationMesh) {
-      scene.remove(interpolationMesh);
-      disposeInterpolationMesh(interpolationMesh);
+    // Pendant la lecture, les données peuvent être momentanément vides: ne pas retirer le mesh (évite le flicker), juste sauter cette itération
+    if (!dataReady || sensorData.size === 0) {
+      return;
     }
+
+    const { scene, interpolationMesh, modelScale, originalCenter, modelGroup } = sceneRef.current;
+    // Conserver l’ancien mesh pour éviter le clignotement; il sera mis à jour/remplacé après calcul.
 
     // Créer le worker si nécessaire
     if (!workerRef.current) {
