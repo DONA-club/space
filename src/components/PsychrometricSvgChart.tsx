@@ -91,7 +91,9 @@ const AnimatedCircle: React.FC<{ cx: number; cy: number; r: number; fill: string
     if (noMotion) return;
     import("framer-motion")
       .then((mod) => {
-        if (mounted) setMotionModule(mod.motion);
+        if (mounted && mod && mod.motion) {
+          setMotionModule(mod.motion);
+        }
       })
       .catch((err) => {
         console.error("[PsychroSvg] Failed to load framer-motion module", err);
@@ -114,18 +116,45 @@ const AnimatedCircle: React.FC<{ cx: number; cy: number; r: number; fill: string
     );
   }
 
-  const Motion = motionModule;
-  return (
-    <Motion.circle
-      animate={{ cx: props.cx, cy: props.cy }}
-      initial={false}
-      transition={{ duration: props.durationSec, ease: "easeInOut" }}
-      r={props.r}
-      fill={props.fill}
-      stroke={props.stroke}
-      strokeWidth={props.strokeWidth}
-    />
-  );
+  try {
+    const MotionCircle = motionModule.circle;
+    if (!MotionCircle) {
+      return (
+        <circle
+          cx={props.cx}
+          cy={props.cy}
+          r={props.r}
+          fill={props.fill}
+          stroke={props.stroke}
+          strokeWidth={props.strokeWidth}
+        />
+      );
+    }
+
+    return (
+      <MotionCircle
+        animate={{ cx: props.cx, cy: props.cy }}
+        initial={false}
+        transition={{ duration: props.durationSec, ease: "easeInOut" }}
+        r={props.r}
+        fill={props.fill}
+        stroke={props.stroke}
+        strokeWidth={props.strokeWidth}
+      />
+    );
+  } catch (error) {
+    console.error("[AnimatedCircle] Error rendering motion.circle:", error);
+    return (
+      <circle
+        cx={props.cx}
+        cy={props.cy}
+        r={props.r}
+        fill={props.fill}
+        stroke={props.stroke}
+        strokeWidth={props.strokeWidth}
+      />
+    );
+  }
 };
 
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animationMs, airSpeed = 0 }) => {
