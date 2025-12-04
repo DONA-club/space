@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useAppStore } from "@/store/appStore";
 import { useSensorData } from "@/hooks/useSensorData";
 import { getMetricValue } from "@/utils/metricUtils";
-import { getColorFromValueSaturated } from "@/utils/colorUtils";
+import { getColorFromValueSaturated, getColorFromValue } from "@/utils/colorUtils";
 import { getAverageDataPointInWindow } from "@/utils/sensorUtils";
 
 type ChartPoint = {
@@ -28,7 +28,12 @@ export function useChartPoints() {
   const setChartPoints = useAppStore((s) => s.setChartPoints);
 
   // Utiliser la même fenêtre de données que la 3D (éviter des appels réseau en replay)
-  const { sensorData, outdoorData: outdoorSeries } = useSensorData(currentSpace, sensors, hasOutdoorData, currentTimestamp);
+  const { sensorData, outdoorData: outdoorSeries } = useSensorData(
+    currentSpace,
+    sensors,
+    hasOutdoorData,
+    currentTimestamp
+  );
 
   // Suivi de la moyenne volumétrique (via événement global)
   const volumetricRef = useRef<{ temperature: number; absoluteHumidity: number; color?: string } | null>(null);
@@ -44,7 +49,12 @@ export function useChartPoints() {
       if (typeof avgTemp === "number" && typeof avgAbsHumidity === "number") {
         let colorHex: string | undefined = undefined;
         if (typeof metricAverage === "number" && interpolationRange && sm) {
-          const c = getColorFromValueSaturated(metricAverage, interpolationRange.min, interpolationRange.max, sm);
+          const c = getColorFromValueSaturated(
+            metricAverage,
+            interpolationRange.min,
+            interpolationRange.max,
+            sm
+          );
           colorHex = `#${c.getHexString()}`;
         }
         volumetricRef.current = { temperature: avgTemp, absoluteHumidity: avgAbsHumidity, color: colorHex };
@@ -58,6 +68,7 @@ export function useChartPoints() {
 
   useEffect(() => {
     let cancelled = false;
+
     const run = async () => {
       if (!currentSpace) {
         setChartPoints([]);
@@ -83,7 +94,12 @@ export function useChartPoints() {
               },
               selectedMetric
             );
-            const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
+            const c = getColorFromValueSaturated(
+              v,
+              interpolationRange.min,
+              interpolationRange.max,
+              selectedMetric
+            );
             colorHex = `#${c.getHexString()}`;
           }
           pts.push({
@@ -94,23 +110,27 @@ export function useChartPoints() {
           });
         });
 
-        // Extérieur (si présent)
-        if (hasOutdoorData && outdoorData) {
-          let colorHex: string | undefined = undefined;
-          if (interpolationRange) {
-            const v = getMetricValue(
-              {
-                timestamp: outdoorData.timestamp,
-                temperature: outdoorData.temperature,
-                humidity: outdoorData.humidity,
-                absoluteHumidity: outdoorData.absoluteHumidity,
-                dewPoint: outdoorData.dewPoint,
-              },
-              selectedMetric
-            );
-            const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
-            colorHex = `#${c.getHexString()}`;
-          }
+        // Extérieur (si présent) — utiliser la même logique de couleur que OutdoorBadge (clamp + getColorFromValue -> hex)
+        if (hasOutdoorData && outdoorData && interpolationRange) {
+          const v = getMetricValue(
+            {
+              timestamp: outdoorData.timestamp,
+              temperature: outdoorData.temperature,
+              humidity: outdoorData.humidity,
+              absoluteHumidity: outdoorData.absoluteHumidity,
+              dewPoint: outdoorData.dewPoint,
+            },
+            selectedMetric
+          );
+          const vClamped = Math.max(interpolationRange.min, Math.min(interpolationRange.max, v));
+          const colorNum = getColorFromValue(
+            vClamped,
+            interpolationRange.min,
+            interpolationRange.max,
+            selectedMetric
+          );
+          const colorHex = `#${colorNum.toString(16).padStart(6, "0")}`;
+
           pts.push({
             name: "Extérieur",
             temperature: outdoorData.temperature,
@@ -125,7 +145,7 @@ export function useChartPoints() {
         if (meshingEnabled && (vol || (hasOutdoorData && outdoorData))) {
           outPts = [];
           if (vol) outPts.push({ name: "Moyenne volumétrique", ...vol });
-          if (hasOutdoorData && outdoorData) {
+          if (hasOutdoorData && outdoorData && interpolationRange) {
             const v = getMetricValue(
               {
                 timestamp: outdoorData.timestamp,
@@ -136,11 +156,15 @@ export function useChartPoints() {
               },
               selectedMetric
             );
-            let colorHex: string | undefined = undefined;
-            if (interpolationRange) {
-              const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
-              colorHex = `#${c.getHexString()}`;
-            }
+            const vClamped = Math.max(interpolationRange.min, Math.min(interpolationRange.max, v));
+            const colorNum = getColorFromValue(
+              vClamped,
+              interpolationRange.min,
+              interpolationRange.max,
+              selectedMetric
+            );
+            const colorHex = `#${colorNum.toString(16).padStart(6, "0")}`;
+
             outPts.push({
               name: "Extérieur",
               temperature: outdoorData.temperature,
@@ -164,7 +188,12 @@ export function useChartPoints() {
         if (!series || series.length === 0 || !interpolationRange) return;
         const point = getAverageDataPointInWindow(series, ts, smoothingWindowSec * 1000);
         const v = getMetricValue(point, selectedMetric);
-        const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
+        const c = getColorFromValueSaturated(
+          v,
+          interpolationRange.min,
+          interpolationRange.max,
+          selectedMetric
+        );
         ptsRaw.push({
           name: sensor.name,
           temperature: point.temperature,
@@ -173,15 +202,22 @@ export function useChartPoints() {
         });
       });
 
+      // Extérieur en replay — utiliser clamp + getColorFromValue -> hex
       if (hasOutdoorData && outdoorSeries.length > 0 && interpolationRange) {
         const point = getAverageDataPointInWindow(outdoorSeries, ts, smoothingWindowSec * 1000);
         const v = getMetricValue(point, selectedMetric);
-        const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
+        const vClamped = Math.max(interpolationRange.min, Math.min(interpolationRange.max, v));
+        const colorNum = getColorFromValue(
+          vClamped,
+          interpolationRange.min,
+          interpolationRange.max,
+          selectedMetric
+        );
         ptsRaw.push({
           name: "Extérieur",
           temperature: point.temperature,
           absoluteHumidity: point.absoluteHumidity,
-          color: `#${c.getHexString()}`,
+          color: `#${colorNum.toString(16).padStart(6, "0")}`,
         });
       }
 

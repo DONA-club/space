@@ -344,13 +344,46 @@ export const Scene3DViewer = () => {
       );
 
       if (sceneRef.current) {
-        // Nettoyer l’ancien mesh s’il existe
-        if (sceneRef.current.interpolationMesh) {
-          sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
-          disposeInterpolationMesh(sceneRef.current.interpolationMesh);
+        const prev = sceneRef.current.interpolationMesh;
+        // Si même type (nuage de points) et même taille, on met à jour en place
+        if (prev && latestVisualizationType === 'points' && prev instanceof THREE.Points && newMesh instanceof THREE.Points) {
+          const oldGeom = (prev.geometry as THREE.BufferGeometry);
+          const newGeom = (newMesh.geometry as THREE.BufferGeometry);
+          const oldPos = oldGeom.getAttribute('position') as THREE.BufferAttribute;
+          const newPos = newGeom.getAttribute('position') as THREE.BufferAttribute;
+          const oldCol = oldGeom.getAttribute('color') as THREE.BufferAttribute;
+          const newCol = newGeom.getAttribute('color') as THREE.BufferAttribute;
+
+          if (oldPos && newPos && oldPos.count === newPos.count && oldCol && newCol && oldCol.count === newCol.count) {
+            (oldPos.array as any).set(newPos.array as any);
+            oldPos.needsUpdate = true;
+            (oldCol.array as any).set(newCol.array as any);
+            oldCol.needsUpdate = true;
+
+            // Nettoyer le mesh temporaire
+            newGeom.dispose();
+            const mat = (newMesh.material as any);
+            if (Array.isArray(mat)) {
+              mat.forEach((m: any) => m.dispose());
+            } else {
+              mat.dispose();
+            }
+          } else {
+            // Sinon, remplacer proprement
+            sceneRef.current.scene.remove(prev);
+            disposeInterpolationMesh(prev);
+            sceneRef.current.scene.add(newMesh);
+            sceneRef.current.interpolationMesh = newMesh;
+          }
+        } else {
+          // Type différent ou pas d'ancien mesh: remplacer
+          if (prev) {
+            sceneRef.current.scene.remove(prev);
+            disposeInterpolationMesh(prev);
+          }
+          sceneRef.current.scene.add(newMesh);
+          sceneRef.current.interpolationMesh = newMesh;
         }
-        sceneRef.current.scene.add(newMesh);
-        sceneRef.current.interpolationMesh = newMesh;
       }
     };
 
