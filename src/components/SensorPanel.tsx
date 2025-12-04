@@ -77,6 +77,16 @@ export const SensorPanel = () => {
   const [outdoorSensorName, setOutdoorSensorName] = useState<string>('Extérieur');
   const [outdoorLastDate, setOutdoorLastDate] = useState<Date | null>(null);
   const chartPoints = useAppStore((state) => state.chartPoints);
+  const [chartReady, setChartReady] = useState(false);
+
+  useEffect(() => {
+    if (chartPoints && chartPoints.length > 0) {
+      const id = setTimeout(() => setChartReady(true), 150);
+      return () => clearTimeout(id);
+    } else {
+      setChartReady(false);
+    }
+  }, [chartPoints]);
   const [volumetricPoint, setVolumetricPoint] = useState<{ temperature: number; absoluteHumidity: number; color?: string } | null>(null);
 
   useEffect(() => {
@@ -1584,16 +1594,18 @@ export const SensorPanel = () => {
                   1013 hPa
                 </Badge>
               </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                onClick={() => setScienceExpanded(!scienceExpanded)}
-                aria-label={scienceExpanded ? "Réduire" : "Agrandir"}
-                title={scienceExpanded ? "Réduire" : "Agrandir"}
-              >
-                {scienceExpanded ? <Focus size={16} strokeWidth={2.5} /> : <Scan size={16} strokeWidth={2.5} />}
-              </Button>
+              {chartReady && (
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="h-7 w-7 rounded-md bg-gradient-to-br from-rose-500/20 to-pink-500/20 border border-rose-400 dark:border-rose-600 text-rose-600 dark:text-rose-300 hover:from-rose-500/30 hover:to-pink-500/30"
+                  onClick={() => setScienceExpanded(!scienceExpanded)}
+                  aria-label={scienceExpanded ? "Réduire" : "Agrandir"}
+                  title={scienceExpanded ? "Réduire" : "Agrandir"}
+                >
+                  {scienceExpanded ? <Focus size={16} strokeWidth={2.5} /> : <Scan size={16} strokeWidth={2.5} />}
+                </Button>
+              )}
             </div>
 
             {chartPoints.length > 0 ? (
