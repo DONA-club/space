@@ -220,6 +220,35 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     return { ...z, ...poly };
   }), [shiftedZones]);
 
+  // Hystérésis pour éviter les bascules rapides (clignotements) aux bords des zones
+  const ACTIVE_HYST = 0.4; // marge en °C
+  const [activeZoneIds, setActiveZoneIds] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    setActiveZoneIds((prev) => {
+      const next = new Set(prev);
+      if (typeof volumetricTemp !== "number") {
+        next.clear();
+        return next;
+      }
+      shiftedZones.forEach((z) => {
+        const wasActive = prev.has(z.id);
+        if (wasActive) {
+          // Ne désactiver qu'en sortant vraiment de la zone (avec marge)
+          if (volumetricTemp < z.tMin - ACTIVE_HYST || volumetricTemp > z.tMax + ACTIVE_HYST) {
+            next.delete(z.id);
+          }
+        } else {
+          // N'activer qu'après être bien entré dans la zone (avec marge)
+          if (volumetricTemp >= z.tMin + ACTIVE_HYST && volumetricTemp <= z.tMax - ACTIVE_HYST) {
+            next.add(z.id);
+          }
+        }
+      });
+      return next;
+    });
+  }, [volumetricTemp, shiftedZones]);
+
   return (
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
@@ -261,7 +290,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         <g>
           {computedZones.map((z) => {
             if (!z.points || z.points.length === 0) return null;
-            const isActive = typeof volumetricTemp === "number" && volumetricTemp >= z.tMin && volumetricTemp <= z.tMax;
+            const isActive = activeZoneIds.has(z.id);
             const fillOpacity = isActive ? 0.18 : 0.06;
             const strokeOpacity = isActive ? 0.9 : 0.35;
             const strokeWidth = isActive ? 1.8 : 1;
