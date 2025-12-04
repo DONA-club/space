@@ -60,9 +60,7 @@ export const OrientationPanel = () => {
       const u = data?.user;
       const anon = !!(u && ((u as any).is_anonymous || (u as any).app_metadata?.provider === 'anonymous'));
       setIsAnonSession(anon);
-      if (!anon) {
-        setLocked(false);
-      }
+      // Toujours démarrer verrouillé; pas de déverrouillage auto pour les sessions officielles
     });
   }, []);
 
@@ -73,7 +71,8 @@ export const OrientationPanel = () => {
 
   const handlePanelMouseLeave = () => {
     window.dispatchEvent(new CustomEvent('windRoseHide'));
-    if (!isAnonSession) return; // hors démo: ne pas re-verrouiller
+    // Sauvegarde l’azimut et replie le panneau pour tous les types de session
+    saveOrientation(localDeg);
     if (!locked) {
       setLocked(true);
       showSuccess("Azimut verrouillé");
@@ -82,24 +81,33 @@ export const OrientationPanel = () => {
     }
   };
 
-  const handleUnlockClick = () => {
-    if (!isAnonSession) {
-      setLocked(false);
-      window.dispatchEvent(new CustomEvent('windRoseShow'));
-      return;
-    }
-    const unlocked = typeof window !== 'undefined' && localStorage.getItem('adminUnlocked') === 'true';
-    if (!unlocked) {
-      const pwd = window.prompt('Mot de passe administrateur ?');
-      if (pwd !== 'admin') {
-        showError('Mot de passe incorrect');
+  const handleLockToggle = () => {
+    if (locked) {
+      // Déverrouillage
+      if (!isAnonSession) {
+        setLocked(false);
+        window.dispatchEvent(new CustomEvent('windRoseShow'));
         return;
       }
-      localStorage.setItem('adminUnlocked', 'true');
-      showSuccess('Mode administrateur activé');
+      const unlocked = typeof window !== 'undefined' && localStorage.getItem('adminUnlocked') === 'true';
+      if (!unlocked) {
+        const pwd = window.prompt('Mot de passe administrateur ?');
+        if (pwd !== 'admin') {
+          showError('Mot de passe incorrect');
+          return;
+        }
+        localStorage.setItem('adminUnlocked', 'true');
+        showSuccess('Mode administrateur activé');
+      }
+      setLocked(false);
+      window.dispatchEvent(new CustomEvent('windRoseShow'));
+    } else {
+      // Verrouillage
+      saveOrientation(localDeg);
+      setLocked(true);
+      window.dispatchEvent(new CustomEvent('windRoseHide'));
+      showSuccess("Azimut verrouillé");
     }
-    setLocked(false);
-    window.dispatchEvent(new CustomEvent('windRoseShow'));
   };
 
   const saveOrientation = async (degToSave: number) => {
@@ -148,17 +156,15 @@ export const OrientationPanel = () => {
             >
               {degToCardinal(localDeg)} • {Math.round(localDeg)}°
             </Badge>
-            {isAnonSession && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={handleUnlockClick}
-                aria-label={locked ? "Déverrouiller l'orientation" : "Orientation déverrouillée"}
-              >
-                {locked ? <Lock size={14} /> : <Unlock size={14} className="text-green-600" />}
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0"
+              onClick={handleLockToggle}
+              aria-label={locked ? "Déverrouiller l'orientation" : "Verrouiller l'orientation"}
+            >
+              {locked ? <Lock size={14} /> : <Unlock size={14} className="text-green-600" />}
+            </Button>
           </div>
         </div>
 
