@@ -119,72 +119,73 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
       if (error) throw error;
 
+      // Détecter si la session est une session démo (utilisateur anonyme)
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user || null;
+      const isAnonymous =
+        !!(user && ((user as any).is_anonymous || (user as any).app_metadata?.provider === 'anonymous'));
+
       const list = data || [];
-      setSpaces(list);
+      const visibleList = isAnonymous ? list : list.filter((s) => s.name !== 'Show-room');
+      setSpaces(visibleList);
 
-      // En mode démo, s'assurer que l'espace Show-room existe pour cet utilisateur.
-      if (DEMO_MODE) {
-        const hasShowroom = list.some((s) => s.name === 'Show-room');
-        if (!hasShowroom) {
-          const { data: userData } = await supabase.auth.getUser();
-          const user = userData?.user || null;
+      // Créer le Show-room UNIQUEMENT pour les sessions démo (anonymes)
+      if (isAnonymous) {
+        const hasShowroom = visibleList.some((s) => s.name === 'Show-room');
+        if (!hasShowroom && user) {
+          // Charger depuis /public puis uploader vers le bucket Supabase pour que les CSV soient persistants via RLS.
+          const gltfResp = await fetch('/45bdVoltaire_SalonVesta.gltf');
+          const jsonResp = await fetch('/45bdVoltaire_SalonVesta.points.json');
 
-          if (user) {
-            // Charger depuis /public puis uploader vers le bucket Supabase pour que les CSV soient persistants via RLS.
-            const gltfResp = await fetch('/45bdVoltaire_SalonVesta.gltf');
-            const jsonResp = await fetch('/45bdVoltaire_SalonVesta.points.json');
-
-            if (!gltfResp.ok || !jsonResp.ok) {
-              throw new Error('Impossible de charger les fichiers de démonstration depuis /public');
-            }
-
-            const gltfBlob = await gltfResp.blob();
-            let jsonText = await jsonResp.text();
-            jsonText = jsonText.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
-
-            const timestamp = Date.now();
-            const gltfPath = `${user.id}/demo_showroom_${timestamp}.gltf`;
-            const jsonPath = `${user.id}/demo_showroom_${timestamp}.json`;
-
-            const { error: gltfError } = await supabase.storage
-              .from('models')
-              .upload(gltfPath, gltfBlob, { contentType: 'model/gltf+json', upsert: false });
-
-            if (gltfError) throw gltfError;
-
-            const { error: jsonError } = await supabase.storage
-              .from('models')
-              .upload(jsonPath, new Blob([jsonText], { type: 'application/json' }), { upsert: false });
-
-            if (jsonError) throw jsonError;
-
-            const { error: insertError } = await supabase
-              .from('spaces')
-              .insert({
-                user_id: user.id,
-                name: 'Show-room',
-                description: 'Espace de démonstration',
-                gltf_file_path: gltfPath,
-                gltf_file_name: '45bdVoltaire_SalonVesta.gltf',
-                json_file_path: jsonPath,
-                json_file_name: '45bdVoltaire_SalonVesta.points.json',
-                latitude: 48.8566,
-                longitude: 2.3522,
-              })
-              .select()
-              .single();
-
-            if (insertError) throw insertError;
-
-            // Recharger la liste avec le Show-room
-            const { data: data2, error: err2 } = await supabase
-              .from('spaces')
-              .select('*')
-              .order('updated_at', { ascending: false });
-
-            if (err2) throw err2;
-            setSpaces(data2 || []);
+          if (!gltfResp.ok || !jsonResp.ok) {
+            throw new Error('Impossible de charger les fichiers de démonstration depuis /public');
           }
+
+          const gltfBlob = await gltfResp.blob();
+          let jsonText = await jsonResp.text();
+          jsonText = jsonText.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
+
+          const timestamp = Date.now();
+          const gltfPath = `${user.id}/demo_showroom_${timestamp}.gltf`;
+          const jsonPath = `${user.id}/demo_showroom_${timestamp}.json`;
+
+          const { error: gltfError } = await supabase.storage
+            .from('models')
+            .upload(gltfPath, gltfBlob, { contentType: 'model/gltf+json', upsert: false });
+          if (gltfError) throw gltfError;
+
+          const { error: jsonError } = await supabase.storage
+            .from('models')
+            .upload(jsonPath, new Blob([jsonText], { type: 'application/json' }), { upsert: false });
+          if (jsonError) throw jsonError;
+
+          const { error: insertError } = await supabase
+            .from('spaces')
+            .insert({
+              user_id: user.id,
+              name: 'Show-room',
+              description: 'Espace de démonstration',
+              gltf_file_path: gltfPath,
+              gltf_file_name: '45bdVoltaire_SalonVesta.gltf',
+              json_file_path: jsonPath,
+              json_file_name: '45bdVoltaire_SalonVesta.points.json',
+              latitude: 48.8566,
+              longitude: 2.3522,
+            })
+            .select()
+            .single();
+          if (insertError) throw insertError;
+
+          // Recharger et filtrer de nouveau
+          const { data: data2, error: err2 } = await supabase
+            .from('spaces')
+            .select('*')
+            .order('updated_at', { ascending: false });
+          if (err2) throw err2;
+
+          const refreshed = data2 || [];
+          const visibleRefreshed = isAnonymous ? refreshed : refreshed.filter((s) => s.name !== 'Show-room');
+          setSpaces(visibleRefreshed);
         }
       }
     } catch (error) {
@@ -381,8 +382,14 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     setCreating(true);
 
     try {
-      // En mode démo: tout espace autre que "Show-room" est éphémère (local), visible mais non sauvegardé.
-      if (DEMO_MODE && newSpaceName.trim() !== 'Show-room') {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non authentifié');
+
+      const isAnonymous =
+        !!(user && ((user as any).is_anonymous || (user as any).app_metadata?.provider === 'anonymous'));
+
+      // En démo (anonyme): tout espace autre que "Show-room" est éphémère (local), visible mais non sauvegardé.
+      if (isAnonymous && newSpaceName.trim() !== 'Show-room') {
         const localGltfUrl = URL.createObjectURL(gltfFile);
         let jsonText = await jsonFile.text();
         jsonText = jsonText.replace(/"([xyz])":\s*(-?\d+),(\d+)/g, '"$1":$2.$3');
@@ -419,10 +426,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
         return;
       }
 
-      // Chemin standard (persisté) – utile si DEMO_MODE désactivé ou pour Show-room explicitement
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non authentifié');
-
+      // Chemin standard (persisté)
       const gltfPath = `${user.id}/${Date.now()}_${gltfFile.name}`;
       const { error: gltfError } = await supabase.storage
         .from('models')
