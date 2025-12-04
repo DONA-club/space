@@ -287,55 +287,72 @@ export const Scene3DViewer = () => {
     // Créer le worker si nécessaire
     if (!workerRef.current) {
       workerRef.current = new Worker(new URL('@/workers/interpolationWorker.ts', import.meta.url), { type: 'module' });
-      workerRef.current.onmessage = (evt: MessageEvent<any>) => {
-        const {
-          positions, values, minValue, maxValue, volumetricAverage,
-          interpolationPointCount, airMass, waterMass, avgTemp, avgHumidity, avgAbsHumidity, jobTs
-        } = evt.data || {};
-
-        // Ignorer un résultat obsolète
-        if (jobTs !== lastJobTsRef.current) return;
-
-        setVolumetricAverage(volumetricAverage);
-        setInterpolationPointCount(interpolationPointCount);
-        setAirMass(airMass);
-        setWaterMass(waterMass);
-        setAverageTemperature(avgTemp);
-        setAverageHumidity(avgHumidity);
-
-        window.dispatchEvent(new CustomEvent('volumetricAverageUpdate', {
-          detail: {
-            avgTemp,
-            avgAbsHumidity,
-            metricAverage: volumetricAverage,
-            selectedMetric
-          }
-        }));
-
-        // Construire la visualisation sur le thread principal
-        const newMesh = createVisualizationMesh(
-          // Convertir typed arrays en structure attendue si nécessaire
-          Array.from({ length: values.length }, (_, i) => ({
-            x: positions[i * 3],
-            y: positions[i * 3 + 1],
-            z: positions[i * 3 + 2],
-            value: values[i]
-          })),
-          minValue,
-          maxValue,
-          selectedMetric,
-          visualizationType,
-          modelBounds,
-          meshResolution,
-          isDarkMode
-        );
-
-        if (sceneRef.current) {
-          sceneRef.current.scene.add(newMesh);
-          sceneRef.current.interpolationMesh = newMesh;
-        }
-      };
     }
+
+    // Réassigner le handler à chaque changement pour capter les dernières options
+    workerRef.current.onmessage = (evt: MessageEvent<any>) => {
+      const {
+        positions, values, minValue, maxValue, volumetricAverage,
+        interpolationPointCount, airMass, waterMass, avgTemp, avgHumidity, avgAbsHumidity, jobTs
+      } = evt.data || {};
+
+      // Ignorer un résultat obsolète
+      if (jobTs !== lastJobTsRef.current) return;
+
+      // Mettre à jour les métriques synchronisées
+      setVolumetricAverage(volumetricAverage);
+      setInterpolationPointCount(interpolationPointCount);
+      setAirMass(airMass);
+      setWaterMass(waterMass);
+      setAverageTemperature(avgTemp);
+      setAverageHumidity(avgHumidity);
+
+      // Aligner la légende et le diagramme sur la plage min/max du worker
+      setInterpolationRange({ min: minValue, max: maxValue });
+
+      // Diffuser la moyenne volumétrique (point)
+      window.dispatchEvent(new CustomEvent('volumetricAverageUpdate', {
+        detail: {
+          avgTemp,
+          avgAbsHumidity,
+          metricAverage: volumetricAverage,
+          selectedMetric
+        }
+      }));
+
+      // Utiliser les options courantes du store
+      const latest = useAppStore.getState();
+      const latestSelectedMetric = latest.selectedMetric;
+      const latestVisualizationType = latest.visualizationType;
+      const latestMeshResolution = latest.meshResolution;
+
+      // Construire la visualisation
+      const newMesh = createVisualizationMesh(
+        Array.from({ length: values.length }, (_, i) => ({
+          x: positions[i * 3],
+          y: positions[i * 3 + 1],
+          z: positions[i * 3 + 2],
+          value: values[i]
+        })),
+        minValue,
+        maxValue,
+        latestSelectedMetric,
+        latestVisualizationType,
+        modelBounds!,
+        latestMeshResolution,
+        isDarkMode
+      );
+
+      if (sceneRef.current) {
+        // Nettoyer l’ancien mesh s’il existe
+        if (sceneRef.current.interpolationMesh) {
+          sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
+          disposeInterpolationMesh(sceneRef.current.interpolationMesh);
+        }
+        sceneRef.current.scene.add(newMesh);
+        sceneRef.current.interpolationMesh = newMesh;
+      }
+    };
 
     const modelPosition = modelGroup?.position || new THREE.Vector3(0, 0, 0);
 

@@ -15,6 +15,7 @@ type ChartPoint = {
 type Props = {
   points: ChartPoint[];
   outdoorTemp?: number | null;
+  animationMs?: number; // durée des transitions des points (ms)
 };
 
 const X_MIN = -15;
@@ -67,7 +68,7 @@ function mixingRatioFromRH(temperatureC: number, rhPercent: number, pressurePa: 
   return w_kgkg * 1000;
 }
 
-const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
+const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animationMs }) => {
   const { theme } = useTheme();
   const isDarkMode =
     theme === "dark" ||
@@ -77,6 +78,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
       window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   const [svgContent, setSvgContent] = React.useState<string | null>(null);
+  const durationSec = (animationMs ?? 250) / 1000;
 
   function injectStyle(svg: string): string {
     const overrideStyle = `
@@ -316,7 +318,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
                     <motion.circle
                       animate={{ cx: c.cx, cy: c.cy }}
                       initial={false}
-                      transition={{ duration: 0.25, ease: "easeInOut" }}
+                      transition={{ duration: durationSec, ease: "easeInOut" }}
                       r={7}
                       fill={fillColor}
                       stroke="hsl(var(--background))"

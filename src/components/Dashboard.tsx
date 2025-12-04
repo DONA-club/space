@@ -32,6 +32,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   const scienceExpanded = useAppStore((state) => state.scienceExpanded);
   const chartPoints = useAppStore((state) => state.chartPoints);
   const outdoorData = useAppStore((state) => state.outdoorData);
+  const isPlaying = useAppStore((state) => state.isPlaying);
   const setScienceExpanded = useAppStore((state) => state.setScienceExpanded);
   
   const [spaceAddress, setSpaceAddress] = useState<string>('');
@@ -266,6 +267,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                         <PsychrometricSvgChart
                           points={chartPoints}
                           outdoorTemp={outdoorData ? outdoorData.temperature : null}
+                          animationMs={isPlaying ? 100 : 250}
                         />
                         <div className="absolute top-2 right-2 z-10">
                           <Button

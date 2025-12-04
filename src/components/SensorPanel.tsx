@@ -76,7 +76,7 @@ export const SensorPanel = () => {
   const [outdoorDataCount, setOutdoorDataCount] = useState(0);
   const [outdoorSensorName, setOutdoorSensorName] = useState<string>('Extérieur');
   const [outdoorLastDate, setOutdoorLastDate] = useState<Date | null>(null);
-  const [chartPoints, setChartPoints] = useState<{ name: string; temperature: number; absoluteHumidity: number; color?: string }[]>([]);
+  const chartPoints = useAppStore((state) => state.chartPoints);
   const [volumetricPoint, setVolumetricPoint] = useState<{ temperature: number; absoluteHumidity: number; color?: string } | null>(null);
 
   useEffect(() => {
@@ -765,20 +765,8 @@ export const SensorPanel = () => {
         }
       }
 
-      // Si interpolation active et point volumétrique disponible: ne garder que volumétrique + extérieur
-      if (meshingEnabled && (volumetricPoint || hasOutdoorData)) {
-        const filtered: { name: string; temperature: number; absoluteHumidity: number; color?: string }[] = [];
-        if (volumetricPoint) {
-          filtered.push({ name: 'Moyenne volumétrique', ...volumetricPoint });
-        }
-        const out = pts.find(p => p.name === outdoorSensorName);
-        if (out) filtered.push(out);
-        setChartPoints(filtered);
-        setChartPointsStore(filtered);
-      } else {
-        setChartPoints(pts);
-        setChartPointsStore(pts);
-      }
+      // Désormais, le calcul des points est centralisé dans useChartPoints
+      // Ne rien faire ici (on évite les mises à jour concurrentes)
     };
 
     if (mode === 'replay') {
@@ -842,13 +830,7 @@ export const SensorPanel = () => {
           color: colorHex
         });
       }
-      setChartPoints(filtered);
-      setChartPointsStore(filtered);
-    } else {
-      // Sinon, garder tous les points live
-      setChartPoints(livePts);
-      setChartPointsStore(livePts);
-    }
+      // Désormais, le calcul des points est centralisé dans useChartPoints
   }, [mode, currentTimestamp, sensors, currentSpace, hasOutdoorData, outdoorSensorName, smoothingWindowSec, meshingEnabled, volumetricPoint, interpolationRange, selectedMetric, outdoorData]);
 
   return (
@@ -1554,7 +1536,11 @@ export const SensorPanel = () => {
 
             {chartPoints.length > 0 ? (
               <div className="h-80">
-                <PsychrometricSvgChart points={chartPoints} outdoorTemp={outdoorData ? outdoorData.temperature : null} />
+                <PsychrometricSvgChart
+                  points={chartPoints}
+                  outdoorTemp={outdoorData ? outdoorData.temperature : null}
+                  animationMs={useAppStore.getState().isPlaying ? 100 : 250}
+                />
               </div>
             ) : (
               <div className="text-xs text-gray-600 dark:text-gray-400 py-2">
