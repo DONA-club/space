@@ -30,12 +30,14 @@ const ZoneAdjustPanel: React.FC = () => {
   const setPsychroYOffsetPx = useAppStore((s) => s.setPsychroYOffsetPx);
   const setPsychroCurvatureGain = useAppStore((s) => s.setPsychroCurvatureGain);
   const setPsychroHeightScale = useAppStore((s) => s.setPsychroHeightScale);
+  const setPsychroZoomScale = useAppStore((s) => s.setPsychroZoomScale);
 
   const xShiftDisplay = useMemo(() => `${formatNum(psychroAdjust.xShiftDeg, 1)} °C`, [psychroAdjust.xShiftDeg]);
   const widthDisplay = useMemo(() => `${formatNum(psychroAdjust.widthScale, 2)}×`, [psychroAdjust.widthScale]);
   const heightDisplay = useMemo(() => `${formatNum(psychroAdjust.heightScale, 2)}×`, [psychroAdjust.heightScale]);
   const yOffsetDisplay = useMemo(() => `${formatNum(psychroAdjust.yOffsetPx, 1)} px`, [psychroAdjust.yOffsetPx]);
   const curvatureDisplay = useMemo(() => `${formatNum(psychroAdjust.curvatureGain, 2)}×`, [psychroAdjust.curvatureGain]);
+  const zoomDisplay = useMemo(() => `${formatNum(psychroAdjust.zoomScale, 2)}×`, [psychroAdjust.zoomScale]);
 
   return (
     <div className="fixed bottom-4 right-4 z-40">
@@ -70,6 +72,16 @@ const ZoneAdjustPanel: React.FC = () => {
               max={1.4}
               step={0.01}
               onValueChange={(v) => setPsychroHeightScale(v[0] ?? 1)}
+            />
+          </Row>
+
+          <Row label="Zoom des zones" valueText={zoomDisplay}>
+            <Slider
+              value={[psychroAdjust.zoomScale]}
+              min={0.7}
+              max={1.5}
+              step={0.01}
+              onValueChange={(v) => setPsychroZoomScale(v[0] ?? 1)}
             />
           </Row>
 

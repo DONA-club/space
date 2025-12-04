@@ -379,7 +379,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     if (!points) return points;
 
     // Réglages utilisateurs (panneau sliders)
-    const { xShiftDeg, widthScale, yOffsetPx, curvatureGain, heightScale } = psychroAdjust;
+    const { xShiftDeg, widthScale, yOffsetPx, curvatureGain, heightScale, zoomScale } = psychroAdjust;
 
     // Repère source (ton chart)
     const SRC_X_MIN = 5;
@@ -434,11 +434,17 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         // Appliquer déformation/translation sur la température
         const tCAdj = T_PIVOT + (tC - T_PIVOT) * widthFactor + tShift + fanBoost;
 
+        // Zoom uniforme autour des pivots (température et humidité)
+        const z = (Number.isFinite(zoomScale) && zoomScale > 0) ? zoomScale : 1;
+        const W_PIVOT = 8.5; // g/kg
+        const tZoomed = T_PIVOT + (tCAdj - T_PIVOT) * z;
+        const wZoomed = W_PIVOT + (wGkgAdj - W_PIVOT) * z;
+
         // Conversion vers notre SVG courant
-        const tx = tempToX(tCAdj);
-        const yOffsetDyn = curvatureOffsetPxAtTemp(tCAdj);
+        const tx = tempToX(tZoomed);
+        const yOffsetDyn = curvatureOffsetPxAtTemp(tZoomed);
         const extraY = Number.isFinite(yOffsetPx) ? yOffsetPx : 0;
-        const ty = gkgToY(wGkgAdj) + yOffsetDyn + extraY;
+        const ty = gkgToY(wZoomed) + yOffsetDyn + extraY;
 
         return `${tx.toFixed(1)},${ty.toFixed(1)}`;
       })
