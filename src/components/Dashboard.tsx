@@ -7,7 +7,8 @@ import { Scene3DViewer } from './Scene3DViewer';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Radio, History, LogOut, ArrowLeft, Menu, X, Minimize2 } from 'lucide-react';
+import { Radio, History, LogOut, ArrowLeft, Menu, X } from 'lucide-react';
+import { TbMinimize } from 'react-icons/tb';
 import { SensorPanel } from './SensorPanel';
 import { TimelineControl } from './TimelineControl';
 import { FileUploadPanel } from './FileUploadPanel';
@@ -278,7 +279,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                             aria-label="Réduire"
                             title="Réduire"
                           >
-                            <Minimize2 size={16} />
+                            <TbMinimize size={18} />
                           </Button>
                         </div>
                       </>
