@@ -192,15 +192,79 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0
   ), [outdoorTemp]);
 
-  const shiftedZones: ZoneDef[] = React.useMemo(() => ZONES.map((z) => {
+  // Convertir x (coord. SVG) -> Température (°C), via le mapping utilisé dans tempToX
+  function xToTemp(x: number): number {
+    const t = X_MIN + (x - X_AT_MIN) / X_PER_DEG;
+    return t;
+  }
+
+  // Ancres extraites des polygones fournis (x extrêmes confort) pour les 3 cas:
+  // 14.5°C → [482.6, 662.4] ; 25.5°C → [570.0, 749.7] ; 38.5°C → [672.7, 852.4]
+  const comfortAnchors = React.useMemo(() => {
+    const cases = [
+      { tout: 14.5, xMin: 482.6, xMax: 662.4 },
+      { tout: 25.5, xMin: 570.0, xMax: 749.7 },
+      { tout: 38.5, xMin: 672.7, xMax: 852.4 },
+    ];
+    return cases.map(c => ({
+      tout: c.tout,
+      tMin: xToTemp(c.xMin),
+      tMax: xToTemp(c.xMax),
+      width: xToTemp(c.xMax) - xToTemp(c.xMin),
+    }));
+  }, []);
+
+  // Interpoler linéairement entre les ancres selon outdoorTemp
+  function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+  function clamp01(x: number) { return Math.max(0, Math.min(1, x)); }
+
+  function interpolateComfortBounds(outT: number | undefined): { tMin: number; tMax: number; width: number } | null {
+    if (typeof outT !== "number") return null;
+    const a0 = comfortAnchors[0], a1 = comfortAnchors[1], a2 = comfortAnchors[2];
+    if (outT <= a0.tout) return { tMin: a0.tMin, tMax: a0.tMax, width: a0.width };
+    if (outT >= a2.tout) return { tMin: a2.tMin, tMax: a2.tMax, width: a2.width };
+    // Interpérer entre segments [a0..a1] ou [a1..a2]
+    if (outT <= a1.tout) {
+      const t = clamp01((outT - a0.tout) / (a1.tout - a0.tout));
+      const tMin = lerp(a0.tMin, a1.tMin, t);
+      const tMax = lerp(a0.tMax, a1.tMax, t);
+      return { tMin, tMax, width: tMax - tMin };
+    } else {
+      const t = clamp01((outT - a1.tout) / (a2.tout - a1.tout));
+      const tMin = lerp(a1.tMin, a2.tMin, t);
+      const tMax = lerp(a1.tMax, a2.tMax, t);
+      return { tMin, tMax, width: tMax - tMin };
+    }
+  }
+
+  const shiftedZones: ZoneDef[] = React.useMemo(() => {
+    // Base width du confort (avant ajustement dynamique)
+    const baseComfort = ZONES.find(z => z.id === "comfort")!;
+    const baseWidth = baseComfort.tMax - baseComfort.tMin;
+
+    const interp = interpolateComfortBounds(outdoorTemp);
     // Extension du confort vers des T plus élevées si la vitesse d’air augmente (≈+3°C par m/s, limité à 1.5 m/s)
-    const fanBoost = z.id === "comfort" ? Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3 : 0;
-    return {
-      ...z,
-      tMin: z.tMin + shift,
-      tMax: z.tMax + shift + fanBoost,
-    };
-  }), [shift, airSpeed]);
+    const fanBoost = Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3;
+
+    return ZONES.map((z) => {
+      if (z.id === "comfort" && interp) {
+        // Appliquer les bornes interpolées + décalage + boost ventilateur
+        const tMin = interp.tMin;
+        const tMax = interp.tMax + fanBoost;
+        return { ...z, tMin, tMax };
+      } else {
+        // Les autres zones: appliquer le décalage + homogénéiser la largeur via un facteur
+        // pour suivre l’élargissement relatif observé sur la zone de confort.
+        const widthFactor = interp ? (interp.width / baseWidth) : 1;
+        const mid = (z.tMin + z.tMax) / 2;
+        const half = (z.tMax - z.tMin) / 2;
+        const newHalf = half * widthFactor;
+        const tMin = (mid - newHalf) + shift;
+        const tMax = (mid + newHalf) + shift;
+        return { ...z, tMin, tMax };
+      }
+    });
+  }, [outdoorTemp, airSpeed, shift]);
 
   function buildZonePolygonPoints(z: ZoneDef): { points: string; labelX: number; labelY: number } {
     const step = 0.5;
