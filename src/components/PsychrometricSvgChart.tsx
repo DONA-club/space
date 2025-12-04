@@ -593,8 +593,8 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
             );
           })}
 
-          {/* Calque ajustable (sliders manuels, discret pour debug) */}
-          {overlayShapes.map((s, idx) => {
+          {/* Calque ajustable (sliders manuels, visible uniquement en mode calibration) */}
+          {useAppStore.getState().showCalibrationPanel && overlayShapes.map((s, idx) => {
             const col = colorById[s.id] ?? "59,130,246";
             const strokeAdj = `rgba(${col},0.28)`;
             const ptsAdj = transformOverlayPoints(s.points, s.id, false);
@@ -625,6 +625,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
               />
             );
           })}
+        </g>
         </g>
 
         {typeof outdoorX === "number" && (

@@ -99,6 +99,7 @@ interface AppState {
 
   // Psychrometric overlay adjustments
   psychroAdjust: { xShiftDeg: number; widthScale: number; yOffsetPx: number; curvatureGain: number; heightScale: number; zoomScale: number };
+  showCalibrationPanel: boolean;
   
   // Actions
   setAuth: (user: any | null) => void;
@@ -142,6 +143,7 @@ interface AppState {
   setPsychroCurvatureGain: (gain: number) => void;
   setPsychroHeightScale: (scale: number) => void;
   setPsychroZoomScale: (scale: number) => void;
+  setShowCalibrationPanel: (show: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -177,6 +179,7 @@ export const useAppStore = create<AppState>((set) => ({
   chartPoints: [],
 
   psychroAdjust: { xShiftDeg: 0, widthScale: 1, yOffsetPx: 0, curvatureGain: 0.7, heightScale: 1, zoomScale: 1 },
+  showCalibrationPanel: false,
   
   setAuth: (user) => set({ 
     isAuthenticated: !!user, 
@@ -245,4 +248,5 @@ export const useAppStore = create<AppState>((set) => ({
   setPsychroCurvatureGain: (gain) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, curvatureGain: gain } })),
   setPsychroHeightScale: (scale) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, heightScale: scale } })),
   setPsychroZoomScale: (scale) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, zoomScale: scale } })),
+  setShowCalibrationPanel: (show) => set({ showCalibrationPanel: show }),
 }));

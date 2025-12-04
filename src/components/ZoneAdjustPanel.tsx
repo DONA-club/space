@@ -24,6 +24,7 @@ const Row: React.FC<{ label: string; valueText: string; children: React.ReactNod
 };
 
 const ZoneAdjustPanel: React.FC = () => {
+  const showCalibrationPanel = useAppStore((s) => s.showCalibrationPanel);
   const psychroAdjust = useAppStore((s) => s.psychroAdjust);
   const setPsychroXShiftDeg = useAppStore((s) => s.setPsychroXShiftDeg);
   const setPsychroWidthScale = useAppStore((s) => s.setPsychroWidthScale);
@@ -38,6 +39,8 @@ const ZoneAdjustPanel: React.FC = () => {
   const yOffsetDisplay = useMemo(() => `${formatNum(psychroAdjust.yOffsetPx, 1)} px`, [psychroAdjust.yOffsetPx]);
   const curvatureDisplay = useMemo(() => `${formatNum(psychroAdjust.curvatureGain, 2)}×`, [psychroAdjust.curvatureGain]);
   const zoomDisplay = useMemo(() => `${formatNum(psychroAdjust.zoomScale, 2)}×`, [psychroAdjust.zoomScale]);
+
+  if (!showCalibrationPanel) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-40">

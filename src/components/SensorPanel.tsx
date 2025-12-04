@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Maximize2, Minimize2, Gauge, Focus, Scan } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Maximize2, Minimize2, Gauge, Focus, Scan, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -1594,18 +1594,32 @@ export const SensorPanel = () => {
                   1013 hPa
                 </Badge>
               </div>
-              {chartReady && (
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-7 w-7 rounded-md bg-gradient-to-br from-rose-500/20 to-pink-500/20 border border-rose-400 dark:border-rose-600 text-rose-600 dark:text-rose-300 hover:from-rose-500/30 hover:to-pink-500/30"
-                  onClick={() => setScienceExpanded(!scienceExpanded)}
-                  aria-label={scienceExpanded ? "Réduire" : "Agrandir"}
-                  title={scienceExpanded ? "Réduire" : "Agrandir"}
-                >
-                  {scienceExpanded ? <Focus size={16} strokeWidth={2.5} /> : <Scan size={16} strokeWidth={2.5} />}
-                </Button>
-              )}
+              <div className="flex items-center gap-1">
+                {chartReady && scienceExpanded && (
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7 rounded-md bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-400 dark:border-amber-600 text-amber-600 dark:text-amber-300 hover:from-amber-500/30 hover:to-orange-500/30"
+                    onClick={() => useAppStore.getState().setShowCalibrationPanel(!useAppStore.getState().showCalibrationPanel)}
+                    aria-label="Calibration"
+                    title="Calibration des zones"
+                  >
+                    <Wrench size={16} strokeWidth={2.5} />
+                  </Button>
+                )}
+                {chartReady && (
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7 rounded-md bg-gradient-to-br from-rose-500/20 to-pink-500/20 border border-rose-400 dark:border-rose-600 text-rose-600 dark:text-rose-300 hover:from-rose-500/30 hover:to-pink-500/30"
+                    onClick={() => setScienceExpanded(!scienceExpanded)}
+                    aria-label={scienceExpanded ? "Réduire" : "Agrandir"}
+                    title={scienceExpanded ? "Réduire" : "Agrandir"}
+                  >
+                    {scienceExpanded ? <Focus size={16} strokeWidth={2.5} /> : <Scan size={16} strokeWidth={2.5} />}
+                  </Button>
+                )}
+              </div>
             </div>
 
             {chartPoints.length > 0 ? (
