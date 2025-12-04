@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Maximize2, Minimize2, Gauge } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Maximize2, Minimize2, Gauge, Focus, Scan } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -1592,7 +1592,7 @@ export const SensorPanel = () => {
                 aria-label={scienceExpanded ? "Réduire" : "Agrandir"}
                 title={scienceExpanded ? "Réduire" : "Agrandir"}
               >
-                {scienceExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                {scienceExpanded ? <Focus size={16} strokeWidth={2.5} /> : <Scan size={16} strokeWidth={2.5} />}
               </Button>
             </div>
 
