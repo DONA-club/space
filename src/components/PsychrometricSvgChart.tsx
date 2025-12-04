@@ -3,6 +3,7 @@
 import React from "react";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/FixedTooltip";
 import { motion } from "framer-motion";
+import { useTheme } from "@/components/theme-provider";
 
 type ChartPoint = {
   name: string;
@@ -84,6 +85,17 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
+  // Thème actif (dark / light) depuis le ThemeProvider
+  const { theme } = useTheme();
+  const isDark = (() => {
+    if (theme === 'system') {
+      return typeof window !== 'undefined'
+        && window.matchMedia
+        && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return theme === 'dark';
+  })();
+
   // Température de la moyenne volumétrique (si disponible dans les points)
   const volumetricTemp = (() => {
     const vol = points.find((p) => p.name.toLowerCase().includes("moyenne volumétrique"));
@@ -159,8 +171,26 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
 
   return (
     <div className="relative w-full h-full">
-      <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
-        <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
+      <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full font-sans">
+        <image
+          href="/psychrometric_template.svg"
+          x={-15}
+          y={0}
+          width={1000}
+          height={730}
+          style={{ filter: isDark ? "brightness(0.98) contrast(1.05)" : "brightness(1.06) contrast(1.02)" }}
+        />
+        {!isDark && (
+          <rect
+            x={-15}
+            y={0}
+            width={1000}
+            height={730}
+            fill="hsl(var(--card))"
+            fillOpacity={0.08}
+            style={{ mixBlendMode: "screen" }}
+          />
+        )}
 
 
         {/* Zones de Givoni pilotées par la température extérieure */}
@@ -183,10 +213,10 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
                 <text
                   x={z.labelX}
                   y={z.labelY}
-                  fontSize={10}
+                  fontSize={11}
                   textAnchor="middle"
-                  fill={`rgba(${z.color},${isActive ? 0.95 : 0.55})`}
-                  style={{ pointerEvents: 'none' }}
+                  fill={`hsl(var(--foreground))`}
+                  style={{ pointerEvents: 'none', fontWeight: 500 }}
                 >
                   {z.name}
                 </text>
