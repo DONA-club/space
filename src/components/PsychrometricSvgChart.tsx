@@ -7,6 +7,8 @@ import { useTheme } from "@/components/theme-provider";
 import { useSmoothedValue } from "@/hooks/useSmoothedValue";
 import { useAppStore } from "@/store/appStore";
 
+const DEBUG_ENABLED = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug");
+
 type ChartPoint = {
   name: string;
   temperature: number;        // °C
@@ -138,6 +140,12 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   }, [isDarkMode]);
 
   const circles = React.useMemo(() => {
+    if (DEBUG_ENABLED) {
+      console.groupCollapsed("[PsychroSvg] circles from points");
+      console.debug("points.length", points.length);
+      console.debug("first point", points[0]);
+      console.groupEnd();
+    }
     return points
       .map(p => {
         const wGkg = ahGm3ToMixingRatioGkg(p.absoluteHumidity, p.temperature);
@@ -163,6 +171,15 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   }, [points]);
 
   const volumetricTemp = useSmoothedValue(volumetricTempRaw, { stiffness: 160, damping: 24, enabled: true });
+
+  React.useEffect(() => {
+    if (DEBUG_ENABLED) {
+      console.groupCollapsed("[PsychroSvg] volumetric temperature");
+      console.debug("volumetricTempRaw", volumetricTempRaw);
+      console.debug("volumetricTemp (smoothed)", volumetricTemp);
+      console.groupEnd();
+    }
+  }, [volumetricTempRaw, volumetricTemp]);
 
   // Zones de Givoni (simplifiées) avec plages de T (°C) et RH (%)
   type ZoneDef = {
@@ -259,7 +276,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
 
     const T_PIVOT = 25.5;
 
-    return ZONES.map((z) => {
+    const result = ZONES.map((z) => {
       const mid = (z.tMin + z.tMax) / 2;
       const half = (z.tMax - z.tMin) / 2;
 
@@ -277,6 +294,17 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
 
       return { ...z, tMin, tMax };
     });
+
+    if (DEBUG_ENABLED) {
+      const comfort = result.find((z) => z.id === "comfort");
+      console.groupCollapsed("[PsychroSvg] shiftedZones");
+      console.debug("outdoorTemp", outdoorTemp, "fanBoost", fanBoost);
+      console.debug("adj", adj);
+      console.debug("comfort range", comfort?.tMin, "→", comfort?.tMax);
+      console.groupEnd();
+    }
+
+    return result;
   }, [outdoorTemp, airSpeed, psychroAdjust]);
 
   function buildZonePolygonPoints(z: ZoneDef): { points: string; labelX: number; labelY: number } {
@@ -434,6 +462,13 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   // Transformation dédiée pour le calque figé: utilise ancre o(T_out) + paramètres calibrés
   function transformOverlayCalibrated(points: string, zoneId?: string): string {
     if (!points) return points;
+
+    if (DEBUG_ENABLED) {
+      console.groupCollapsed("[PsychroSvg] transformOverlayCalibrated");
+      console.debug("zoneId", zoneId);
+      console.debug("outdoorTemp", outdoorTemp);
+      console.groupEnd();
+    }
 
     const adj = interpolateAdjust(typeof outdoorTemp === "number" ? outdoorTemp : undefined);
 
