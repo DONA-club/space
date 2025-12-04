@@ -110,9 +110,9 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
       </style>
     `;
     if (svg.includes('</defs>')) {
-      return svg.replace('</defs>', \`</defs>\${overrideStyle}\`);
+      return svg.replace('</defs>', `</defs>${overrideStyle}`);
     }
-    return svg.replace('</svg>', \`\${overrideStyle}</svg>\`);
+    return svg.replace('</svg>', `${overrideStyle}</svg>`);
   }
 
   React.useEffect(() => {
