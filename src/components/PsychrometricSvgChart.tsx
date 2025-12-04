@@ -161,6 +161,16 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
+        {/* Fond de la zone du graphique (adaptatif au thème) */}
+        <rect
+          x={0}
+          y={40}
+          width={960}
+          height={651}
+          fill="hsl(var(--muted))"
+          fillOpacity={0.18}
+          style={{ pointerEvents: 'none' }}
+        />
 
 
         {/* Zones de Givoni pilotées par la température extérieure */}
