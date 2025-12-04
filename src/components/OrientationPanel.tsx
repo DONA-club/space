@@ -94,7 +94,7 @@ export const OrientationPanel = () => {
   return (
     <LiquidGlassCard className="flex-shrink-0">
       <div
-        className={`${locked ? "px-3 py-2" : "p-3"}`}
+        className={`${locked ? "px-3 py-0" : "p-3"}`}
         onMouseEnter={handlePanelMouseEnter}
         onMouseLeave={handlePanelMouseLeave}
       >
@@ -102,8 +102,6 @@ export const OrientationPanel = () => {
           <div className="flex items-center gap-2">
             <Compass size={14} className="text-indigo-600" />
             <h3 className="text-sm font-medium">Orientation</h3>
-          </div>
-          <div className="flex items-center gap-2">
             {currentSpace?.latitude != null && currentSpace?.longitude != null && (
               <Badge
                 variant="outline"
@@ -114,6 +112,8 @@ export const OrientationPanel = () => {
                 {currentSpace.latitude.toFixed(5)}, {currentSpace.longitude.toFixed(5)}
               </Badge>
             )}
+          </div>
+          <div className="flex items-center gap-2">
             <Badge
               variant="outline"
               className={`text-[10px] h-5 px-1.5 ${getAzimuthBadgeClasses(localDeg)}`}

@@ -838,7 +838,7 @@ export const SensorPanel = () => {
     <div className="h-full flex flex-col gap-3 overflow-y-auto pb-2">
       <OrientationPanel />
       <LiquidGlassCard className="flex-shrink-0">
-        <div className={`${isDataExpanded ? "p-3" : "px-3 py-2"}`}>
+        <div className={`${isDataExpanded ? "p-3" : "px-3 py-0"}`}>
           <div className={`flex items-center justify-between ${isDataExpanded ? "mb-2" : "h-10"}`}>
             <div className="flex items-center gap-2">
               <Database size={14} className="text-blue-600" />
@@ -1246,7 +1246,7 @@ export const SensorPanel = () => {
         <>
         <LiquidGlassCard className="flex-shrink-0">
           <div
-            className={`${isInterpolationExpanded ? "p-3" : "px-3 py-2"}`}
+            className={`${isInterpolationExpanded ? "p-3" : "px-3 py-0"}`}
             onMouseEnter={() => { setInterpHovered(true); setLastInteraction(Date.now()); }}
             onMouseLeave={() => { setInterpHovered(false); setLastInteraction(Date.now()); }}
           >
@@ -1258,7 +1258,7 @@ export const SensorPanel = () => {
                   <div className="flex items-center gap-1.5">
                     <Badge
                       variant="outline"
-                      className="text-[9px] h-5 px-1.5 flex items-center gap-1 bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border-2 border-indigo-400 dark:border-indigo-600"
+                      className="text-[9px] h-5 px-1.5 flex items-center gap-1 bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-400 dark:border-indigo-600"
                       title="Résolution"
                     >
                       <Maximize2 size={10} className="text-indigo-600" />
@@ -1268,12 +1268,12 @@ export const SensorPanel = () => {
                       variant="outline"
                       className={`text-[9px] h-5 px-1.5 flex items-center justify-center ${
                         visualizationType === 'points'
-                          ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-2 border-blue-400 dark:border-blue-600'
+                          ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-400 dark:border-blue-600'
                           : visualizationType === 'vectors'
-                          ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-2 border-green-400 dark:border-green-600'
+                          ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-400 dark:border-green-600'
                           : visualizationType === 'isosurface'
-                          ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-2 border-purple-400 dark:border-purple-600'
-                          : 'bg-gradient-to-br from-orange-500/20 to-red-500/20 border-2 border-orange-400 dark:border-orange-600'
+                          ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-400 dark:border-purple-600'
+                          : 'bg-gradient-to-br from-orange-500/20 to-red-500/20 border border-orange-400 dark:border-orange-600'
                       }`}
                       title="Type"
                     >
@@ -1286,13 +1286,23 @@ export const SensorPanel = () => {
                       variant="outline"
                       className={`text-[9px] h-5 px-1.5 flex items-center justify-center ${
                         interpolationMethod === 'idw'
-                          ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-2 border-blue-400 dark:border-blue-600'
-                          : 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-2 border-purple-400 dark:border-purple-600'
+                          ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-400 dark:border-blue-600'
+                          : 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-400 dark:border-purple-600'
                       }`}
                       title="Méthode"
                     >
-                      {interpolationMethod === 'idw' && <Zap size={10} className="text-blue-600" />}
-                      {interpolationMethod === 'rbf' && <Waves size={10} className="text-purple-600" />}
+                      {interpolationMethod === 'idw' && (
+                        <>
+                          <Zap size={10} className="text-blue-600" />
+                          <span className="text-[9px] font-medium text-blue-700 dark:text-blue-400 ml-1">IDW</span>
+                        </>
+                      )}
+                      {interpolationMethod === 'rbf' && (
+                        <>
+                          <Waves size={10} className="text-purple-600" />
+                          <span className="text-[9px] font-medium text-purple-700 dark:text-purple-400 ml-1">RBF</span>
+                        </>
+                      )}
                     </Badge>
                   </div>
                 )}
