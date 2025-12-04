@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { Scene3DViewer } from './Scene3DViewer';
@@ -13,7 +13,7 @@ import { TimelineControl } from './TimelineControl';
 import { FileUploadPanel } from './FileUploadPanel';
 import { DataControlPanel } from './DataControlPanel';
 import { supabase } from '@/integrations/supabase/client';
-import PsychrometricSvgChart from './PsychrometricSvgChart';
+const PsychrometricSvgChart = lazy(() => import('./PsychrometricSvgChart'));
 import { useChartPoints } from '@/hooks/useChartPoints';
 
 interface DashboardProps {
@@ -263,25 +263,33 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                 <LiquidGlassCard className="p-4 h-full">
                   <div className="relative w-full h-full">
                     {scienceExpanded ? (
-                      <>
-                        <PsychrometricSvgChart
-                          points={chartPoints}
-                          outdoorTemp={outdoorData ? outdoorData.temperature : null}
-                          animationMs={isPlaying ? 100 : 250}
-                        />
-                        <div className="absolute top-2 right-2 z-10">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-8 w-8 bg-white/70 dark:bg-black/40 backdrop-blur"
-                            onClick={() => setScienceExpanded(false)}
-                            aria-label="Réduire"
-                            title="Réduire"
-                          >
-                            <Minimize2 size={16} />
-                          </Button>
-                        </div>
-                      </>
+                      <Suspense
+                        fallback={
+                          <div className="grid place-items-center h-full">
+                            <span className="text-xs text-muted-foreground">Chargement du graphique…</span>
+                          </div>
+                        }
+                      >
+                        <>
+                          <PsychrometricSvgChart
+                            points={chartPoints}
+                            outdoorTemp={outdoorData ? outdoorData.temperature : null}
+                            animationMs={isPlaying ? 100 : 250}
+                          />
+                          <div className="absolute top-2 right-2 z-10">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8 bg-white/70 dark:bg-black/40 backdrop-blur"
+                              onClick={() => setScienceExpanded(false)}
+                              aria-label="Réduire"
+                              title="Réduire"
+                            >
+                              <Minimize2 size={16} />
+                            </Button>
+                          </div>
+                        </>
+                      </Suspense>
                     ) : (
                       <Scene3DViewer />
                     )}
