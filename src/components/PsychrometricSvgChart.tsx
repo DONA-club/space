@@ -17,13 +17,16 @@ type ChartPoint = {
 type Props = {
   points: ChartPoint[];
   outdoorTemp?: number | null;
-  animationMs?: number; // durée des transitions des points (ms)
-  airSpeed?: number | null; // vitesse d'air en m/s (0–1.5), étend la T max confortable
+  animationMs?: number;
+  airSpeed?: number | null; // vitesse d'air en m/s (0–1.5)
 };
+
+// ============================================================================
+// CONSTANTES DU DIAGRAMME PSYCHROMÉTRIQUE
+// ============================================================================
 
 const X_MIN = -15;
 const X_MAX = 40;
-// Aligner avec les ticks du SVG: -15°C à x=20, 40°C à x=880.9
 const X_AT_MIN = 20;
 const X_AT_40 = 880.9;
 const X_PER_DEG = (X_AT_40 - X_AT_MIN) / (X_MAX - X_MIN);
@@ -34,13 +37,37 @@ const Y_PER_GKG = 19.727272727272727;
 const R_v = 461.5;
 const P_ATM = 101325;
 
+// Constantes pour les zones de Givoni
+const SHIFT_REF = 25; // Température de référence pour le décalage
+const SHIFT_FACTOR = 0.6; // Facteur de décalage par degré
+
+// ============================================================================
+// FONCTIONS DE CONVERSION COORDONNÉES
+// ============================================================================
+
 function tempToX(t: number): number {
   const clamped = Math.max(X_MIN, Math.min(X_MAX, t));
   return X_AT_MIN + (clamped - X_MIN) * X_PER_DEG;
 }
 
-// AH (g/m³) + T (°C) -> w (g/kg)
-function ahGm3ToMixingRatioGkg(absoluteHumidityGm3: number, temperatureC: number, pressurePa: number = P_ATM): number {
+function gkgToY(wGkg: number): number {
+  const clamped = Math.max(0, Math.min(60, wGkg));
+  return Y_AT_0_GKG - clamped * Y_PER_GKG;
+}
+
+// ============================================================================
+// FONCTIONS PSYCHROMÉTRIQUES DE BASE
+// ============================================================================
+
+/**
+ * Convertit l'humidité absolue (g/m³) en rapport de mélange (g/kg d'air sec)
+ * en utilisant la loi des gaz parfaits pour la vapeur d'eau.
+ */
+function ahGm3ToMixingRatioGkg(
+  absoluteHumidityGm3: number,
+  temperatureC: number,
+  pressurePa: number = P_ATM
+): number {
   if (!Number.isFinite(absoluteHumidityGm3) || !Number.isFinite(temperatureC)) return NaN;
   const rho_v = absoluteHumidityGm3 / 1000;
   const T_K = temperatureC + 273.15;
@@ -50,19 +77,21 @@ function ahGm3ToMixingRatioGkg(absoluteHumidityGm3: number, temperatureC: number
   return w_kgkg * 1000;
 }
 
-function gkgToY(wGkg: number): number {
-  const clamped = Math.max(0, Math.min(60, wGkg));
-  return Y_AT_0_GKG - clamped * Y_PER_GKG;
-}
-
-// Saturation vapor pressure (Tetens) in Pa
+/**
+ * Pression de vapeur saturante (formule de Tetens) en Pa
+ */
 function saturationVaporPressurePa(temperatureC: number): number {
-  // 610.94 Pa * exp(17.625*T / (T + 243.04))
   return 610.94 * Math.exp((17.625 * temperatureC) / (temperatureC + 243.04));
 }
 
-// Mixing ratio from RH (%) and T (°C) → g/kg
-function mixingRatioFromRH(temperatureC: number, rhPercent: number, pressurePa: number = P_ATM): number {
+/**
+ * Calcule le rapport de mélange (g/kg) à partir de T (°C) et RH (%)
+ */
+function mixingRatioFromRH(
+  temperatureC: number,
+  rhPercent: number,
+  pressurePa: number = P_ATM
+): number {
   if (!Number.isFinite(temperatureC) || !Number.isFinite(rhPercent)) return NaN;
   const es = saturationVaporPressurePa(temperatureC);
   const rh = Math.max(0, Math.min(100, rhPercent)) / 100;
@@ -72,15 +101,311 @@ function mixingRatioFromRH(temperatureC: number, rhPercent: number, pressurePa: 
   return w_kgkg * 1000;
 }
 
-// RH max de confort en fonction de la température (≈80% à 18°C → ≈60% à 28°C)
+/**
+ * Calcule l'enthalpie de l'air humide (kJ/kg d'air sec)
+ * h = Cp_air * T + w * (Lv + Cp_vapor * T)
+ */
+function airEnthalpy(temperatureC: number, wGkg: number): number {
+  const Cp_air = 1.006; // kJ/(kg·K)
+  const Lv = 2501; // kJ/kg (chaleur latente de vaporisation à 0°C)
+  const Cp_vapor = 1.86; // kJ/(kg·K)
+  const w_kgkg = wGkg / 1000;
+  return Cp_air * temperatureC + w_kgkg * (Lv + Cp_vapor * temperatureC);
+}
+
+/**
+ * Résout w tel que airEnthalpy(T, w) = h_target
+ * Utilise une méthode de Newton-Raphson simplifiée
+ */
+function solveHumidityForEnthalpy(temperatureC: number, h_target: number): number {
+  const Cp_air = 1.006;
+  const Lv = 2501;
+  const Cp_vapor = 1.86;
+  
+  // Résolution analytique: h = Cp_air * T + w * (Lv + Cp_vapor * T)
+  // => w = (h - Cp_air * T) / (Lv + Cp_vapor * T)
+  const w_kgkg = (h_target - Cp_air * temperatureC) / (Lv + Cp_vapor * temperatureC);
+  const w_gkg = w_kgkg * 1000;
+  
+  // Vérifier que w est physiquement possible (pas au-delà de la saturation)
+  const w_sat = mixingRatioFromRH(temperatureC, 100, P_ATM);
+  if (w_gkg > w_sat || w_gkg < 0) return NaN;
+  
+  return w_gkg;
+}
+
+/**
+ * Humidité relative maximale de confort en fonction de la température
+ * Interpolation linéaire: 80% à 18°C → 60% à 28°C
+ */
 function rhMaxComfortPercentAtT(tC: number): number {
   if (tC <= 18) return 80;
   if (tC >= 28) return 60;
-  // interpolation linéaire entre 18 et 28°C
-  return 80 - ((tC - 18) * 2); // 2 %RH par °C
+  return 80 - ((tC - 18) * 2);
 }
 
-const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animationMs, airSpeed = 0 }) => {
+// ============================================================================
+// CALCUL DES ZONES DE GIVONI DYNAMIQUES
+// ============================================================================
+
+type ZonePoint = { x: number; y: number };
+
+/**
+ * Calcule la zone de confort thermique en fonction de la température extérieure.
+ * 
+ * Principe physique:
+ * - Plage de base: 19-26°C pour T_ext ≈ 20°C
+ * - Adaptation physiologique: +0.2°C par °C au-dessus de 20°C extérieur
+ * - Limites d'humidité: 20% à 70% RH (avec plafond à 12 g/kg et plancher à 5 g/kg)
+ * - Extension possible avec ventilation (airSpeed)
+ */
+function computeComfortZone(T_ext: number, airSpeed: number = 0): ZonePoint[] {
+  // 1. Déterminer les bornes de température de confort
+  let T_comfort_min = 19;
+  let T_comfort_max = 26;
+  
+  // Adaptation en climat chaud (décalage de 0.2°C par °C au-dessus de 20°C)
+  if (T_ext > 20) {
+    const delta = 0.2 * (T_ext - 20);
+    T_comfort_min += delta;
+    T_comfort_max += delta;
+  }
+  
+  // Extension du confort avec ventilation (≈+3°C par m/s, max 1.5 m/s)
+  const fanBoost = Math.min(Math.max(airSpeed, 0), 1.5) * 3;
+  T_comfort_max += fanBoost;
+  
+  // 2. Limites d'humidité absolue pour le confort
+  const W_MAX_COMFORT_GKG = 12; // ≃0.012 kg/kg
+  const W_MIN_COMFORT_GKG = 5;  // ≃0.005 kg/kg
+  
+  const points: ZonePoint[] = [];
+  const step = 0.5;
+  
+  // Tracer la limite supérieure (air humide, RH variable selon T)
+  for (let T = T_comfort_min; T <= T_comfort_max + 1e-6; T += step) {
+    const rhMax = rhMaxComfortPercentAtT(T);
+    const wTopRaw = mixingRatioFromRH(T, rhMax, P_ATM);
+    const wTop = Math.min(wTopRaw, W_MAX_COMFORT_GKG);
+    if (!Number.isFinite(wTop)) continue;
+    points.push({ x: tempToX(T), y: gkgToY(wTop) });
+  }
+  
+  // Tracer la limite inférieure (air sec, RH min 20%)
+  for (let T = T_comfort_max; T >= T_comfort_min - 1e-6; T -= step) {
+    const wBotRaw = mixingRatioFromRH(T, 20, P_ATM);
+    const wBot = Math.max(wBotRaw, W_MIN_COMFORT_GKG);
+    if (!Number.isFinite(wBot)) continue;
+    points.push({ x: tempToX(T), y: gkgToY(wBot) });
+  }
+  
+  return points;
+}
+
+/**
+ * Calcule la zone de ventilation naturelle.
+ * 
+ * Principe physique:
+ * - Extension jusqu'à +10°C au-dessus du confort en air sec (20% RH)
+ * - Gain décroissant linéairement jusqu'à 0°C à 100% RH
+ * - L'efficacité du vent diminue avec l'humidité (transpiration moins efficace)
+ */
+function computeVentilationZone(T_ext: number, T_comfort_max: number): ZonePoint[] {
+  const points: ZonePoint[] = [];
+  const deltaT_max = 10; // +10°C possible en air sec
+  const RH_values = [0.20, 0.40, 0.60, 0.80, 1.0];
+  
+  // Tracer la limite supérieure de la zone de ventilation
+  RH_values.forEach(RH => {
+    // Interpolation linéaire du gain en température
+    const gain = deltaT_max * (1 - (RH - 0.20) / (1.0 - 0.20));
+    const T_limit = T_comfort_max + Math.max(gain, 0);
+    const w = mixingRatioFromRH(T_limit, RH * 100, P_ATM);
+    if (Number.isFinite(w)) {
+      points.push({ x: tempToX(T_limit), y: gkgToY(w) });
+    }
+  });
+  
+  // Fermer le polygone en revenant à la zone de confort
+  const w_base = mixingRatioFromRH(T_comfort_max, 20, P_ATM);
+  if (Number.isFinite(w_base)) {
+    points.push({ x: tempToX(T_comfort_max), y: gkgToY(w_base) });
+  }
+  
+  return points;
+}
+
+/**
+ * Calcule la zone à forte inertie thermique (masse thermique).
+ * 
+ * Principe physique:
+ * - Un bâtiment lourd peut encaisser les pics chauds si la température moyenne reste proche du confort
+ * - Extension de +5°C à 50% RH, +2°C à 100% RH
+ * - Plus efficace en air moyennement humide
+ */
+function computeHighMassZone(T_comfort_max: number): ZonePoint[] {
+  const points: ZonePoint[] = [];
+  const T_gain_mid = 5;
+  const T_gain_highRH = 2;
+  
+  // Point à humidité modérée (50% RH)
+  let T_limit = T_comfort_max + T_gain_mid;
+  let w = mixingRatioFromRH(T_limit, 50, P_ATM);
+  if (Number.isFinite(w)) points.push({ x: tempToX(T_limit), y: gkgToY(w) });
+  
+  // Point à humidité élevée (100% RH)
+  T_limit = T_comfort_max + T_gain_highRH;
+  w = mixingRatioFromRH(T_limit, 100, P_ATM);
+  if (Number.isFinite(w)) points.push({ x: tempToX(T_limit), y: gkgToY(w) });
+  
+  // Point côté sec (30% RH, +7°C)
+  T_limit = T_comfort_max + 7;
+  w = mixingRatioFromRH(T_limit, 30, P_ATM);
+  if (Number.isFinite(w)) points.push({ x: tempToX(T_limit), y: gkgToY(w) });
+  
+  // Fermer vers la zone de confort
+  w = mixingRatioFromRH(T_comfort_max, 70, P_ATM);
+  if (Number.isFinite(w)) points.push({ x: tempToX(T_comfort_max), y: gkgToY(w) });
+  
+  return points;
+}
+
+/**
+ * Calcule la zone inertie + ventilation nocturne.
+ * 
+ * Principe physique:
+ * - En climat chaud et sec, la combinaison inertie + ventilation nocturne permet
+ *   de tolérer des journées très chaudes si les nuits sont fraîches
+ * - Extension jusqu'à +12°C en air très sec (20% RH)
+ * - +5°C à 50% RH
+ */
+function computeHighMassNightZone(T_comfort_max: number): ZonePoint[] {
+  const points: ZonePoint[] = [];
+  
+  // Point en air très sec (20% RH, +12°C)
+  let T_limit = T_comfort_max + 12;
+  let w = mixingRatioFromRH(T_limit, 20, P_ATM);
+  if (Number.isFinite(w)) points.push({ x: tempToX(T_limit), y: gkgToY(w) });
+  
+  // Point à humidité moyenne (50% RH, +5°C)
+  T_limit = T_comfort_max + 5;
+  w = mixingRatioFromRH(T_limit, 50, P_ATM);
+  if (Number.isFinite(w)) points.push({ x: tempToX(T_limit), y: gkgToY(w) });
+  
+  // Connecter à la zone haute inertie
+  points.push({ x: tempToX(T_comfort_max + 5), y: gkgToY(mixingRatioFromRH(T_comfort_max + 5, 50, P_ATM)) });
+  
+  return points;
+}
+
+/**
+ * Calcule la zone de refroidissement par évaporation.
+ * 
+ * Principe physique:
+ * - Frontière définie par l'enthalpie constante (température humide constante)
+ * - Prend le point le plus chaud/humide de la zone de confort comme référence
+ * - Au-delà de cette courbe, même saturer l'air ne permet pas d'atteindre le confort
+ */
+function computeEvapCoolingZone(T_comfort_max: number): ZonePoint[] {
+  const points: ZonePoint[] = [];
+  
+  // Point de référence: limite supérieure de confort (T_max, 70% RH)
+  const T_ref = T_comfort_max;
+  const RH_ref = 70;
+  const w_ref = mixingRatioFromRH(T_ref, RH_ref, P_ATM);
+  const h_ref = airEnthalpy(T_ref, w_ref);
+  
+  // Balayer des températures au-dessus de T_ref
+  for (let T = T_ref; T <= 45; T += 1) {
+    const w = solveHumidityForEnthalpy(T, h_ref);
+    if (Number.isFinite(w) && w >= 0) {
+      points.push({ x: tempToX(T), y: gkgToY(w) });
+    }
+  }
+  
+  // Fermer vers le point de référence
+  if (Number.isFinite(w_ref)) {
+    points.push({ x: tempToX(T_ref), y: gkgToY(w_ref) });
+  }
+  
+  return points;
+}
+
+/**
+ * Calcule la limite de chauffage solaire passif.
+ * 
+ * Principe physique:
+ * - Ligne à ~10°C sous la zone de confort
+ * - En-dessous, même le soleil ne suffit pas, il faut un chauffage d'appoint
+ */
+function computeSolarHeatingLimit(T_comfort_min: number): ZonePoint[] {
+  const points: ZonePoint[] = [];
+  const T_limit = T_comfort_min - 10;
+  
+  // Ligne horizontale de T_limit à différentes humidités
+  for (let RH = 20; RH <= 100; RH += 20) {
+    const w = mixingRatioFromRH(T_limit, RH, P_ATM);
+    if (Number.isFinite(w)) {
+      points.push({ x: tempToX(T_limit), y: gkgToY(w) });
+    }
+  }
+  
+  return points;
+}
+
+/**
+ * Calcule la limite de chauffage mécanique.
+ * 
+ * Principe physique:
+ * - En-dessous de la limite solaire passive, chauffage actif requis
+ */
+function computeMechanicalHeatingLimit(T_comfort_min: number): ZonePoint[] {
+  const points: ZonePoint[] = [];
+  const T_limit = T_comfort_min - 10;
+  
+  // Ligne verticale le long de la saturation
+  for (let T = -15; T <= T_limit; T += 2) {
+    const w = mixingRatioFromRH(T, 100, P_ATM);
+    if (Number.isFinite(w)) {
+      points.push({ x: tempToX(T), y: gkgToY(w) });
+    }
+  }
+  
+  return points;
+}
+
+/**
+ * Calcule la limite de climatisation mécanique.
+ * 
+ * Principe physique:
+ * - Au-delà de la zone évaporative, aucune technique passive ne suffit
+ * - Ligne verticale à la température maximale de la zone évaporative
+ */
+function computeMechanicalCoolingLimit(): ZonePoint[] {
+  const points: ZonePoint[] = [];
+  const T_limit = 40; // Température limite approximative
+  
+  // Ligne verticale de la saturation vers le haut
+  for (let RH = 60; RH <= 100; RH += 10) {
+    const w = mixingRatioFromRH(T_limit, RH, P_ATM);
+    if (Number.isFinite(w)) {
+      points.push({ x: tempToX(T_limit), y: gkgToY(w) });
+    }
+  }
+  
+  return points;
+}
+
+// ============================================================================
+// COMPOSANT PRINCIPAL
+// ============================================================================
+
+const PsychrometricSvgChart: React.FC<Props> = ({ 
+  points, 
+  outdoorTemp, 
+  animationMs, 
+  airSpeed = 0 
+}) => {
   const { theme } = useTheme();
   const isDarkMode =
     theme === "dark" ||
@@ -91,25 +416,19 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
 
   const [svgContent, setSvgContent] = React.useState<string | null>(null);
   const durationSec = (animationMs ?? 250) / 1000;
-  // Abonnement aux réglages d'ajustement pour provoquer un re-render quand les sliders changent
-  const psychroAdjust = useAppStore((s) => s.psychroAdjust);
 
   function injectStyle(svg: string): string {
     const overrideStyle = `
       <style id="theme-overrides">
-        /* Traits principaux et secondaires adaptés au thème */
         #chart-psychro .st1,
         #chart-psychro .st2,
         #chart-psychro .st5 {
           stroke: hsl(var(--muted-foreground));
         }
-
         #chart-psychro .st3,
         #chart-psychro .st4 {
           stroke: hsl(var(--border));
         }
-
-        /* Inscriptions sur les axes : couleur, police + léger halo pour la lisibilité */
         #chart-psychro .st6,
         #chart-psychro .st7 {
           fill: hsl(var(--muted-foreground));
@@ -118,8 +437,6 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
           stroke-width: 0.4;
           paint-order: stroke;
         }
-
-        /* Neutraliser le fond interne du SVG: on gère déjà le fond via le rect Tailwind */
         #chart-psychro .st8 {
           fill: none;
         }
@@ -137,6 +454,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
       .then((text) => setSvgContent(injectStyle(text)));
   }, [isDarkMode]);
 
+  // Calcul des cercles de données
   const circles = React.useMemo(() => {
     return points
       .map(p => {
@@ -156,370 +474,98 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
 
   const outdoorX = typeof outdoorTemp === "number" ? tempToX(outdoorTemp) : null;
 
-  // Température de la moyenne volumétrique (si disponible dans les points)
+  // Température volumétrique moyenne (lissée)
   const volumetricTempRaw = React.useMemo(() => {
     const vol = points.find((p) => p.name.toLowerCase().includes("moyenne volumétrique"));
     return typeof vol?.temperature === "number" ? vol.temperature : null;
   }, [points]);
 
-  const volumetricTemp = useSmoothedValue(volumetricTempRaw, { stiffness: 160, damping: 24, enabled: true });
+  const volumetricTemp = useSmoothedValue(volumetricTempRaw, { 
+    stiffness: 160, 
+    damping: 24, 
+    enabled: true 
+  });
 
-  // Zones de Givoni (simplifiées) avec plages de T (°C) et RH (%)
-  type ZoneDef = {
-    id: string;
-    name: string;
-    tMin: number;
-    tMax: number;
-    rhMin: number;
-    rhMax: number;
-    color: string; // "r,g,b"
-    labelOffsetY?: number;
-  };
+  // ============================================================================
+  // CALCUL DES ZONES DYNAMIQUES DE GIVONI
+  // ============================================================================
 
-  const ZONES: ZoneDef[] = [
-    { id: "comfort", name: "Confort", tMin: 20, tMax: 27, rhMin: 30, rhMax: 70, color: "59,130,246", labelOffsetY: -6 },
-    { id: "nat-vent", name: "Ventilation naturelle", tMin: 27, tMax: 32, rhMin: 30, rhMax: 70, color: "34,197,94", labelOffsetY: -6 },
-    { id: "passive-solar", name: "Chauffage solaire passif", tMin: 18, tMax: 20, rhMin: 30, rhMax: 70, color: "245,158,11", labelOffsetY: -6 },
-    { id: "active-solar", name: "Chauffage solaire actif", tMin: 15, tMax: 18, rhMin: 30, rhMax: 70, color: "251,191,36", labelOffsetY: -6 },
-    { id: "evap-cool", name: "Refroidissement évaporatif", tMin: 27, tMax: 35, rhMin: 40, rhMax: 85, color: "16,185,129", labelOffsetY: -6 },
-    { id: "mass-cool", name: "Refroidissement inertiel", tMin: 25, tMax: 32, rhMin: 30, rhMax: 60, color: "14,165,233", labelOffsetY: -6 },
-    { id: "night-vent", name: "Refroidissement + Ventilation nocturne", tMin: 25, tMax: 32, rhMin: 60, rhMax: 80, color: "99,102,241", labelOffsetY: -6 },
-    { id: "dehumidif-ac", name: "Climatisation & déshumidification", tMin: 25, tMax: 40, rhMin: 70, rhMax: 100, color: "168,85,247", labelOffsetY: -6 },
-    { id: "humidification", name: "Humidification", tMin: 10, tMax: 20, rhMin: 0, rhMax: 30, color: "6,182,212", labelOffsetY: -6 },
-  ];
-
-  // Décalage des zones de Givoni selon la température extérieure moyenne
-  // Référence 25°C, facteur 0.6 (même logique que le composant Recharts)
-  const SHIFT_REF = 25;
-  const SHIFT_FACTOR = 0.6;
-  const shift = React.useMemo(() => (
-    typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0
-  ), [outdoorTemp]);
-
-  // Convertir x (coord. SVG) -> Température (°C), via le mapping utilisé dans tempToX
-  function xToTemp(x: number): number {
-    const t = X_MIN + (x - X_AT_MIN) / X_PER_DEG;
-    return t;
-  }
-
-  // Ancres extraites des polygones fournis (x extrêmes confort) pour les 3 cas:
-  // 14.5°C → [482.6, 662.4] ; 25.5°C → [570.0, 749.7] ; 38.5°C → [672.7, 852.4]
-  const comfortAnchors = React.useMemo(() => {
-    const cases = [
-      { tout: 14.5, xMin: 482.6, xMax: 662.4 },
-      { tout: 25.5, xMin: 570.0, xMax: 749.7 },
-      { tout: 38.5, xMin: 672.7, xMax: 852.4 },
-    ];
-    return cases.map(c => ({
-      tout: c.tout,
-      tMin: xToTemp(c.xMin),
-      tMax: xToTemp(c.xMax),
-      width: xToTemp(c.xMax) - xToTemp(c.xMin),
-    }));
-  }, []);
-
-  // Interpoler linéairement entre les ancres selon outdoorTemp
-  function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
-  function clamp01(x: number) { return Math.max(0, Math.min(1, x)); }
-
-  function interpolateComfortBounds(outT: number | undefined): { tMin: number; tMax: number; width: number } | null {
-    if (typeof outT !== "number") return null;
-    const a0 = comfortAnchors[0], a1 = comfortAnchors[1], a2 = comfortAnchors[2];
-    if (outT <= a0.tout) return { tMin: a0.tMin, tMax: a0.tMax, width: a0.width };
-    if (outT >= a2.tout) return { tMin: a2.tMin, tMax: a2.tMax, width: a2.width };
-    // Interpérer entre segments [a0..a1] ou [a1..a2]
-    if (outT <= a1.tout) {
-      const t = clamp01((outT - a0.tout) / (a1.tout - a0.tout));
-      const tMin = lerp(a0.tMin, a1.tMin, t);
-      const tMax = lerp(a0.tMax, a1.tMax, t);
-      return { tMin, tMax, width: tMax - tMin };
-    } else {
-      const t = clamp01((outT - a1.tout) / (a2.tout - a1.tout));
-      const tMin = lerp(a1.tMin, a2.tMin, t);
-      const tMax = lerp(a1.tMax, a2.tMax, t);
-      return { tMin, tMax, width: tMax - tMin };
-    }
-  }
-
-  const shiftedZones: ZoneDef[] = React.useMemo(() => {
-    // Base width du confort (avant ajustement dynamique)
-    const baseComfort = ZONES.find(z => z.id === "comfort")!;
-    const baseWidth = baseComfort.tMax - baseComfort.tMin;
-
-    const interp = interpolateComfortBounds(outdoorTemp);
-    // Extension du confort vers des T plus élevées si la vitesse d’air augmente (≈+3°C par m/s, limité à 1.5 m/s)
-    const fanBoost = Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3;
-
-    return ZONES.map((z) => {
-      if (z.id === "comfort" && interp) {
-        // Appliquer les bornes interpolées + décalage + boost ventilateur
-        const tMin = interp.tMin;
-        const tMax = interp.tMax + fanBoost;
-        return { ...z, tMin, tMax };
-      } else {
-        // Les autres zones: appliquer le décalage + homogénéiser la largeur via un facteur
-        // pour suivre l’élargissement relatif observé sur la zone de confort.
-        const widthFactor = interp ? (interp.width / baseWidth) : 1;
-        const mid = (z.tMin + z.tMax) / 2;
-        const half = (z.tMax - z.tMin) / 2;
-        const newHalf = half * widthFactor;
-        const tMin = (mid - newHalf) + shift;
-        const tMax = (mid + newHalf) + shift;
-        return { ...z, tMin, tMax };
-      }
-    });
-  }, [outdoorTemp, airSpeed, shift]);
-
-  function buildZonePolygonPoints(z: ZoneDef): { points: string; labelX: number; labelY: number } {
-    const step = 0.5;
-    const top: string[] = [];
-    const W_MAX_COMFORT_GKG = 12; // ≃0.012 kg/kg
-    const W_MIN_COMFORT_GKG = 5;  // ≃0.005 kg/kg
-
-    for (let t = z.tMin; t <= z.tMax + 1e-6; t += step) {
-      // RH max variable pour la zone de confort, sinon RH max fixe de la zone
-      const rhMax = z.id === "comfort" ? rhMaxComfortPercentAtT(t) : z.rhMax;
-      const wTopRaw = mixingRatioFromRH(t, rhMax, P_ATM);
-      const wTop = z.id === "comfort" ? Math.min(wTopRaw, W_MAX_COMFORT_GKG) : wTopRaw;
-      if (!Number.isFinite(wTop)) continue;
-      top.push(`${tempToX(t)},${gkgToY(wTop)}`);
-    }
-
-    const bottom: string[] = [];
-    for (let t = z.tMax; t >= z.tMin - 1e-6; t -= step) {
-      // RH min fixe pour la plupart des zones; pour “Confort” appliquer plancher W
-      const wBotRaw = mixingRatioFromRH(t, z.rhMin, P_ATM);
-      const wBot = z.id === "comfort" ? Math.max(wBotRaw, W_MIN_COMFORT_GKG) : wBotRaw;
-      if (!Number.isFinite(wBot)) continue;
-      bottom.push(`${tempToX(t)},${gkgToY(wBot)}`);
-    }
-
-    const points = [...top, ...bottom].join(" ");
-
-    // Label au centre (utilise RH mid moyenne pour le positionner)
-    const tMid = (z.tMin + z.tMax) / 2;
-    const rhMid = (z.rhMin + z.rhMax) / 2;
-    const wMidRaw = mixingRatioFromRH(tMid, rhMid, P_ATM);
-    const wMid = z.id === "comfort"
-      ? Math.max(Math.min(wMidRaw, W_MAX_COMFORT_GKG), W_MIN_COMFORT_GKG)
-      : wMidRaw;
-    const labelX = tempToX(tMid);
-    const labelY = Number.isFinite(wMid) ? gkgToY(wMid) + (z.labelOffsetY ?? 0) : 120;
-
-    return { points, labelX, labelY };
-  }
-
-  type OverlayShape = { kind: 'polygon' | 'polyline'; id: string; points: string; fill?: boolean };
-
-  const colorById: Record<string, string> = {
-    comfort: "59,130,246",
-    "nat-vent": "34,197,94",
-    "passive-solar": "245,158,11",
-    "active-solar": "251,191,36",
-    "evap-cool": "16,185,129",
-    "mass-cool": "14,165,233",
-    "night-vent": "99,102,241",
-    "dehumidif-ac": "168,85,247",
-    humidification: "6,182,212",
-  };
-
-  // Zones exactes fournies par l'utilisateur (dans son repère x:-15..45°C, y:0..33 g/kg)
-  const overlayShapes: OverlayShape[] = [
-    // Confort (rempli)
-    { kind: "polygon", id: "comfort", fill: true, points: "531.6,580.6 543.5,561.1 555.4,540.5 567.2,519.0 573.4,507.2 579.1,507.2 590.9,507.2 602.8,507.2 631.3,595.1 631.3,806.2 631.3,806.2 617.0,814.5 602.8,822.3 588.6,829.7 574.3,836.7 560.1,843.3 545.9,849.5 531.6,855.4" },
-    // Ventilation naturelle
-    { kind: "polygon", id: "nat-vent", points: "531.6,489.0 545.9,459.5 560.1,428.3 574.3,395.3 588.6,360.4 602.8,323.5 617.0,284.5 631.3,243.2 702.4,473.2 702.4,757.5 702.4,757.5 688.2,768.3 674.0,778.6 659.7,788.3 645.5,797.5 631.3,806.2 617.0,814.5 602.8,822.3 588.6,829.7 574.3,836.7 560.1,843.3 545.9,849.5 531.6,855.4" },
-    // Chauffage solaire passif
-    { kind: "polyline", id: "passive-solar", points: "581.4,947.0 360.8,947.0 360.8,737.4 360.8,737.4 375.1,722.7 389.3,707.2 403.5,690.6 417.8,673.1 432.0,654.5 446.2,634.7 460.5,613.8 474.7,591.6 488.9,568.2 503.2,543.3 517.4,516.9" },
-    // Chauffage solaire actif
-    { kind: "polyline", id: "active-solar", points: "346.6,947.0 303.9,947.0 303.9,787.8 303.9,787.8 311.0,782.2 318.1,776.3 325.3,770.3 332.4,764.1 339.5,757.8 346.6,751.2" },
-    // Refroidissement évaporatif
-    { kind: "polyline", id: "evap-cool", points: "602.8,507.2 759.4,588.0 802.1,662.5 830.5,787.5 830.5,947.0 648.0,947.0 531.6,855.4" },
-    // Refroidissement inertiel (mass cooling)
-    { kind: "polyline", id: "mass-cool", points: "602.8,507.2 716.7,507.2 773.6,566.7 773.6,855.4 531.6,855.4" },
-    // Refroidissement + ventilation nocturne
-    { kind: "polyline", id: "night-vent", points: "716.7,507.2 816.3,507.2 873.2,568.8 873.2,855.4 531.6,855.4" },
-    // Climatisation & déshumidification
-    { kind: "polyline", id: "dehumidif-ac", points: "816.3,507.2 894.6,507.2 894.6,947.0 830.5,947.0" },
-  ];
-
-  // Ajustements calibrés fournis par l'utilisateur pour différentes T extérieures
-  type AdjustParams = {
-    xShiftDeg: number;
-    widthScale: number;
-    heightScale: number;
-    zoomScale: number;
-    yOffsetPx: number;
-    curvatureGain: number;
-  };
-
-  const CALIBRATIONS: { t: number; adjust: AdjustParams }[] = [
-    { t: 5.4, adjust: { xShiftDeg: 2.8, widthScale: 0.72, heightScale: 0.84, zoomScale: 0.8, yOffsetPx: 35.5, curvatureGain: 0 } },
-    { t: 8.6, adjust: { xShiftDeg: 2.5, widthScale: 0.73, heightScale: 0.91, zoomScale: 0.8, yOffsetPx: 34,   curvatureGain: 0 } },
-    { t: 11.0, adjust: { xShiftDeg: 1.6, widthScale: 0.75, heightScale: 0.94, zoomScale: 0.8, yOffsetPx: 38,   curvatureGain: 0.2 } },
-  ];
-
-  function interpolateAdjust(outT?: number): AdjustParams {
-    const mid = CALIBRATIONS[1].adjust;
-    if (typeof outT !== "number") return mid;
-    const sorted = CALIBRATIONS.slice().sort((a,b)=> a.t-b.t);
-    if (outT <= sorted[0].t) return sorted[0].adjust;
-    if (outT >= sorted[sorted.length-1].t) return sorted[sorted.length-1].adjust;
-
-    let a = sorted[0], b = sorted[1];
-    for (let i=0; i<sorted.length-1; i++){
-      if (outT >= sorted[i].t && outT <= sorted[i+1].t) { a = sorted[i]; b = sorted[i+1]; break; }
-    }
-    const ratio = (outT - a.t) / (b.t - a.t);
-    const lerp = (pA:number, pB:number) => pA + (pB - pA) * ratio;
-
-    return {
-      xShiftDeg:     lerp(a.adjust.xShiftDeg,     b.adjust.xShiftDeg),
-      widthScale:    lerp(a.adjust.widthScale,    b.adjust.widthScale),
-      heightScale:   lerp(a.adjust.heightScale,   b.adjust.heightScale),
-      zoomScale:     lerp(a.adjust.zoomScale,     b.adjust.zoomScale),
-      yOffsetPx:     lerp(a.adjust.yOffsetPx,     b.adjust.yOffsetPx),
-      curvatureGain: lerp(a.adjust.curvatureGain, b.adjust.curvatureGain),
-    };
-  }
-
-  // Polygones dynamiques des zones (calculés à partir de RH et T, suivront les iso-RH du fond)
-  type ZonePoly = { id: string; points: string; labelX: number; labelY: number; fill: boolean };
-  const zonePolys: ZonePoly[] = React.useMemo(() => {
-    return shiftedZones.map((z) => {
-      const built = buildZonePolygonPoints(z);
-      return {
-        id: z.id,
-        points: built.points,
-        labelX: built.labelX,
-        labelY: built.labelY,
-        fill: z.id === "comfort",
-      };
-    });
-  }, [shiftedZones]);
-
-  // Translation horizontale continue des zones selon la température extérieure (shift en °C converti en pixels)
-  const dx = React.useMemo(() => shift * X_PER_DEG, [shift]);
-
-  // Pas de re-scaling Y: on rend les polygones dans le repère du SVG et on les clippe sur la zone du graphe.
-
-  // Décalage du repère interne: le SVG template est inséré à x=-15, on compense pour l'overlay
-  const OFFSET_X = -15;
-
-  // Transformer les points depuis le repère fourni (x:-15..45°C, y:0..33 g/kg) vers notre graphe.
-  // Utilise soit les paramètres calibrés interpolés (mode auto), soit les sliders manuels.
-  function transformOverlayPoints(points: string, zoneId?: string, useCalibrated: boolean = false): string {
-    if (!points) return points;
-
-    // Choisir la source des paramètres
-    const params = useCalibrated
-      ? interpolateAdjust(typeof outdoorTemp === "number" ? outdoorTemp : undefined)
-      : psychroAdjust;
+  const givoniZones = React.useMemo(() => {
+    if (typeof outdoorTemp !== "number") return null;
     
-    const { xShiftDeg, widthScale, yOffsetPx, curvatureGain, heightScale, zoomScale } = params;
-
-    // Repère source (ton chart)
-    const SRC_X_MIN = 5;
-    const SRC_X_MAX = 859;
-    const SRC_Y_BOTTOM = 947;
-    const SRC_Y_TOP = 40;
-    const SRC_W_MAX = 33;
-
-    // Correction verticale dynamique pour coller à la courbure (référence 100% RH)
-    function curvatureOffsetPxAtTemp(t: number): number {
-      const yA = gkgToY(mixingRatioFromRH(t - 0.5, 100, P_ATM));
-      const yB = gkgToY(mixingRatioFromRH(t + 0.5, 100, P_ATM));
-      const slope = Math.abs(yB - yA); // pente locale (px par °C)
-      const base = 3;       // correction minimale
-      const gain = Number.isFinite(curvatureGain) ? curvatureGain : 0.7; // amplification liée à la pente (via slider)
-      const max = 7;        // limite supérieure
-      return -Math.min(max, base + gain * slope);
+    // Calculer la zone de confort (base pour toutes les autres zones)
+    const comfortZone = computeComfortZone(outdoorTemp, airSpeed ?? 0);
+    
+    // Extraire T_comfort_min et T_comfort_max de la zone de confort
+    let T_comfort_min = 19;
+    let T_comfort_max = 26;
+    if (outdoorTemp > 20) {
+      const delta = 0.2 * (outdoorTemp - 20);
+      T_comfort_min += delta;
+      T_comfort_max += delta;
     }
+    const fanBoost = Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3;
+    T_comfort_max += fanBoost;
+    
+    return {
+      comfort: comfortZone,
+      ventilation: computeVentilationZone(outdoorTemp, T_comfort_max),
+      highMass: computeHighMassZone(T_comfort_max),
+      highMassNight: computeHighMassNightZone(T_comfort_max),
+      evapCooling: computeEvapCoolingZone(T_comfort_max),
+      solarHeating: computeSolarHeatingLimit(T_comfort_min),
+      mechHeating: computeMechanicalHeatingLimit(T_comfort_min),
+      mechCooling: computeMechanicalCoolingLimit(),
+    };
+  }, [outdoorTemp, airSpeed]);
 
-    // Déplacement horizontal en fonction de la T extérieure + ajustement manuel
-    const tShiftBase = typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0;
-    const tShift = tShiftBase + (Number.isFinite(xShiftDeg) ? xShiftDeg : 0);
+  // Fonction utilitaire pour convertir les points en string SVG
+  const pointsToString = (pts: ZonePoint[]): string => {
+    return pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  };
 
-    // Déformation horizontale (élargissement/rétrécissement) autour d’un pivot
-    const T_PIVOT = 25.5;
-    const baseComfort = ZONES.find(z => z.id === "comfort")!;
-    const baseWidth = baseComfort.tMax - baseComfort.tMin;
-    const interp = interpolateComfortBounds(outdoorTemp);
-    const widthFactorBase = interp ? (interp.width / baseWidth) : 1;
-    const widthFactor = widthFactorBase * (Number.isFinite(widthScale) && widthScale > 0 ? widthScale : 1);
-
-    // Extension de confort si ventilateur (≈+3°C par m/s, max 1.5 m/s)
-    const fanBoost = zoneId === "comfort" ? Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3 : 0;
-
-    return points
-      .trim()
-      .split(/\s+/)
-      .map(pair => {
-        const [xs, ys] = pair.split(',');
-        const x = parseFloat(xs);
-        const y = parseFloat(ys);
-
-        // Température en °C dans le repère source
-        const xClamped = Math.max(SRC_X_MIN, Math.min(SRC_X_MAX, x));
-        const tC = -15 + ((xClamped - SRC_X_MIN) * 60) / (SRC_X_MAX - SRC_X_MIN);
-
-        // Humidité absolue en g/kg dans le repère source
-        const yClamped = Math.max(SRC_Y_TOP, Math.min(SRC_Y_BOTTOM, y));
-        const wGkg = ((SRC_Y_BOTTOM - yClamped) / (SRC_Y_BOTTOM - SRC_Y_TOP)) * SRC_W_MAX;
-        const wGkgAdj = wGkg * ((Number.isFinite(heightScale) && heightScale > 0) ? heightScale : 1);
-
-        // Appliquer déformation/translation sur la température
-        const tCAdj = T_PIVOT + (tC - T_PIVOT) * widthFactor + tShift + fanBoost;
-
-        // Zoom uniforme autour des pivots (température et humidité)
-        const z = (Number.isFinite(zoomScale) && zoomScale > 0) ? zoomScale : 1;
-        const W_PIVOT = 8.5; // g/kg
-        const tZoomed = T_PIVOT + (tCAdj - T_PIVOT) * z;
-        const wZoomed = W_PIVOT + (wGkgAdj - W_PIVOT) * z;
-
-        // Conversion vers notre SVG courant
-        const tx = tempToX(tZoomed);
-        const yOffsetDyn = curvatureOffsetPxAtTemp(tZoomed);
-        const extraY = Number.isFinite(yOffsetPx) ? yOffsetPx : 0;
-        const ty = gkgToY(wZoomed) + yOffsetDyn + extraY;
-
-        return `${tx.toFixed(1)},${ty.toFixed(1)}`;
-      })
-      .join(' ');
-  }
-
-  // Hystérésis pour éviter les bascules rapides (clignotements) aux bords des zones
-  const ACTIVE_HYST = 0.4; // marge en °C
+  // Détection des zones actives avec hystérésis
+  const ACTIVE_HYST = 0.4;
   const [activeZoneIds, setActiveZoneIds] = React.useState<Set<string>>(new Set());
 
   React.useEffect(() => {
+    if (!givoniZones || typeof volumetricTemp !== "number") {
+      setActiveZoneIds(new Set());
+      return;
+    }
+
     setActiveZoneIds((prev) => {
       const next = new Set(prev);
-      if (typeof volumetricTemp !== "number") {
-        next.clear();
-        return next;
+      
+      // Logique simplifiée de détection (à affiner selon les besoins)
+      // Pour l'instant, on active "comfort" si la température est dans la plage
+      let T_comfort_min = 19;
+      let T_comfort_max = 26;
+      if (typeof outdoorTemp === "number" && outdoorTemp > 20) {
+        const delta = 0.2 * (outdoorTemp - 20);
+        T_comfort_min += delta;
+        T_comfort_max += delta;
       }
-      shiftedZones.forEach((z) => {
-        const wasActive = prev.has(z.id);
-        if (wasActive) {
-          // Ne désactiver qu'en sortant vraiment de la zone (avec marge)
-          if (volumetricTemp < z.tMin - ACTIVE_HYST || volumetricTemp > z.tMax + ACTIVE_HYST) {
-            next.delete(z.id);
-          }
-        } else {
-          // N'activer qu'après être bien entré dans la zone (avec marge)
-          if (volumetricTemp >= z.tMin + ACTIVE_HYST && volumetricTemp <= z.tMax - ACTIVE_HYST) {
-            next.add(z.id);
-          }
+      
+      const wasComfortActive = prev.has("comfort");
+      if (wasComfortActive) {
+        if (volumetricTemp < T_comfort_min - ACTIVE_HYST || volumetricTemp > T_comfort_max + ACTIVE_HYST) {
+          next.delete("comfort");
         }
-      });
+      } else {
+        if (volumetricTemp >= T_comfort_min + ACTIVE_HYST && volumetricTemp <= T_comfort_max - ACTIVE_HYST) {
+          next.add("comfort");
+        }
+      }
+      
       return next;
     });
-  }, [volumetricTemp, shiftedZones]);
+  }, [volumetricTemp, givoniZones, outdoorTemp]);
 
   return (
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
+        {/* Fond du diagramme psychrométrique */}
         {svgContent ? (
           <svg
             x={-15}
@@ -542,7 +588,8 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
             }}
           />
         )}
-        {/* Fond de la zone du graphique (adaptatif au thème) */}
+
+        {/* Fond de la zone du graphique */}
         <rect
           x={0}
           y={40}
@@ -552,81 +599,92 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
           fillOpacity={isDarkMode ? 0.12 : 0.18}
           style={{ pointerEvents: 'none' }}
         />
-        {/* Clip path pour contraindre les overlays à la zone du graphe */}
+
+        {/* Clip path pour les zones */}
         <defs>
           <clipPath id="dyad-psychro-clip">
             <rect x={0} y={40} width={960} height={651} />
           </clipPath>
         </defs>
 
+        {/* Calque des zones de Givoni dynamiques */}
+        {givoniZones && (
+          <g id="zones-layer" clipPath="url(#dyad-psychro-clip)">
+            {/* Zone de confort (remplie) */}
+            <polygon
+              points={pointsToString(givoniZones.comfort)}
+              fill="rgba(59,130,246,0.22)"
+              stroke="rgba(59,130,246,0.88)"
+              strokeWidth={3}
+              strokeLinejoin="round"
+            />
 
-        {/* Calque figé (calibré automatiquement selon T extérieure) */}
-        <g clipPath="url(#dyad-psychro-clip)">
-          {overlayShapes.map((s, idx) => {
-            const col = colorById[s.id] ?? "59,130,246";
-            const stroke = `rgba(${col},0.88)`;
-            const fillCol = s.fill ? `rgba(${col},0.22)` : "none";
-            const ptsFixed = transformOverlayPoints(s.points, s.id, true);
+            {/* Zone de ventilation naturelle */}
+            <polygon
+              points={pointsToString(givoniZones.ventilation)}
+              fill="none"
+              stroke="rgba(34,197,94,0.85)"
+              strokeWidth={3}
+              strokeLinejoin="round"
+            />
 
-            if (s.kind === "polygon") {
-              return (
-                <polygon
-                  key={`fixed-${s.id}-${idx}`}
-                  points={ptsFixed}
-                  stroke={stroke}
-                  strokeWidth={3}
-                  strokeLinejoin="round"
-                  fill={fillCol}
-                />
-              );
-            }
+            {/* Zone à forte inertie thermique */}
+            <polygon
+              points={pointsToString(givoniZones.highMass)}
+              fill="none"
+              stroke="rgba(14,165,233,0.85)"
+              strokeWidth={3}
+              strokeLinejoin="round"
+            />
 
-            return (
-              <polyline
-                key={`fixed-${s.id}-${idx}`}
-                points={ptsFixed}
-                stroke={stroke}
-                strokeWidth={3}
-                strokeLinejoin="round"
-                fill="none"
-              />
-            );
-          })}
+            {/* Zone inertie + ventilation nocturne */}
+            <polygon
+              points={pointsToString(givoniZones.highMassNight)}
+              fill="none"
+              stroke="rgba(99,102,241,0.85)"
+              strokeWidth={3}
+              strokeLinejoin="round"
+            />
 
-          {/* Calque ajustable (sliders manuels, visible uniquement en mode calibration) */}
-          {useAppStore.getState().showCalibrationPanel && overlayShapes.map((s, idx) => {
-            const col = colorById[s.id] ?? "59,130,246";
-            const strokeAdj = `rgba(${col},0.28)`;
-            const ptsAdj = transformOverlayPoints(s.points, s.id, false);
+            {/* Zone de refroidissement évaporatif */}
+            <polygon
+              points={pointsToString(givoniZones.evapCooling)}
+              fill="none"
+              stroke="rgba(16,185,129,0.85)"
+              strokeWidth={3}
+              strokeLinejoin="round"
+            />
 
-            if (s.kind === "polygon") {
-              return (
-                <polygon
-                  key={`adj-${s.id}-${idx}`}
-                  points={ptsAdj}
-                  stroke={strokeAdj}
-                  strokeDasharray="6 4"
-                  strokeWidth={2}
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-              );
-            }
+            {/* Limite chauffage solaire passif */}
+            <polyline
+              points={pointsToString(givoniZones.solarHeating)}
+              fill="none"
+              stroke="rgba(245,158,11,0.85)"
+              strokeWidth={2.5}
+              strokeLinejoin="round"
+            />
 
-            return (
-              <polyline
-                key={`adj-${s.id}-${idx}`}
-                points={ptsAdj}
-                stroke={strokeAdj}
-                strokeDasharray="6 4"
-                strokeWidth={2}
-                strokeLinejoin="round"
-                fill="none"
-              />
-            );
-          })}
-        </g>
+            {/* Limite chauffage mécanique */}
+            <polyline
+              points={pointsToString(givoniZones.mechHeating)}
+              fill="none"
+              stroke="rgba(251,191,36,0.85)"
+              strokeWidth={2.5}
+              strokeLinejoin="round"
+            />
 
+            {/* Limite climatisation mécanique */}
+            <polyline
+              points={pointsToString(givoniZones.mechCooling)}
+              fill="none"
+              stroke="rgba(168,85,247,0.85)"
+              strokeWidth={2.5}
+              strokeLinejoin="round"
+            />
+          </g>
+        )}
+
+        {/* Ligne de température extérieure */}
         {typeof outdoorX === "number" && (
           <>
             <line
@@ -651,6 +709,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
           </>
         )}
 
+        {/* Points de données */}
         <g>
           {circles.map((c, i) => {
             const isVolumetric = c.name.toLowerCase().includes("moyenne volumétrique");
@@ -691,9 +750,8 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         </g>
       </svg>
 
-      {/* Tooltips axes (overlay discrets) */}
+      {/* Tooltips axes */}
       <TooltipProvider delayDuration={200}>
-        {/* Axe X: Température du bulbe sec */}
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="absolute left-0 right-0 bottom-0 h-8" />
@@ -703,7 +761,6 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
           </TooltipContent>
         </Tooltip>
 
-        {/* Axe Y (colonne droite des valeurs g/kg) */}
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="absolute right-0 top-10 bottom-0 w-16" />
