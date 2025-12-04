@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { AuthPage } from '@/components/AuthPage';
@@ -19,6 +19,7 @@ const Index = () => {
   const setCurrentSpace = useAppStore((state) => state.setCurrentSpace);
   const setGltfModel = useAppStore((state) => state.setGltfModel);
   const setSensors = useAppStore((state) => state.setSensors);
+  const signOutClearTimeout = useRef<number | null>(null);
 
   useEffect(() => {
     // Check current session
@@ -32,17 +33,47 @@ const Index = () => {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Annule une éventuelle purge planifiée suite à SIGNED_OUT (switch de session)
+        if (signOutClearTimeout.current) {
+          window.clearTimeout(signOutClearTimeout.current);
+          signOutClearTimeout.current = null;
+        }
         setAuth(session.user);
-      } else {
-        setAuth(null);
-        setCurrentSpace(null);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      if (event === 'SIGNED_OUT') {
+        // On planifie la purge, mais on l'annule si un SIGNED_IN suit rapidement (switch)
+        if (signOutClearTimeout.current) {
+          window.clearTimeout(signOutClearTimeout.current);
+        }
+        signOutClearTimeout.current = window.setTimeout(() => {
+          setAuth(null);
+          setCurrentSpace(null);
+          setLoading(false);
+          signOutClearTimeout.current = null;
+        }, 800);
+        return;
+      }
+
+      if (event === 'INITIAL_SESSION') {
+        if (session?.user) {
+          setAuth(session.user);
+        }
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (signOutClearTimeout.current) {
+        window.clearTimeout(signOutClearTimeout.current);
+        signOutClearTimeout.current = null;
+      }
+      subscription.unsubscribe();
+    };
   }, [setAuth, setCurrentSpace]);
 
   const parseNumber = (value: any): number => {
