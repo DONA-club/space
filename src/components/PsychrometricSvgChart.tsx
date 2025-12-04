@@ -76,6 +76,51 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
       window.matchMedia &&
       window.matchMedia("(prefers-color-scheme: dark)").matches);
 
+  const [svgContent, setSvgContent] = React.useState<string | null>(null);
+
+  function injectStyle(svg: string): string {
+    const overrideStyle = `
+      <style id="theme-overrides">
+        /* Traits principaux et secondaires adaptés au thème */
+        #chart-psychro .st1,
+        #chart-psychro .st2,
+        #chart-psychro .st5 {
+          stroke: hsl(var(--muted-foreground));
+        }
+
+        #chart-psychro .st3,
+        #chart-psychro .st4 {
+          stroke: hsl(var(--border));
+        }
+
+        /* Inscriptions sur les axes : couleur, police + léger halo pour la lisibilité */
+        #chart-psychro .st6,
+        #chart-psychro .st7 {
+          fill: hsl(var(--muted-foreground));
+          font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+          stroke: hsl(var(--background));
+          stroke-width: 0.4;
+          paint-order: stroke;
+        }
+
+        /* Neutraliser le fond interne du SVG: on gère déjà le fond via le rect Tailwind */
+        #chart-psychro .st8 {
+          fill: none;
+        }
+      </style>
+    `;
+    if (svg.includes('</defs>')) {
+      return svg.replace('</defs>', \`</defs>\${overrideStyle}\`);
+    }
+    return svg.replace('</svg>', \`\${overrideStyle}</svg>\`);
+  }
+
+  React.useEffect(() => {
+    fetch('/psychrometric_template.svg')
+      .then((res) => res.text())
+      .then((text) => setSvgContent(injectStyle(text)));
+  }, [isDarkMode]);
+
   const circles = points
     .map(p => {
       const wGkg = ahGm3ToMixingRatioGkg(p.absoluteHumidity, p.temperature);
@@ -169,17 +214,28 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
   return (
     <div className="relative w-full h-full">
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
-        <image
-          href="/psychrometric_template.svg"
-          x={-15}
-          y={0}
-          width={1000}
-          height={730}
-          style={{
-            filter: isDarkMode ? "brightness(1.15) contrast(1.2)" : "none",
-            opacity: 1
-          }}
-        />
+        {svgContent ? (
+          <svg
+            x={-15}
+            y={0}
+            width={1000}
+            height={730}
+            viewBox="0 0 1000 730"
+            dangerouslySetInnerHTML={{ __html: svgContent }}
+          />
+        ) : (
+          <image
+            href="/psychrometric_template.svg"
+            x={-15}
+            y={0}
+            width={1000}
+            height={730}
+            style={{
+              filter: isDarkMode ? "brightness(1.15) contrast(1.2)" : "none",
+              opacity: 1
+            }}
+          />
+        )}
         {/* Fond de la zone du graphique (adaptatif au thème) */}
         <rect
           x={0}
