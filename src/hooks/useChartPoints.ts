@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useAppStore } from "@/store/appStore";
-import { supabase } from "@/integrations/supabase/client";
+import { useSensorData } from "@/hooks/useSensorData";
 import { getMetricValue } from "@/utils/metricUtils";
 import { getColorFromValueSaturated } from "@/utils/colorUtils";
 
@@ -25,6 +25,9 @@ export function useChartPoints() {
   const interpolationRange = useAppStore((s) => s.interpolationRange);
   const meshingEnabled = useAppStore((s) => s.meshingEnabled);
   const setChartPoints = useAppStore((s) => s.setChartPoints);
+
+  // Utiliser la même fenêtre de données que la 3D (éviter des appels réseau en replay)
+  const { sensorData, outdoorData: outdoorSeries } = useSensorData(currentSpace, sensors, hasOutdoorData, currentTimestamp);
 
   // Suivi de la moyenne volumétrique (via événement global)
   const volumetricRef = useRef<{ temperature: number; absoluteHumidity: number; color?: string } | null>(null);
@@ -150,129 +153,36 @@ export function useChartPoints() {
         return;
       }
 
-      // REPLAY: récupérer les points les plus proches en parallèle
+      // REPLAY: récupérer les points depuis les données déjà chargées (sans requêtes réseau)
       const ts = currentTimestamp || Date.now();
 
-      // Pour chaque capteur intérieur, deux requêtes (below / above) parallélisées globalement
-      const sensorPromises = sensors.map(async (sensor) => {
-        const [belowRes, aboveRes] = await Promise.all([
-          supabase
-            .from("sensor_data")
-            .select("temperature, humidity, absolute_humidity, dew_point, timestamp")
-            .eq("space_id", currentSpace.id)
-            .eq("sensor_id", sensor.id)
-            .lte("timestamp", new Date(ts).toISOString())
-            .order("timestamp", { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-          supabase
-            .from("sensor_data")
-            .select("temperature, humidity, absolute_humidity, dew_point, timestamp")
-            .eq("space_id", currentSpace.id)
-            .eq("sensor_id", sensor.id)
-            .gte("timestamp", new Date(ts).toISOString())
-            .order("timestamp", { ascending: true })
-            .limit(1)
-            .maybeSingle(),
-        ]);
+      const ptsRaw: ChartPoint[] = [];
 
-        const below = belowRes.data as any | null;
-        const above = aboveRes.data as any | null;
-
-        let chosen: any | null = null;
-        if (below && above) {
-          const dBelow = Math.abs(new Date(below.timestamp).getTime() - ts);
-          const dAbove = Math.abs(new Date(above.timestamp).getTime() - ts);
-          chosen = dBelow <= dAbove ? below : above;
-        } else {
-          chosen = below || above || null;
-        }
-
-        if (!chosen || !interpolationRange) return null;
-
-        const v = getMetricValue(
-          {
-            timestamp: new Date(chosen.timestamp).getTime(),
-            temperature: chosen.temperature,
-            humidity: chosen.humidity,
-            absoluteHumidity: chosen.absolute_humidity,
-            dewPoint: chosen.dew_point,
-          },
-          selectedMetric
-        );
+      sensors.forEach((sensor) => {
+        const series = sensorData.get(sensor.id);
+        if (!series || series.length === 0 || !interpolationRange) return;
+        const point = getAverageDataPointInWindow(series, ts, smoothingWindowSec * 1000);
+        const v = getMetricValue(point, selectedMetric);
         const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
-        const colorHex = `#${c.getHexString()}`;
-
-        return {
+        ptsRaw.push({
           name: sensor.name,
-          temperature: chosen.temperature,
-          absoluteHumidity: chosen.absolute_humidity,
-          color: colorHex,
-        } as ChartPoint | null;
+          temperature: point.temperature,
+          absoluteHumidity: point.absoluteHumidity,
+          color: `#${c.getHexString()}`,
+        });
       });
 
-      // Extérieur (si présent)
-      const outdoorPromise = hasOutdoorData
-        ? (async () => {
-            const [belowRes, aboveRes] = await Promise.all([
-              supabase
-                .from("sensor_data")
-                .select("temperature, humidity, absolute_humidity, dew_point, timestamp, sensor_name")
-                .eq("space_id", currentSpace.id)
-                .eq("sensor_id", 0)
-                .lte("timestamp", new Date(ts).toISOString())
-                .order("timestamp", { ascending: false })
-                .limit(1)
-                .maybeSingle(),
-              supabase
-                .from("sensor_data")
-                .select("temperature, humidity, absolute_humidity, dew_point, timestamp, sensor_name")
-                .eq("space_id", currentSpace.id)
-                .eq("sensor_id", 0)
-                .gte("timestamp", new Date(ts).toISOString())
-                .order("timestamp", { ascending: true })
-                .limit(1)
-                .maybeSingle(),
-            ]);
-            const below = belowRes.data as any | null;
-            const above = aboveRes.data as any | null;
-
-            let chosen: any | null = null;
-            if (below && above) {
-              const dBelow = Math.abs(new Date(below.timestamp).getTime() - ts);
-              const dAbove = Math.abs(new Date(above.timestamp).getTime() - ts);
-              chosen = dBelow <= dAbove ? below : above;
-            } else {
-              chosen = below || above || null;
-            }
-
-            if (!chosen || !interpolationRange) return null;
-
-            const v = getMetricValue(
-              {
-                timestamp: new Date(chosen.timestamp).getTime(),
-                temperature: chosen.temperature,
-                humidity: chosen.humidity,
-                absoluteHumidity: chosen.absolute_humidity,
-                dewPoint: chosen.dew_point,
-              },
-              selectedMetric
-            );
-            const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
-            const colorHex = `#${c.getHexString()}`;
-
-            return {
-              name: chosen.sensor_name || "Extérieur",
-              temperature: chosen.temperature,
-              absoluteHumidity: chosen.absolute_humidity,
-              color: colorHex,
-            } as ChartPoint | null;
-          })()
-        : Promise.resolve<ChartPoint | null>(null);
-
-      // Attendre toutes les promesses
-      const results = await Promise.all([...sensorPromises, outdoorPromise]);
-      const ptsRaw = results.filter(Boolean) as ChartPoint[];
+      if (hasOutdoorData && outdoorSeries.length > 0 && interpolationRange) {
+        const point = getAverageDataPointInWindow(outdoorSeries, ts, smoothingWindowSec * 1000);
+        const v = getMetricValue(point, selectedMetric);
+        const c = getColorFromValueSaturated(v, interpolationRange.min, interpolationRange.max, selectedMetric);
+        ptsRaw.push({
+          name: "Extérieur",
+          temperature: point.temperature,
+          absoluteHumidity: point.absoluteHumidity,
+          color: `#${c.getHexString()}`,
+        });
+      }
 
       let outPts = ptsRaw;
 

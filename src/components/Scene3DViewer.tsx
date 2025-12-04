@@ -240,7 +240,12 @@ export const Scene3DViewer = () => {
     sceneRef.current.sensorMeshes = newSensorMeshes;
   }, [sensorOffset, sensors, modelLoaded]);
 
+  // Worker pour paralléliser les calculs d’interpolation
+  const workerRef = useRef<Worker | null>(null);
+  const lastJobTsRef = useRef<number>(0);
+
   useEffect(() => {
+    // Conditions préalables
     if (!sceneRef.current || !dataReady || !modelBounds || !originalModelBounds || sensorData.size === 0 || exactAirVolume === null) {
       if (sceneRef.current?.interpolationMesh) {
         sceneRef.current.scene.remove(sceneRef.current.interpolationMesh);
@@ -253,7 +258,6 @@ export const Scene3DViewer = () => {
       setWaterMass(null);
       setAverageTemperature(null);
       setAverageHumidity(null);
-      // Nettoyer le point volumétrique dans le panneau
       window.dispatchEvent(new CustomEvent('volumetricAverageUpdate', { detail: null }));
       return;
     }
@@ -270,77 +274,96 @@ export const Scene3DViewer = () => {
       setWaterMass(null);
       setAverageTemperature(null);
       setAverageHumidity(null);
-      // Nettoyer le point volumétrique dans le panneau
       window.dispatchEvent(new CustomEvent('volumetricAverageUpdate', { detail: null }));
       return;
     }
 
     const { scene, interpolationMesh, modelScale, originalCenter, modelGroup } = sceneRef.current;
-
     if (interpolationMesh) {
       scene.remove(interpolationMesh);
       disposeInterpolationMesh(interpolationMesh);
     }
 
+    // Créer le worker si nécessaire
+    if (!workerRef.current) {
+      workerRef.current = new Worker(new URL('@/workers/interpolationWorker.ts', import.meta.url), { type: 'module' });
+      workerRef.current.onmessage = (evt: MessageEvent<any>) => {
+        const {
+          positions, values, minValue, maxValue, volumetricAverage,
+          interpolationPointCount, airMass, waterMass, avgTemp, avgHumidity, avgAbsHumidity, jobTs
+        } = evt.data || {};
+
+        // Ignorer un résultat obsolète
+        if (jobTs !== lastJobTsRef.current) return;
+
+        setVolumetricAverage(volumetricAverage);
+        setInterpolationPointCount(interpolationPointCount);
+        setAirMass(airMass);
+        setWaterMass(waterMass);
+        setAverageTemperature(avgTemp);
+        setAverageHumidity(avgHumidity);
+
+        window.dispatchEvent(new CustomEvent('volumetricAverageUpdate', {
+          detail: {
+            avgTemp,
+            avgAbsHumidity,
+            metricAverage: volumetricAverage,
+            selectedMetric
+          }
+        }));
+
+        // Construire la visualisation sur le thread principal
+        const newMesh = createVisualizationMesh(
+          // Convertir typed arrays en structure attendue si nécessaire
+          Array.from({ length: values.length }, (_, i) => ({
+            x: positions[i * 3],
+            y: positions[i * 3 + 1],
+            z: positions[i * 3 + 2],
+            value: values[i]
+          })),
+          minValue,
+          maxValue,
+          selectedMetric,
+          visualizationType,
+          modelBounds,
+          meshResolution,
+          isDarkMode
+        );
+
+        if (sceneRef.current) {
+          sceneRef.current.scene.add(newMesh);
+          sceneRef.current.interpolationMesh = newMesh;
+        }
+      };
+    }
+
     const modelPosition = modelGroup?.position || new THREE.Vector3(0, 0, 0);
 
-    const points = buildInterpolationPoints(sensors, sensorData, currentTimestamp, selectedMetric, modelScale, originalCenter, modelPosition, sensorOffset, smoothingWindowSec * 1000);
-    if (points.length === 0) return;
+    // Préparer les données pour le worker
+    const sensorDataRecord: Record<number, any[]> = {};
+    sensorData.forEach((arr, id) => { sensorDataRecord[id] = arr; });
 
-    const { min: minValue, max: maxValue } = getValueRange(points);
+    const jobTs = currentTimestamp || Date.now();
+    lastJobTsRef.current = jobTs;
 
-    const validGridPoints = getValidGridPoints(modelBounds, meshResolution);
-    
-    const gridValues = interpolateGridValues(points, validGridPoints, interpolationMethod, rbfKernel, idwPower, minValue, maxValue);
-
-    const average = calculateWeightedAverage(gridValues);
-    setVolumetricAverage(average);
-    setInterpolationPointCount(gridValues.length);
-
-    const { mass, waterMass: calculatedWaterMass, avgTemp, avgHumidity, avgAbsHumidity } = calculateAirProperties(
-      gridValues,
+    workerRef.current.postMessage({
       sensors,
-      sensorData,
+      sensorData: sensorDataRecord,
       currentTimestamp,
-      validGridPoints,
+      selectedMetric,
+      modelScale,
+      originalCenter: originalCenter ? { x: originalCenter.x, y: originalCenter.y, z: originalCenter.z } : null,
+      modelPosition: { x: modelPosition.x, y: modelPosition.y, z: modelPosition.z },
+      sensorOffset,
+      smoothingWindowMs: smoothingWindowSec * 1000,
+      bounds: { min: { x: modelBounds.min.x, y: modelBounds.min.y, z: modelBounds.min.z }, max: { x: modelBounds.max.x, y: modelBounds.max.y, z: modelBounds.max.z } },
+      meshResolution,
       interpolationMethod,
       rbfKernel,
       idwPower,
-      modelScale,
-      originalCenter,
-      modelPosition,
-      sensorOffset,
-      smoothingWindowSec * 1000,
-      exactAirVolume
-    );
-    
-    setAirMass(mass);
-    setWaterMass(calculatedWaterMass);
-    setAverageTemperature(avgTemp);
-    setAverageHumidity(avgHumidity);
-    // Partager la moyenne volumétrique au panneau (temp + AH + valeur métrique)
-    window.dispatchEvent(new CustomEvent('volumetricAverageUpdate', {
-      detail: {
-        avgTemp,
-        avgAbsHumidity,
-        metricAverage: average,
-        selectedMetric
-      }
-    }));
-
-    const newMesh = createVisualizationMesh(
-      gridValues,
-      minValue,
-      maxValue,
-      selectedMetric,
-      visualizationType,
-      modelBounds,
-      meshResolution,
-      isDarkMode
-    );
-    
-    scene.add(newMesh);
-    sceneRef.current.interpolationMesh = newMesh;
+      exactVolume: exactAirVolume,
+      jobTs
+    });
   }, [
     currentTimestamp,
     dataReady,
@@ -358,7 +381,8 @@ export const Scene3DViewer = () => {
     modelLoaded,
     sensorData,
     sensorOffset,
-    isDarkMode
+    isDarkMode,
+    smoothingWindowSec
   ]);
 
   useLayoutEffect(() => {
