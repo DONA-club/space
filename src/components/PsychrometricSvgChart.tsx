@@ -22,9 +22,9 @@ type Props = {
 
 const X_MIN = -15;
 const X_MAX = 40;
-// Aligner avec les ticks du SVG: -15°C à x=20, 40°C à x=959.2
+// Aligner avec les ticks du SVG: -15°C à x=20, 40°C à x=880.9
 const X_AT_MIN = 20;
-const X_AT_40 = 959.2;
+const X_AT_40 = 880.9;
 const X_PER_DEG = (X_AT_40 - X_AT_MIN) / (X_MAX - X_MIN);
 
 const Y_AT_0_GKG = 691;
@@ -360,10 +360,20 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     return "25.5";
   }
 
-  const overlayShapes: OverlayShape[] = React.useMemo(
-    () => overlayCases[pickOverlayCase(outdoorTemp)],
-    [outdoorTemp, overlayCases]
-  );
+  // Polygones dynamiques des zones (calculés à partir de RH et T, suivront les iso-RH du fond)
+  type ZonePoly = { id: string; points: string; labelX: number; labelY: number; fill: boolean };
+  const zonePolys: ZonePoly[] = React.useMemo(() => {
+    return shiftedZones.map((z) => {
+      const built = buildZonePolygonPoints(z);
+      return {
+        id: z.id,
+        points: built.points,
+        labelX: built.labelX,
+        labelY: built.labelY,
+        fill: z.id === "comfort",
+      };
+    });
+  }, [shiftedZones]);
 
   // Translation horizontale continue des zones selon la température extérieure (shift en °C converti en pixels)
   const dx = React.useMemo(() => shift * X_PER_DEG, [shift]);
@@ -461,34 +471,20 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         </defs>
 
 
-        {/* Zones de Givoni: polygones/polylines transformés et translatés (suivi continu de T ext), clipés à la zone */}
+        {/* Zones de Givoni: polygones dynamiques (alignés sur les courbes du fond), clipés à la zone */}
         <g clipPath="url(#dyad-psychro-clip)">
-          {overlayShapes.map((s, idx) => {
-            const col = colorById[s.id] ?? "59,130,246";
+          {zonePolys.map((zp) => {
+            const col = colorById[zp.id] ?? "59,130,246";
             const stroke = `rgba(${col},0.85)`;
-            const fillCol = s.fill ? `rgba(${col},0.2)` : "none";
-            const pts = transformPointsString(s.points, dx);
-
-            if (s.kind === "polygon") {
-              return (
-                <polygon
-                  key={`${s.id}-${idx}`}
-                  points={pts}
-                  stroke={stroke}
-                  strokeWidth={3}
-                  strokeLinejoin="round"
-                  fill={fillCol}
-                />
-              );
-            }
+            const fillCol = zp.fill ? `rgba(${col},0.2)` : "none";
             return (
-              <polyline
-                key={`${s.id}-${idx}`}
-                points={pts}
+              <polygon
+                key={`zone-${zp.id}`}
+                points={zp.points}
                 stroke={stroke}
                 strokeWidth={3}
                 strokeLinejoin="round"
-                fill="none"
+                fill={fillCol}
               />
             );
           })}
