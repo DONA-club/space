@@ -17,6 +17,7 @@ type Props = {
   points: ChartPoint[];
   outdoorTemp?: number | null;
   animationMs?: number; // durée des transitions des points (ms)
+  airSpeed?: number | null; // vitesse d'air en m/s (0–1.5), étend la T max confortable
 };
 
 const X_MIN = -15;
@@ -67,6 +68,14 @@ function mixingRatioFromRH(temperatureC: number, rhPercent: number, pressurePa: 
   if (Pv <= 0 || Pv >= pressurePa) return NaN;
   const w_kgkg = 0.62198 * Pv / (pressurePa - Pv);
   return w_kgkg * 1000;
+}
+
+// RH max de confort en fonction de la température (≈80% à 18°C → ≈60% à 28°C)
+function rhMaxComfortPercentAtT(tC: number): number {
+  if (tC <= 18) return 80;
+  if (tC >= 28) return 60;
+  // interpolation linéaire entre 18 et 28°C
+  return 80 - ((tC - 18) * 2); // 2 %RH par °C
 }
 
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animationMs }) => {
@@ -183,32 +192,49 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     typeof outdoorTemp === "number" ? (outdoorTemp - SHIFT_REF) * SHIFT_FACTOR : 0
   ), [outdoorTemp]);
 
-  const shiftedZones: ZoneDef[] = React.useMemo(() => ZONES.map((z) => ({
-    ...z,
-    tMin: z.tMin + shift,
-    tMax: z.tMax + shift,
-  })), [shift]);
+  const shiftedZones: ZoneDef[] = React.useMemo(() => ZONES.map((z) => {
+    // Extension du confort vers des T plus élevées si la vitesse d’air augmente (≈+3°C par m/s, limité à 1.5 m/s)
+    const fanBoost = z.id === "comfort" ? Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3 : 0;
+    return {
+      ...z,
+      tMin: z.tMin + shift,
+      tMax: z.tMax + shift + fanBoost,
+    };
+  }), [shift, airSpeed]);
 
   function buildZonePolygonPoints(z: ZoneDef): { points: string; labelX: number; labelY: number } {
     const step = 0.5;
     const top: string[] = [];
+    const W_MAX_COMFORT_GKG = 12; // ≃0.012 kg/kg
+    const W_MIN_COMFORT_GKG = 5;  // ≃0.005 kg/kg
+
     for (let t = z.tMin; t <= z.tMax + 1e-6; t += step) {
-      const wTop = mixingRatioFromRH(t, z.rhMax, P_ATM);
+      // RH max variable pour la zone de confort, sinon RH max fixe de la zone
+      const rhMax = z.id === "comfort" ? rhMaxComfortPercentAtT(t) : z.rhMax;
+      const wTopRaw = mixingRatioFromRH(t, rhMax, P_ATM);
+      const wTop = z.id === "comfort" ? Math.min(wTopRaw, W_MAX_COMFORT_GKG) : wTopRaw;
       if (!Number.isFinite(wTop)) continue;
       top.push(`${tempToX(t)},${gkgToY(wTop)}`);
     }
+
     const bottom: string[] = [];
     for (let t = z.tMax; t >= z.tMin - 1e-6; t -= step) {
-      const wBot = mixingRatioFromRH(t, z.rhMin, P_ATM);
+      // RH min fixe pour la plupart des zones; pour “Confort” appliquer plancher W
+      const wBotRaw = mixingRatioFromRH(t, z.rhMin, P_ATM);
+      const wBot = z.id === "comfort" ? Math.max(wBotRaw, W_MIN_COMFORT_GKG) : wBotRaw;
       if (!Number.isFinite(wBot)) continue;
       bottom.push(`${tempToX(t)},${gkgToY(wBot)}`);
     }
+
     const points = [...top, ...bottom].join(" ");
 
-    // Label au centre
+    // Label au centre (utilise RH mid moyenne pour le positionner)
     const tMid = (z.tMin + z.tMax) / 2;
     const rhMid = (z.rhMin + z.rhMax) / 2;
-    const wMid = mixingRatioFromRH(tMid, rhMid, P_ATM);
+    const wMidRaw = mixingRatioFromRH(tMid, rhMid, P_ATM);
+    const wMid = z.id === "comfort"
+      ? Math.max(Math.min(wMidRaw, W_MAX_COMFORT_GKG), W_MIN_COMFORT_GKG)
+      : wMidRaw;
     const labelX = tempToX(tMid);
     const labelY = Number.isFinite(wMid) ? gkgToY(wMid) + (z.labelOffsetY ?? 0) : 120;
 
