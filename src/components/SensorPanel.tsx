@@ -831,6 +831,7 @@ export const SensorPanel = () => {
         });
       }
       // Désormais, le calcul des points est centralisé dans useChartPoints
+    }
   }, [mode, currentTimestamp, sensors, currentSpace, hasOutdoorData, outdoorSensorName, smoothingWindowSec, meshingEnabled, volumetricPoint, interpolationRange, selectedMetric, outdoorData]);
 
   return (
