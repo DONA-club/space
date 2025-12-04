@@ -431,7 +431,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     };
   }
 
-  // Transformation dédiée pour le calque figé: utilise uniquement les paramètres calibrés
+  // Transformation dédiée pour le calque figé: utilise ancre o(T_out) + paramètres calibrés
   function transformOverlayCalibrated(points: string, zoneId?: string): string {
     if (!points) return points;
 
@@ -444,6 +444,17 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     const SRC_Y_TOP = 40;
     const SRC_W_MAX = 33;
 
+    // Ancre horizontale dépendante de la T extérieure (d’après ton code)
+    function anchorT(tOut?: number): number {
+      const tRef = 25.5;
+      const base = 17.6 + 0.31 * tRef - 3.5; // o0 à 25.5°C
+      if (typeof tOut !== "number") return base;
+      return 17.6 + 0.31 * tOut - 3.5;
+    }
+    const o = anchorT(typeof outdoorTemp === "number" ? outdoorTemp : undefined);
+    const o0 = anchorT(25.5);
+    const anchorDelta = o - o0;
+
     // Correction verticale dynamique liée à la courbure 100% RH (contrôlée par le gain calibré)
     function curvatureOffsetPxAtTemp(t: number): number {
       const yA = gkgToY(mixingRatioFromRH(t - 0.5, 100, P_ATM));
@@ -455,7 +466,6 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
       return -Math.min(max, base + gain * slope);
     }
 
-    // Déformation horizontale centrée autour d’un pivot
     const T_PIVOT = 25.5;
 
     // Extension du confort si ventilateur (≈+3°C par m/s, max 1.5 m/s)
@@ -478,9 +488,13 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         const wGkg = ((SRC_Y_BOTTOM - yClamped) / (SRC_Y_BOTTOM - SRC_Y_TOP)) * SRC_W_MAX;
         const wGkgAdj = wGkg * ((Number.isFinite(adj.heightScale) && adj.heightScale > 0) ? adj.heightScale : 1);
 
-        // Appliquer déformation/translation sur la température avec paramètres calibrés
+        // Déformation/translation sur la température:
+        // - élargissement/rétrécissement autour du pivot
+        // - déplacement par ancreDelta lié à T extérieure (o(T_out))
+        // - décalage manuel xShift + boost ventilateur dans la zone confort
         const widthFactor = (Number.isFinite(adj.widthScale) && adj.widthScale > 0) ? adj.widthScale : 1;
-        const tCAdj = T_PIVOT + (tC - T_PIVOT) * widthFactor + (Number.isFinite(adj.xShiftDeg) ? adj.xShiftDeg : 0) + fanBoost;
+        const tCAdjBase = T_PIVOT + (tC - T_PIVOT) * widthFactor;
+        const tCAdj = tCAdjBase + anchorDelta + (Number.isFinite(adj.xShiftDeg) ? adj.xShiftDeg : 0) + fanBoost;
 
         // Zoom uniforme autour des pivots (température et humidité)
         const z = (Number.isFinite(adj.zoomScale) && adj.zoomScale > 0) ? adj.zoomScale : 1;
@@ -672,20 +686,35 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         </defs>
 
 
-        {/* Calque figé dynamique (zones Givoni) collé aux iso-RH du graphe */}
+        {/* Calque figé (overlays fournis) transformé avec l’ancre et tes calibrations */}
         <g clipPath="url(#dyad-psychro-clip)">
-          {zonePolys.map((zp, idx) => {
-            const col = colorById[zp.id] ?? "59,130,246";
+          {overlayShapes.map((s, idx) => {
+            const col = colorById[s.id] ?? "59,130,246";
             const stroke = `rgba(${col},0.9)`;
-            const fillCol = zp.fill ? `rgba(${col},0.22)` : "none";
+            const fillCol = s.fill ? `rgba(${col},0.22)` : "none";
+            const ptsFixed = transformOverlayCalibrated(s.points, s.id);
+
+            if (s.kind === "polygon") {
+              return (
+                <polygon
+                  key={`fixed-${s.id}-${idx}`}
+                  points={ptsFixed}
+                  stroke={stroke}
+                  strokeWidth={3}
+                  strokeLinejoin="round"
+                  fill={fillCol}
+                />
+              );
+            }
+
             return (
-              <polygon
-                key={`zone-${zp.id}-${idx}`}
-                points={zp.points}
+              <polyline
+                key={`fixed-${s.id}-${idx}`}
+                points={ptsFixed}
                 stroke={stroke}
                 strokeWidth={3}
                 strokeLinejoin="round"
-                fill={fillCol}
+                fill="none"
               />
             );
           })}
