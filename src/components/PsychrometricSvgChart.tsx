@@ -162,30 +162,6 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp }) => {
       <svg viewBox="-15 0 1000 730" preserveAspectRatio="xMinYMin meet" className="w-full h-full">
         <image href="/psychrometric_template.svg" x={-15} y={0} width={1000} height={730} />
 
-        {/* Labels % des courbes d'humidité relative (positionnés à l'extrémité de courbe côté droit) */}
-        <g>
-          {[10,20,30,40,50,60,70,80,90,100].map((rh) => {
-            const w = mixingRatioFromRH(40, rh, P_ATM);
-            if (!Number.isFinite(w)) return null;
-            let y = gkgToY(w);
-            // Borner dans la zone visible du chart (haut=40, bas=691)
-            y = Math.min(691, Math.max(40, y));
-            // Position proche du bord droit, avec ancrage à droite
-            const x = 940;
-            return (
-              <text
-                key={`rh-${rh}`}
-                x={x}
-                y={y}
-                fontSize={10}
-                textAnchor="end"
-                fill="hsl(var(--muted-foreground))"
-              >
-                {rh}%
-              </text>
-            );
-          })}
-        </g>
 
         {/* Zones de Givoni pilotées par la température extérieure */}
         <g>
