@@ -14,7 +14,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { Alert, AlertDescription } from './ui/alert';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/FixedTooltip';
 import OrientationPanel from './OrientationPanel';
 import PsychrometricSvgChart from './PsychrometricSvgChart';
 import { getColorFromValueSaturated } from '@/utils/colorUtils';
