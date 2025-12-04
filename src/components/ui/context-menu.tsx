@@ -35,7 +35,7 @@ const ContextMenuSubTrigger = React.forwardRef<
     <ChevronRight className="ml-auto h-4 w-4" />
   </ContextMenuPrimitive.SubTrigger>
 ));
-ContextMenuSubTrigger.displayName = (ContextMenuPrimitive.SubTrigger as any)?.displayName || "ContextMenuSubTrigger";
+ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName;
 
 const ContextMenuSubContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
@@ -50,7 +50,7 @@ const ContextMenuSubContent = React.forwardRef<
     {...props}
   />
 ));
-ContextMenuSubContent.displayName = (ContextMenuPrimitive.SubContent as any)?.displayName || "ContextMenuSubContent";
+ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName;
 
 const ContextMenuContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.Content>,
@@ -67,7 +67,7 @@ const ContextMenuContent = React.forwardRef<
     />
   </ContextMenuPrimitive.Portal>
 ));
-ContextMenuContent.displayName = (ContextMenuPrimitive.Content as any)?.displayName || "ContextMenuContent";
+ContextMenuContent.displayName = ContextMenuPrimitive.Content.displayName;
 
 const ContextMenuItem = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.Item>,
@@ -85,7 +85,7 @@ const ContextMenuItem = React.forwardRef<
     {...props}
   />
 ));
-ContextMenuItem.displayName = (ContextMenuPrimitive.Item as any)?.displayName || "ContextMenuItem";
+ContextMenuItem.displayName = ContextMenuPrimitive.Item.displayName;
 
 const ContextMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.CheckboxItem>,
@@ -108,7 +108,8 @@ const ContextMenuCheckboxItem = React.forwardRef<
     {children}
   </ContextMenuPrimitive.CheckboxItem>
 ));
-ContextMenuCheckboxItem.displayName = (ContextMenuPrimitive.CheckboxItem as any)?.displayName || "ContextMenuCheckboxItem";
+ContextMenuCheckboxItem.displayName =
+  ContextMenuPrimitive.CheckboxItem.displayName;
 
 const ContextMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.RadioItem>,
@@ -130,7 +131,7 @@ const ContextMenuRadioItem = React.forwardRef<
     {children}
   </ContextMenuPrimitive.RadioItem>
 ));
-ContextMenuRadioItem.displayName = (ContextMenuPrimitive.RadioItem as any)?.displayName || "ContextMenuRadioItem";
+ContextMenuRadioItem.displayName = ContextMenuPrimitive.RadioItem.displayName;
 
 const ContextMenuLabel = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.Label>,
@@ -148,7 +149,7 @@ const ContextMenuLabel = React.forwardRef<
     {...props}
   />
 ));
-ContextMenuLabel.displayName = (ContextMenuPrimitive.Label as any)?.displayName || "ContextMenuLabel";
+ContextMenuLabel.displayName = ContextMenuPrimitive.Label.displayName;
 
 const ContextMenuSeparator = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.Separator>,
@@ -160,7 +161,7 @@ const ContextMenuSeparator = React.forwardRef<
     {...props}
   />
 ));
-ContextMenuSeparator.displayName = (ContextMenuPrimitive.Separator as any)?.displayName || "ContextMenuSeparator";
+ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName;
 
 const ContextMenuShortcut = ({
   className,

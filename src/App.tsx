@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import GlobalErrorMonitor from "@/components/GlobalErrorMonitor";
 
 const queryClient = new QueryClient();
 
@@ -16,7 +15,6 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <GlobalErrorMonitor />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />

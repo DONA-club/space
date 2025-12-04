@@ -21,7 +21,7 @@ const NavigationMenu = React.forwardRef<
     <NavigationMenuViewport />
   </NavigationMenuPrimitive.Root>
 ));
-NavigationMenu.displayName = (NavigationMenuPrimitive.Root as any)?.displayName || "NavigationMenu";
+NavigationMenu.displayName = NavigationMenuPrimitive.Root.displayName;
 
 const NavigationMenuList = React.forwardRef<
   React.ElementRef<typeof NavigationMenuPrimitive.List>,
@@ -36,7 +36,7 @@ const NavigationMenuList = React.forwardRef<
     {...props}
   />
 ));
-NavigationMenuList.displayName = (NavigationMenuPrimitive.List as any)?.displayName || "NavigationMenuList";
+NavigationMenuList.displayName = NavigationMenuPrimitive.List.displayName;
 
 const NavigationMenuItem = NavigationMenuPrimitive.Item;
 
@@ -60,7 +60,7 @@ const NavigationMenuTrigger = React.forwardRef<
     />
   </NavigationMenuPrimitive.Trigger>
 ));
-NavigationMenuTrigger.displayName = (NavigationMenuPrimitive.Trigger as any)?.displayName || "NavigationMenuTrigger";
+NavigationMenuTrigger.displayName = NavigationMenuPrimitive.Trigger.displayName;
 
 const NavigationMenuContent = React.forwardRef<
   React.ElementRef<typeof NavigationMenuPrimitive.Content>,
@@ -75,7 +75,7 @@ const NavigationMenuContent = React.forwardRef<
     {...props}
   />
 ));
-NavigationMenuContent.displayName = (NavigationMenuPrimitive.Content as any)?.displayName || "NavigationMenuContent";
+NavigationMenuContent.displayName = NavigationMenuPrimitive.Content.displayName;
 
 const NavigationMenuLink = NavigationMenuPrimitive.Link;
 
@@ -94,7 +94,8 @@ const NavigationMenuViewport = React.forwardRef<
     />
   </div>
 ));
-NavigationMenuViewport.displayName = (NavigationMenuPrimitive.Viewport as any)?.displayName || "NavigationMenuViewport";
+NavigationMenuViewport.displayName =
+  NavigationMenuPrimitive.Viewport.displayName;
 
 const NavigationMenuIndicator = React.forwardRef<
   React.ElementRef<typeof NavigationMenuPrimitive.Indicator>,
@@ -111,7 +112,8 @@ const NavigationMenuIndicator = React.forwardRef<
     <div className="relative top-[60%] h-2 w-2 rotate-45 rounded-tl-sm bg-border shadow-md" />
   </NavigationMenuPrimitive.Indicator>
 ));
-NavigationMenuIndicator.displayName = (NavigationMenuPrimitive.Indicator as any)?.displayName || "NavigationMenuIndicator";
+NavigationMenuIndicator.displayName =
+  NavigationMenuPrimitive.Indicator.displayName;
 
 export {
   navigationMenuTriggerStyle,

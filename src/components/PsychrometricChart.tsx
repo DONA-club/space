@@ -11,7 +11,6 @@ import {
   Tooltip,
   ReferenceArea,
   ReferenceLine,
-  TooltipProps,
 } from "recharts";
 
 type Point = {
@@ -40,34 +39,6 @@ const buildIsoRHSeries = (rhPct: number, tMin = 0, tMax = 45, step = 1) => {
     data.push({ x: t, y: absHumidityFromTempRH(t, rhPct) });
   }
   return data;
-};
-
-// Wrapper personnalisé pour le Tooltip afin d'éviter les erreurs displayName
-const CustomTooltip: React.FC<TooltipProps<any, any>> = ({ active, payload }) => {
-  if (!active || !payload || payload.length === 0) return null;
-
-  const data = payload[0]?.payload;
-  if (!data) return null;
-
-  return (
-    <div
-      style={{
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        border: '1px solid rgba(0, 0, 0, 0.1)',
-        borderRadius: '4px',
-        padding: '8px',
-        fontSize: '12px',
-      }}
-    >
-      {data.name && <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{data.name}</div>}
-      {data.x !== undefined && (
-        <div>Température sèche: {Number(data.x).toFixed(1)} °C</div>
-      )}
-      {data.y !== undefined && (
-        <div>Humidité absolue: {Number(data.y).toFixed(2)} g/m³</div>
-      )}
-    </div>
-  );
 };
 
 const PsychrometricChart: React.FC<Props> = ({ points, outdoorTemp }) => {
@@ -171,7 +142,13 @@ const PsychrometricChart: React.FC<Props> = ({ points, outdoorTemp }) => {
 
         <Tooltip
           cursor={{ strokeDasharray: "3 3" }}
-          content={<CustomTooltip />}
+          formatter={(value: any, name: string) => {
+            if (name === "x") return [`${Number(value).toFixed(1)} °C`, "Température sèche"];
+            if (name === "y") return [`${Number(value).toFixed(2)} g/m³`, "Humidité absolue"];
+            return [value, name];
+          }}
+          labelFormatter={() => `Point`}
+          contentStyle={{ fontSize: 12 }}
         />
 
         {/* Points capteurs */}

@@ -1,13 +1,11 @@
 "use client";
 
 import React from "react";
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/FixedTooltip";
+import { motion } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
 import { useSmoothedValue } from "@/hooks/useSmoothedValue";
 import { useAppStore } from "@/store/appStore";
-import { interpolateAdjust } from "@/utils/psychroAdjust";
-
-const DEBUG_ENABLED = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug");
 
 type ChartPoint = {
   name: string;
@@ -82,81 +80,6 @@ function rhMaxComfortPercentAtT(tC: number): number {
   return 80 - ((tC - 18) * 2); // 2 %RH par °C
 }
 
-const AnimatedCircle: React.FC<{ cx: number; cy: number; r: number; fill: string; stroke: string; strokeWidth: number; durationSec: number }> = (props) => {
-  const [motionModule, setMotionModule] = React.useState<any>(null);
-  const noMotion = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debugNoMotion");
-
-  React.useEffect(() => {
-    let mounted = true;
-    if (noMotion) return;
-    import("framer-motion")
-      .then((mod) => {
-        if (mounted && mod && mod.motion) {
-          setMotionModule(mod.motion);
-        }
-      })
-      .catch((err) => {
-        console.error("[PsychroSvg] Failed to load framer-motion module", err);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [noMotion]);
-
-  if (!motionModule) {
-    return (
-      <circle
-        cx={props.cx}
-        cy={props.cy}
-        r={props.r}
-        fill={props.fill}
-        stroke={props.stroke}
-        strokeWidth={props.strokeWidth}
-      />
-    );
-  }
-
-  try {
-    const MotionCircle = motionModule.circle;
-    if (!MotionCircle) {
-      return (
-        <circle
-          cx={props.cx}
-          cy={props.cy}
-          r={props.r}
-          fill={props.fill}
-          stroke={props.stroke}
-          strokeWidth={props.strokeWidth}
-        />
-      );
-    }
-
-    return (
-      <MotionCircle
-        animate={{ cx: props.cx, cy: props.cy }}
-        initial={false}
-        transition={{ duration: props.durationSec, ease: "easeInOut" }}
-        r={props.r}
-        fill={props.fill}
-        stroke={props.stroke}
-        strokeWidth={props.strokeWidth}
-      />
-    );
-  } catch (error) {
-    console.error("[AnimatedCircle] Error rendering motion.circle:", error);
-    return (
-      <circle
-        cx={props.cx}
-        cy={props.cy}
-        r={props.r}
-        fill={props.fill}
-        stroke={props.stroke}
-        strokeWidth={props.strokeWidth}
-      />
-    );
-  }
-};
-
 const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animationMs, airSpeed = 0 }) => {
   const { theme } = useTheme();
   const isDarkMode =
@@ -215,12 +138,6 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   }, [isDarkMode]);
 
   const circles = React.useMemo(() => {
-    if (DEBUG_ENABLED) {
-      console.groupCollapsed("[PsychroSvg] circles from points");
-      console.debug("points.length", points.length);
-      console.debug("first point", points[0]);
-      console.groupEnd();
-    }
     return points
       .map(p => {
         const wGkg = ahGm3ToMixingRatioGkg(p.absoluteHumidity, p.temperature);
@@ -246,15 +163,6 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   }, [points]);
 
   const volumetricTemp = useSmoothedValue(volumetricTempRaw, { stiffness: 160, damping: 24, enabled: true });
-
-  React.useEffect(() => {
-    if (DEBUG_ENABLED) {
-      console.groupCollapsed("[PsychroSvg] volumetric temperature");
-      console.debug("volumetricTempRaw", volumetricTempRaw);
-      console.debug("volumetricTemp (smoothed)", volumetricTemp);
-      console.groupEnd();
-    }
-  }, [volumetricTempRaw, volumetricTemp]);
 
   // Zones de Givoni (simplifiées) avec plages de T (°C) et RH (%)
   type ZoneDef = {
@@ -334,121 +242,69 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
   }
 
   const shiftedZones: ZoneDef[] = React.useMemo(() => {
+    // Base width du confort (avant ajustement dynamique)
     const baseComfort = ZONES.find(z => z.id === "comfort")!;
+    const baseWidth = baseComfort.tMax - baseComfort.tMin;
+
+    const interp = interpolateComfortBounds(outdoorTemp);
+    // Extension du confort vers des T plus élevées si la vitesse d’air augmente (≈+3°C par m/s, limité à 1.5 m/s)
     const fanBoost = Math.min(Math.max(airSpeed ?? 0, 0), 1.5) * 3;
 
-    // Ajustement combiné (calibrations + sliders)
-    const baseAdj = interpolateAdjust(typeof outdoorTemp === "number" ? outdoorTemp : undefined);
-    const userAdj = psychroAdjust;
-    const adj = {
-      xShiftDeg: (baseAdj.xShiftDeg ?? 0) + (userAdj.xShiftDeg ?? 0),
-      widthScale: (baseAdj.widthScale ?? 1) * (userAdj.widthScale ?? 1),
-      heightScale: (baseAdj.heightScale ?? 1) * (userAdj.heightScale ?? 1),
-      zoomScale: (baseAdj.zoomScale ?? 1) * (userAdj.zoomScale ?? 1),
-      yOffsetPx: (baseAdj.yOffsetPx ?? 0) + (userAdj.yOffsetPx ?? 0),
-      curvatureGain: (baseAdj.curvatureGain ?? 0) + (userAdj.curvatureGain ?? 0),
-    };
-
-    const T_PIVOT = 25.5;
-
-    const result = ZONES.map((z) => {
-      const mid = (z.tMin + z.tMax) / 2;
-      const half = (z.tMax - z.tMin) / 2;
-
-      // Élargissement/rétrécissement autour du pivot puis déplacement horizontal
-      const scaledMin = T_PIVOT + (z.tMin - T_PIVOT) * (adj.widthScale > 0 ? adj.widthScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
-      const scaledMax = T_PIVOT + (z.tMax - T_PIVOT) * (adj.widthScale > 0 ? adj.widthScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
-
-      let tMin = scaledMin + (Number.isFinite(adj.xShiftDeg) ? adj.xShiftDeg : 0);
-      let tMax = scaledMax + (Number.isFinite(adj.xShiftDeg) ? adj.xShiftDeg : 0);
-
-      // Boost ventilateur seulement pour la zone Confort
-      if (z.id === "comfort") {
-        tMax += fanBoost;
+    return ZONES.map((z) => {
+      if (z.id === "comfort" && interp) {
+        // Appliquer les bornes interpolées + décalage + boost ventilateur
+        const tMin = interp.tMin;
+        const tMax = interp.tMax + fanBoost;
+        return { ...z, tMin, tMax };
+      } else {
+        // Les autres zones: appliquer le décalage + homogénéiser la largeur via un facteur
+        // pour suivre l’élargissement relatif observé sur la zone de confort.
+        const widthFactor = interp ? (interp.width / baseWidth) : 1;
+        const mid = (z.tMin + z.tMax) / 2;
+        const half = (z.tMax - z.tMin) / 2;
+        const newHalf = half * widthFactor;
+        const tMin = (mid - newHalf) + shift;
+        const tMax = (mid + newHalf) + shift;
+        return { ...z, tMin, tMax };
       }
-
-      return { ...z, tMin, tMax };
     });
-
-    if (DEBUG_ENABLED) {
-      const comfort = result.find((z) => z.id === "comfort");
-      console.groupCollapsed("[PsychroSvg] shiftedZones");
-      console.debug("outdoorTemp", outdoorTemp, "fanBoost", fanBoost);
-      console.debug("adj", adj);
-      console.debug("comfort range", comfort?.tMin, "→", comfort?.tMax);
-      console.groupEnd();
-    }
-
-    return result;
-  }, [outdoorTemp, airSpeed, psychroAdjust]);
+  }, [outdoorTemp, airSpeed, shift]);
 
   function buildZonePolygonPoints(z: ZoneDef): { points: string; labelX: number; labelY: number } {
     const step = 0.5;
     const top: string[] = [];
-    const W_MAX_COMFORT_GKG = 12;
-    const W_MIN_COMFORT_GKG = 5;
+    const W_MAX_COMFORT_GKG = 12; // ≃0.012 kg/kg
+    const W_MIN_COMFORT_GKG = 5;  // ≃0.005 kg/kg
 
-    // Ajustement combiné: calibrations (en fonction de T ext) + sliders (psychroAdjust)
-    const baseAdj = interpolateAdjust(typeof outdoorTemp === "number" ? outdoorTemp : undefined);
-    const userAdj = psychroAdjust;
-    const adj = {
-      xShiftDeg: (baseAdj.xShiftDeg ?? 0) + (userAdj.xShiftDeg ?? 0),
-      widthScale: (baseAdj.widthScale ?? 1) * (userAdj.widthScale ?? 1),
-      heightScale: (baseAdj.heightScale ?? 1) * (userAdj.heightScale ?? 1),
-      zoomScale: (baseAdj.zoomScale ?? 1) * (userAdj.zoomScale ?? 1),
-      yOffsetPx: (baseAdj.yOffsetPx ?? 0) + (userAdj.yOffsetPx ?? 0),
-      curvatureGain: (baseAdj.curvatureGain ?? 0) + (userAdj.curvatureGain ?? 0),
-    };
-
-    const T_PIVOT = 25.5;
-    const W_PIVOT = 8.5;
-
-    function curvatureOffsetPxAtTemp(t: number): number {
-      const yA = gkgToY(mixingRatioFromRH(t - 0.5, 100, P_ATM));
-      const yB = gkgToY(mixingRatioFromRH(t + 0.5, 100, P_ATM));
-      const slope = Math.abs(yB - yA);
-      const base = 3;
-      const max = 7;
-      const gain = Number.isFinite(adj.curvatureGain) ? adj.curvatureGain : 0;
-      return -Math.min(max, base + gain * slope);
-    }
-
-    // Parcours des T avec zoom horizontal déjà pris en compte dans shiftedZones (éviter double-zoom X)
     for (let t = z.tMin; t <= z.tMax + 1e-6; t += step) {
+      // RH max variable pour la zone de confort, sinon RH max fixe de la zone
       const rhMax = z.id === "comfort" ? rhMaxComfortPercentAtT(t) : z.rhMax;
       const wTopRaw = mixingRatioFromRH(t, rhMax, P_ATM);
-      const wScaled = W_PIVOT + (wTopRaw - W_PIVOT) * (adj.heightScale > 0 ? adj.heightScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
-      const wTop = z.id === "comfort" ? Math.min(wScaled, W_MAX_COMFORT_GKG) : wScaled;
+      const wTop = z.id === "comfort" ? Math.min(wTopRaw, W_MAX_COMFORT_GKG) : wTopRaw;
       if (!Number.isFinite(wTop)) continue;
-
-      const x = tempToX(t);
-      const y = gkgToY(wTop) + curvatureOffsetPxAtTemp(t) + (Number.isFinite(adj.yOffsetPx) ? adj.yOffsetPx : 0);
-      top.push(`${x},${y}`);
+      top.push(`${tempToX(t)},${gkgToY(wTop)}`);
     }
 
     const bottom: string[] = [];
     for (let t = z.tMax; t >= z.tMin - 1e-6; t -= step) {
+      // RH min fixe pour la plupart des zones; pour “Confort” appliquer plancher W
       const wBotRaw = mixingRatioFromRH(t, z.rhMin, P_ATM);
-      const wScaled = W_PIVOT + (wBotRaw - W_PIVOT) * (adj.heightScale > 0 ? adj.heightScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
-      const wBot = z.id === "comfort" ? Math.max(wScaled, W_MIN_COMFORT_GKG) : wScaled;
+      const wBot = z.id === "comfort" ? Math.max(wBotRaw, W_MIN_COMFORT_GKG) : wBotRaw;
       if (!Number.isFinite(wBot)) continue;
-
-      const x = tempToX(t);
-      const y = gkgToY(wBot) + curvatureOffsetPxAtTemp(t) + (Number.isFinite(adj.yOffsetPx) ? adj.yOffsetPx : 0);
-      bottom.push(`${x},${y}`);
+      bottom.push(`${tempToX(t)},${gkgToY(wBot)}`);
     }
 
     const points = [...top, ...bottom].join(" ");
+
+    // Label au centre (utilise RH mid moyenne pour le positionner)
     const tMid = (z.tMin + z.tMax) / 2;
     const rhMid = (z.rhMin + z.rhMax) / 2;
     const wMidRaw = mixingRatioFromRH(tMid, rhMid, P_ATM);
-    const wMidScaled = W_PIVOT + (wMidRaw - W_PIVOT) * (adj.heightScale > 0 ? adj.heightScale : 1) * (adj.zoomScale > 0 ? adj.zoomScale : 1);
-    const wMid = z.id === "comfort" ? Math.max(Math.min(wMidScaled, W_MAX_COMFORT_GKG), W_MIN_COMFORT_GKG) : wMidScaled;
-
+    const wMid = z.id === "comfort"
+      ? Math.max(Math.min(wMidRaw, W_MAX_COMFORT_GKG), W_MIN_COMFORT_GKG)
+      : wMidRaw;
     const labelX = tempToX(tMid);
-    const labelY = Number.isFinite(wMid)
-      ? gkgToY(wMid) + curvatureOffsetPxAtTemp(tMid) + (z.labelOffsetY ?? 0)
-      : 120;
+    const labelY = Number.isFinite(wMid) ? gkgToY(wMid) + (z.labelOffsetY ?? 0) : 120;
 
     return { points, labelX, labelY };
   }
@@ -494,22 +350,49 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     return "25.5";
   }
 
-  // Ajustements calibrés déplacés vers utilitaire: src/utils/psychroAdjust.ts
+  // Ajustements calibrés fournis par l'utilisateur pour différentes T extérieures
+  type AdjustParams = {
+    xShiftDeg: number;
+    widthScale: number;
+    heightScale: number;
+    zoomScale: number;
+    yOffsetPx: number;
+    curvatureGain: number;
+  };
 
-  // Calibrations déplacées vers utilitaire: src/utils/psychroAdjust.ts
+  const CALIBRATIONS: { t: number; adjust: AdjustParams }[] = [
+    { t: 5.4, adjust: { xShiftDeg: 2.8, widthScale: 0.72, heightScale: 0.84, zoomScale: 0.8, yOffsetPx: 35.5, curvatureGain: 0 } },
+    { t: 8.6, adjust: { xShiftDeg: 2.5, widthScale: 0.73, heightScale: 0.91, zoomScale: 0.8, yOffsetPx: 34,   curvatureGain: 0 } },
+    { t: 11.0, adjust: { xShiftDeg: 1.6, widthScale: 0.75, heightScale: 0.94, zoomScale: 0.8, yOffsetPx: 38,   curvatureGain: 0.2 } },
+  ];
 
-  // interpolateAdjust importé depuis utilitaire: src/utils/psychroAdjust.ts
+  function interpolateAdjust(outT?: number): AdjustParams {
+    const mid = CALIBRATIONS[1].adjust;
+    if (typeof outT !== "number") return mid;
+    const sorted = CALIBRATIONS.slice().sort((a,b)=> a.t-b.t);
+    if (outT <= sorted[0].t) return sorted[0].adjust;
+    if (outT >= sorted[sorted.length-1].t) return sorted[sorted.length-1].adjust;
 
-  // Transformation dédiée pour le calque figé: utilise ancre o(T_out) + paramètres calibrés
+    let a = sorted[0], b = sorted[1];
+    for (let i=0; i<sorted.length-1; i++){
+      if (outT >= sorted[i].t && outT <= sorted[i+1].t) { a = sorted[i]; b = sorted[i+1]; break; }
+    }
+    const ratio = (outT - a.t) / (b.t - a.t);
+    const lerp = (pA:number, pB:number) => pA + (pB - pA) * ratio;
+
+    return {
+      xShiftDeg:     lerp(a.adjust.xShiftDeg,     b.adjust.xShiftDeg),
+      widthScale:    lerp(a.adjust.widthScale,    b.adjust.widthScale),
+      heightScale:   lerp(a.adjust.heightScale,   b.adjust.heightScale),
+      zoomScale:     lerp(a.adjust.zoomScale,     b.adjust.zoomScale),
+      yOffsetPx:     lerp(a.adjust.yOffsetPx,     b.adjust.yOffsetPx),
+      curvatureGain: lerp(a.adjust.curvatureGain, b.adjust.curvatureGain),
+    };
+  }
+
+  // Transformation dédiée pour le calque figé: utilise uniquement les paramètres calibrés
   function transformOverlayCalibrated(points: string, zoneId?: string): string {
     if (!points) return points;
-
-    if (DEBUG_ENABLED) {
-      console.groupCollapsed("[PsychroSvg] transformOverlayCalibrated");
-      console.debug("zoneId", zoneId);
-      console.debug("outdoorTemp", outdoorTemp);
-      console.groupEnd();
-    }
 
     const adj = interpolateAdjust(typeof outdoorTemp === "number" ? outdoorTemp : undefined);
 
@@ -519,17 +402,6 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     const SRC_Y_BOTTOM = 947;
     const SRC_Y_TOP = 40;
     const SRC_W_MAX = 33;
-
-    // Ancre horizontale dépendante de la T extérieure (d’après ton code)
-    function anchorT(tOut?: number): number {
-      const tRef = 25.5;
-      const base = 17.6 + 0.31 * tRef - 3.5; // o0 à 25.5°C
-      if (typeof tOut !== "number") return base;
-      return 17.6 + 0.31 * tOut - 3.5;
-    }
-    const o = anchorT(typeof outdoorTemp === "number" ? outdoorTemp : undefined);
-    const o0 = anchorT(25.5);
-    const anchorDelta = o - o0;
 
     // Correction verticale dynamique liée à la courbure 100% RH (contrôlée par le gain calibré)
     function curvatureOffsetPxAtTemp(t: number): number {
@@ -542,6 +414,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
       return -Math.min(max, base + gain * slope);
     }
 
+    // Déformation horizontale centrée autour d’un pivot
     const T_PIVOT = 25.5;
 
     // Extension du confort si ventilateur (≈+3°C par m/s, max 1.5 m/s)
@@ -564,13 +437,9 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         const wGkg = ((SRC_Y_BOTTOM - yClamped) / (SRC_Y_BOTTOM - SRC_Y_TOP)) * SRC_W_MAX;
         const wGkgAdj = wGkg * ((Number.isFinite(adj.heightScale) && adj.heightScale > 0) ? adj.heightScale : 1);
 
-        // Déformation/translation sur la température:
-        // - élargissement/rétrécissement autour du pivot
-        // - déplacement par ancreDelta lié à T extérieure (o(T_out))
-        // - décalage manuel xShift + boost ventilateur dans la zone confort
+        // Appliquer déformation/translation sur la température avec paramètres calibrés
         const widthFactor = (Number.isFinite(adj.widthScale) && adj.widthScale > 0) ? adj.widthScale : 1;
-        const tCAdjBase = T_PIVOT + (tC - T_PIVOT) * widthFactor;
-        const tCAdj = tCAdjBase + anchorDelta + (Number.isFinite(adj.xShiftDeg) ? adj.xShiftDeg : 0) + fanBoost;
+        const tCAdj = T_PIVOT + (tC - T_PIVOT) * widthFactor + (Number.isFinite(adj.xShiftDeg) ? adj.xShiftDeg : 0) + fanBoost;
 
         // Zoom uniforme autour des pivots (température et humidité)
         const z = (Number.isFinite(adj.zoomScale) && adj.zoomScale > 0) ? adj.zoomScale : 1;
@@ -589,9 +458,20 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
       .join(' ');
   }
 
-  // Polygones dynamiques des zones (désactivés pour stabilité; on utilise le calque figé calibré)
+  // Polygones dynamiques des zones (calculés à partir de RH et T, suivront les iso-RH du fond)
   type ZonePoly = { id: string; points: string; labelX: number; labelY: number; fill: boolean };
-  const zonePolys: ZonePoly[] = React.useMemo(() => [], []);
+  const zonePolys: ZonePoly[] = React.useMemo(() => {
+    return shiftedZones.map((z) => {
+      const built = buildZonePolygonPoints(z);
+      return {
+        id: z.id,
+        points: built.points,
+        labelX: built.labelX,
+        labelY: built.labelY,
+        fill: z.id === "comfort",
+      };
+    });
+  }, [shiftedZones]);
 
   // Translation horizontale continue des zones selon la température extérieure (shift en °C converti en pixels)
   const dx = React.useMemo(() => shift * X_PER_DEG, [shift]);
@@ -751,11 +631,11 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
         </defs>
 
 
-        {/* Calque figé (overlays fournis) transformé avec l’ancre et tes calibrations */}
+        {/* Calque figé (calibré) : se superpose automatiquement au graphe */}
         <g clipPath="url(#dyad-psychro-clip)">
           {overlayShapes.map((s, idx) => {
             const col = colorById[s.id] ?? "59,130,246";
-            const stroke = `rgba(${col},0.9)`;
+            const stroke = `rgba(${col},0.88)`;
             const fillCol = s.fill ? `rgba(${col},0.22)` : "none";
             const ptsFixed = transformOverlayCalibrated(s.points, s.id);
 
@@ -778,6 +658,39 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
                 points={ptsFixed}
                 stroke={stroke}
                 strokeWidth={3}
+                strokeLinejoin="round"
+                fill="none"
+              />
+            );
+          })}
+
+          {/* Calque ajustable (discret): utile pour fine-tuning, n’écrase pas le calque figé */}
+          {overlayShapes.map((s, idx) => {
+            const col = colorById[s.id] ?? "59,130,246";
+            const strokeAdj = `rgba(${col},0.28)`;
+            const ptsAdj = transformOverlayPoints(s.points, s.id);
+
+            if (s.kind === "polygon") {
+              return (
+                <polygon
+                  key={`adj-${s.id}-${idx}`}
+                  points={ptsAdj}
+                  stroke={strokeAdj}
+                  strokeDasharray="6 4"
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              );
+            }
+
+            return (
+              <polyline
+                key={`adj-${s.id}-${idx}`}
+                points={ptsAdj}
+                stroke={strokeAdj}
+                strokeDasharray="6 4"
+                strokeWidth={2}
                 strokeLinejoin="round"
                 fill="none"
               />
@@ -818,14 +731,14 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
               <TooltipProvider delayDuration={150} key={`${c.name}-${i}`}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <AnimatedCircle
-                      cx={c.cx}
-                      cy={c.cy}
+                    <motion.circle
+                      animate={{ cx: c.cx, cy: c.cy }}
+                      initial={false}
+                      transition={{ duration: durationSec, ease: "easeInOut" }}
                       r={7}
                       fill={fillColor}
                       stroke="hsl(var(--background))"
                       strokeWidth={1.5}
-                      durationSec={durationSec}
                     />
                   </TooltipTrigger>
                   <TooltipContent side="top">
