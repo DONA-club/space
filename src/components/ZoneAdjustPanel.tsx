@@ -28,10 +28,12 @@ const ZoneAdjustPanel: React.FC = () => {
   const setPsychroXShiftDeg = useAppStore((s) => s.setPsychroXShiftDeg);
   const setPsychroWidthScale = useAppStore((s) => s.setPsychroWidthScale);
   const setPsychroYOffsetPx = useAppStore((s) => s.setPsychroYOffsetPx);
+  const setPsychroCurvatureGain = useAppStore((s) => s.setPsychroCurvatureGain);
 
   const xShiftDisplay = useMemo(() => `${formatNum(psychroAdjust.xShiftDeg, 1)} °C`, [psychroAdjust.xShiftDeg]);
   const widthDisplay = useMemo(() => `${formatNum(psychroAdjust.widthScale, 2)}×`, [psychroAdjust.widthScale]);
   const yOffsetDisplay = useMemo(() => `${formatNum(psychroAdjust.yOffsetPx, 1)} px`, [psychroAdjust.yOffsetPx]);
+  const curvatureDisplay = useMemo(() => `${formatNum(psychroAdjust.curvatureGain, 2)}×`, [psychroAdjust.curvatureGain]);
 
   return (
     <div className="fixed bottom-4 right-4 z-40">
@@ -66,6 +68,16 @@ const ZoneAdjustPanel: React.FC = () => {
               max={12}
               step={0.5}
               onValueChange={(v) => setPsychroYOffsetPx(v[0] ?? 0)}
+            />
+          </Row>
+
+          <Row label="Correction de courbure" valueText={curvatureDisplay}>
+            <Slider
+              value={[psychroAdjust.curvatureGain]}
+              min={0}
+              max={1.5}
+              step={0.05}
+              onValueChange={(v) => setPsychroCurvatureGain(v[0] ?? 0.7)}
             />
           </Row>
 

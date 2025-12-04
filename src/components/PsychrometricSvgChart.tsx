@@ -91,6 +91,8 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
 
   const [svgContent, setSvgContent] = React.useState<string | null>(null);
   const durationSec = (animationMs ?? 250) / 1000;
+  // Abonnement aux réglages d'ajustement pour provoquer un re-render quand les sliders changent
+  const psychroAdjust = useAppStore((s) => s.psychroAdjust);
 
   function injectStyle(svg: string): string {
     const overrideStyle = `
@@ -377,7 +379,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
     if (!points) return points;
 
     // Réglages utilisateurs (panneau sliders)
-    const { xShiftDeg, widthScale, yOffsetPx } = useAppStore.getState().psychroAdjust;
+    const { xShiftDeg, widthScale, yOffsetPx, curvatureGain } = psychroAdjust;
 
     // Repère source (ton chart)
     const SRC_X_MIN = 5;
@@ -392,7 +394,7 @@ const PsychrometricSvgChart: React.FC<Props> = ({ points, outdoorTemp, animation
       const yB = gkgToY(mixingRatioFromRH(t + 0.5, 100, P_ATM));
       const slope = Math.abs(yB - yA); // pente locale (px par °C)
       const base = 3;       // correction minimale
-      const gain = 0.7;     // amplification liée à la pente
+      const gain = Number.isFinite(curvatureGain) ? curvatureGain : 0.7; // amplification liée à la pente (via slider)
       const max = 7;        // limite supérieure
       return -Math.min(max, base + gain * slope);
     }

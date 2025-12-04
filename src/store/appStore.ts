@@ -98,7 +98,7 @@ interface AppState {
   chartPoints: { name: string; temperature: number; absoluteHumidity: number; color?: string }[];
 
   // Psychrometric overlay adjustments
-  psychroAdjust: { xShiftDeg: number; widthScale: number; yOffsetPx: number };
+  psychroAdjust: { xShiftDeg: number; widthScale: number; yOffsetPx: number; curvatureGain: number };
   
   // Actions
   setAuth: (user: any | null) => void;
@@ -139,6 +139,7 @@ interface AppState {
   setPsychroXShiftDeg: (deg: number) => void;
   setPsychroWidthScale: (scale: number) => void;
   setPsychroYOffsetPx: (px: number) => void;
+  setPsychroCurvatureGain: (gain: number) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -173,7 +174,7 @@ export const useAppStore = create<AppState>((set) => ({
   scienceExpanded: false,
   chartPoints: [],
 
-  psychroAdjust: { xShiftDeg: 0, widthScale: 1, yOffsetPx: 0 },
+  psychroAdjust: { xShiftDeg: 0, widthScale: 1, yOffsetPx: 0, curvatureGain: 0.7 },
   
   setAuth: (user) => set({ 
     isAuthenticated: !!user, 
@@ -239,4 +240,5 @@ export const useAppStore = create<AppState>((set) => ({
   setPsychroXShiftDeg: (deg) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, xShiftDeg: deg } })),
   setPsychroWidthScale: (scale) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, widthScale: scale } })),
   setPsychroYOffsetPx: (px) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, yOffsetPx: px } })),
+  setPsychroCurvatureGain: (gain) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, curvatureGain: gain } })),
 }));
