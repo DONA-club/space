@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Gauge, Scan, Wrench, Wind } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Gauge, Scan, Wrench, Wind, Grid3X3 } from 'lucide-react';
 import { TbMaximize, TbMinimize } from 'react-icons/tb';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -1330,7 +1330,7 @@ export const SensorPanel = () => {
                       className="text-[9px] h-5 px-1.5 flex items-center gap-1 bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-400 dark:border-indigo-600"
                       title="Résolution"
                     >
-                      <TbMaximize size={12} className="text-indigo-600" />
+                      <Grid3X3 size={12} className="text-indigo-600" />
                       {(meshResolution * meshResolution * meshResolution).toLocaleString()}
                     </Badge>
                     <Badge
