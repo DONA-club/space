@@ -97,6 +97,7 @@ interface AppState {
   scienceExpanded: boolean;
   isInterpolationExpanded: boolean;
   chartPoints: { name: string; temperature: number; absoluteHumidity: number; color?: string }[];
+  airSpeedMps: number;
 
   // Psychrometric overlay adjustments
   psychroAdjust: { xShiftDeg: number; widthScale: number; yOffsetPx: number; curvatureGain: number; heightScale: number; zoomScale: number };
@@ -137,6 +138,7 @@ interface AppState {
   setScienceExpanded: (expanded: boolean) => void;
   setIsInterpolationExpanded: (expanded: boolean) => void;
   setChartPoints: (points: { name: string; temperature: number; absoluteHumidity: number; color?: string }[]) => void;
+  setAirSpeedMps: (value: number) => void;
 
   // Psychrometric adjustments actions
   setPsychroXShiftDeg: (deg: number) => void;
@@ -180,6 +182,7 @@ export const useAppStore = create<AppState>((set) => ({
   scienceExpanded: false,
   isInterpolationExpanded: true,
   chartPoints: [],
+  airSpeedMps: 0,
 
   psychroAdjust: { xShiftDeg: 0, widthScale: 1, yOffsetPx: 0, curvatureGain: 0.7, heightScale: 1, zoomScale: 1 },
   showCalibrationPanel: false,
@@ -245,6 +248,7 @@ export const useAppStore = create<AppState>((set) => ({
   setScienceExpanded: (expanded) => set({ scienceExpanded: expanded }),
   setIsInterpolationExpanded: (expanded) => set({ isInterpolationExpanded: expanded }),
   setChartPoints: (points) => set({ chartPoints: points }),
+  setAirSpeedMps: (value) => set({ airSpeedMps: value }),
 
   setPsychroXShiftDeg: (deg) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, xShiftDeg: deg } })),
   setPsychroWidthScale: (scale) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, widthScale: scale } })),

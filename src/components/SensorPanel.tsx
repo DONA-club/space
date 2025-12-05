@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Gauge, Scan, Wrench } from 'lucide-react';
+import { Thermometer, Droplets, AlertCircle, ChevronDown, ChevronUp, Upload, Download, Trash2, FolderUp, Loader2, Clock, CloudSun, Sparkles, Zap, Waves, Box, Layers, GitBranch, Database, Home, Cloud, Calendar, FlaskConical, Gauge, Scan, Wrench, Wind } from 'lucide-react';
 import { TbMaximize, TbMinimize } from 'react-icons/tb';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -50,6 +50,7 @@ export const SensorPanel = () => {
   const scienceExpanded = useAppStore((state) => state.scienceExpanded);
   const setScienceExpanded = useAppStore((state) => state.setScienceExpanded);
   const setChartPointsStore = useAppStore((state) => state.setChartPoints);
+  const airSpeedMps = useAppStore((state) => state.airSpeedMps);
   
   const [isDataExpanded, setIsDataExpanded] = useState(true);
   const isInterpolationExpanded = useAppStore((state) => state.isInterpolationExpanded);
@@ -1650,6 +1651,14 @@ export const SensorPanel = () => {
                 >
                   <Gauge size={10} />
                   1013 hPa
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] h-5 px-1.5 flex items-center gap-1 bg-teal-100 dark:bg-teal-900/30 border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-200"
+                  title="Vitesse d’air"
+                >
+                  <Wind size={10} />
+                  {Number.isFinite(airSpeedMps) ? airSpeedMps.toFixed(1) : '0.0'} m/s
                 </Badge>
               </div>
               <div className="flex items-center gap-1">
