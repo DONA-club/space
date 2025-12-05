@@ -101,16 +101,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   // Affiche le panneau d'import modèle si aucun modèle 3D n'est chargé,
   // mais ne masque plus les autres panneaux quand la liste de capteurs est vide.
   const showFileUpload = !gltfModel;
-  const hasSensorMapping = Boolean(currentSpace?.json_file_path) || Boolean((currentSpace as any)?.localJsonText);
-
-  console.debug('[Dashboard] state', {
-    hasSensorMapping,
-    mode,
-    dataReady,
-    spaceId: currentSpace?.id,
-    gltfModelLoaded: Boolean(gltfModel),
-    sensors: sensors.length
-  });
+  const hasSensorMapping = sensors.length > 0;
 
   return (
     <div className="h-screen overflow-hidden p-2 sm:p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 flex flex-col">
