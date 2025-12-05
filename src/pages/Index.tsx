@@ -19,62 +19,24 @@ const Index = () => {
   const setCurrentSpace = useAppStore((state) => state.setCurrentSpace);
   const setGltfModel = useAppStore((state) => state.setGltfModel);
   const setSensors = useAppStore((state) => state.setSensors);
-  const signOutClearTimeout = useRef<number | null>(null);
 
   useEffect(() => {
-    // Check current session
+    // Synchroniser la session initiale
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setAuth(session.user);
-      }
+      setAuth(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Annule une éventuelle purge planifiée suite à SIGNED_OUT (switch de session)
-        if (signOutClearTimeout.current) {
-          window.clearTimeout(signOutClearTimeout.current);
-          signOutClearTimeout.current = null;
-        }
-        setAuth(session.user);
-        setLoading(false);
-        return;
-      }
-
-      if (event === 'SIGNED_OUT') {
-        // On planifie la purge, mais on l'annule si un SIGNED_IN suit rapidement (switch)
-        if (signOutClearTimeout.current) {
-          window.clearTimeout(signOutClearTimeout.current);
-        }
-        signOutClearTimeout.current = window.setTimeout(() => {
-          setAuth(null);
-          setCurrentSpace(null);
-          setLoading(false);
-          signOutClearTimeout.current = null;
-        }, 800);
-        return;
-      }
-
-      if (event === 'INITIAL_SESSION') {
-        if (session?.user) {
-          setAuth(session.user);
-        }
-        setLoading(false);
-      }
+    // Source unique de vérité pour l'état d'auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuth(session?.user ?? null);
+      setLoading(false);
     });
 
     return () => {
-      if (signOutClearTimeout.current) {
-        window.clearTimeout(signOutClearTimeout.current);
-        signOutClearTimeout.current = null;
-      }
       subscription.unsubscribe();
     };
-  }, [setAuth, setCurrentSpace]);
+  }, [setAuth]);
 
   const parseNumber = (value: any): number => {
     if (typeof value === 'number') return value;
