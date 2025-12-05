@@ -35,6 +35,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   const outdoorData = useAppStore((state) => state.outdoorData);
   const isPlaying = useAppStore((state) => state.isPlaying);
   const setScienceExpanded = useAppStore((state) => state.setScienceExpanded);
+  const setIsInterpolationExpanded = useAppStore((state) => state.setIsInterpolationExpanded);
   
   const [spaceAddress, setSpaceAddress] = useState<string>('');
 
@@ -275,7 +276,11 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
                             size="icon"
                             variant="outline"
                             className="h-8 w-8 bg-white/70 dark:bg-black/40 backdrop-blur"
-                            onClick={() => setScienceExpanded(false)}
+                            onClick={() => {
+                              // Forcer la fermeture du panneau Interpolation quand on réduit Monitoring
+                              setIsInterpolationExpanded(false);
+                              setScienceExpanded(false);
+                            }}
                             aria-label="Réduire"
                             title="Réduire"
                           >

@@ -56,13 +56,12 @@ export const SensorPanel = () => {
   const setIsInterpolationExpanded = useAppStore((state) => state.setIsInterpolationExpanded);
   const prevScienceExpandedRef = useRef(scienceExpanded);
   useEffect(() => {
-    // Quand on passe de grand (true) à petit (false)
-    if (prevScienceExpandedRef.current && !scienceExpanded && meshingEnabled) {
-      // Interpolation active: garder le panneau replié
+    // Quand on passe de grand (true) à petit (false), forcer la fermeture d’Interpolation
+    if (prevScienceExpandedRef.current && !scienceExpanded) {
       setIsInterpolationExpanded(false);
     }
     prevScienceExpandedRef.current = scienceExpanded;
-  }, [scienceExpanded, meshingEnabled]);
+  }, [scienceExpanded]);
   const [lastInteraction, setLastInteraction] = useState<number>(Date.now());
   const [interpHovered, setInterpHovered] = useState(false);
 
@@ -1673,8 +1672,8 @@ export const SensorPanel = () => {
                     className="h-7 w-7 rounded-md border border-gray-300 dark:border-gray-700 bg-white/50 dark:bg-black/40 text-gray-700 dark:text-gray-200 hover:bg-white/70 dark:hover:bg-black/60"
                     onClick={() => {
                       const next = !scienceExpanded;
-                      // Si on passe de grand à petit et que l’interpolation est active, on replie
-                      if (scienceExpanded && !next && meshingEnabled) {
+                      // Forcer la fermeture du panneau Interpolation lorsque l’on réduit le Monitoring
+                      if (scienceExpanded && !next) {
                         setIsInterpolationExpanded(false);
                       }
                       setScienceExpanded(next);
