@@ -351,7 +351,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           .eq('space_id', space.id)
           .order('timestamp', { ascending: true })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         const { data: maxData } = await supabase
           .from('sensor_data')
@@ -359,7 +359,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
           .eq('space_id', space.id)
           .order('timestamp', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         const { count: totalPoints } = await supabase
           .from('sensor_data')

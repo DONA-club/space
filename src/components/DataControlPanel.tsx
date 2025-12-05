@@ -73,13 +73,15 @@ export const DataControlPanel = () => {
 
       if (aggError) throw aggError;
 
-      const agg = (aggRows && aggRows[0]) || null;
+      type AggRow = { min: string | null; max: string | null };
+      const agg = ((aggRows as unknown as AggRow[])?.[0]) ?? null;
       if (!agg || !agg.min || !agg.max) {
         throw new Error('Aucune donnée trouvée');
       }
 
-      const minTime = new Date(agg.min as string).getTime();
-      const maxTime = new Date(agg.max as string).getTime();
+      const { min, max } = agg as AggRow;
+      const minTime = new Date(min as string).getTime();
+      const maxTime = new Date(max as string).getTime();
       
       // Get total count across all sensors
       const { count, error: countError } = await supabase
