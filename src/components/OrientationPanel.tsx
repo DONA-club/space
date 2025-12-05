@@ -44,14 +44,19 @@ export const OrientationPanel = () => {
   const [locked, setLocked] = useState<boolean>(true);
   const [isAnonSession, setIsAnonSession] = useState<boolean>(true);
 
+  // Suivi de modification depuis le dernier déverrouillage
+  const [hasChanged, setHasChanged] = useState<boolean>(false);
+  const [unlockStartDeg, setUnlockStartDeg] = useState<number | null>(null);
+
   useEffect(() => {
     setLocalDeg(orientationAzimuth);
   }, [orientationAzimuth]);
 
   useEffect(() => {
     if (currentSpace?.orientation_azimuth != null) {
-      setOrientationAzimuth(Math.round(currentSpace.orientation_azimuth));
-      setLocalDeg(Math.round(currentSpace.orientation_azimuth));
+      const val = Math.round(currentSpace.orientation_azimuth);
+      setOrientationAzimuth(val);
+      setLocalDeg(val);
     }
   }, [currentSpace, setOrientationAzimuth]);
 
@@ -60,32 +65,34 @@ export const OrientationPanel = () => {
       const u = data?.user;
       const anon = !!(u && ((u as any).is_anonymous || (u as any).app_metadata?.provider === 'anonymous'));
       setIsAnonSession(anon);
-      // Toujours démarrer verrouillé; pas de déverrouillage auto pour les sessions officielles
     });
   }, []);
 
   const handlePanelMouseEnter = () => {
     window.dispatchEvent(new CustomEvent('windRoseShow'));
-    // Reste déverrouillé tant que l’on est dans le panneau (si déjà déverrouillé)
   };
 
-  const handlePanelMouseLeave = () => {
+  const handlePanelMouseLeave = async () => {
     window.dispatchEvent(new CustomEvent('windRoseHide'));
-    // Sauvegarde l’azimut et replie le panneau pour tous les types de session
-    saveOrientation(localDeg);
+    // Sauvegarde uniquement si panneau déverrouillé ET modifié
+    if (!locked && hasChanged) {
+      await saveOrientation(localDeg, true);
+      setHasChanged(false);
+    }
+    // Re-verrouiller si il était déverrouillé
     if (!locked) {
       setLocked(true);
       showSuccess("Azimut verrouillé");
-    } else {
-      setLocked(true);
     }
   };
 
-  const handleLockToggle = () => {
+  const handleLockToggle = async () => {
     if (locked) {
       // Déverrouillage
       if (!isAnonSession) {
         setLocked(false);
+        setHasChanged(false);
+        setUnlockStartDeg(localDeg);
         window.dispatchEvent(new CustomEvent('windRoseShow'));
         return;
       }
@@ -100,17 +107,22 @@ export const OrientationPanel = () => {
         showSuccess('Mode administrateur activé');
       }
       setLocked(false);
+      setHasChanged(false);
+      setUnlockStartDeg(localDeg);
       window.dispatchEvent(new CustomEvent('windRoseShow'));
     } else {
       // Verrouillage
-      saveOrientation(localDeg);
+      if (hasChanged) {
+        await saveOrientation(localDeg, true);
+        setHasChanged(false);
+      }
       setLocked(true);
       window.dispatchEvent(new CustomEvent('windRoseHide'));
       showSuccess("Azimut verrouillé");
     }
   };
 
-  const saveOrientation = async (degToSave: number) => {
+  const saveOrientation = async (degToSave: number, showToast: boolean = true) => {
     if (!currentSpace) return;
     const deg = ((degToSave % 360) + 360) % 360;
 
@@ -123,7 +135,9 @@ export const OrientationPanel = () => {
       showError("Échec de sauvegarde de l'orientation");
       return;
     }
-    showSuccess("Azimut enregistré");
+    if (showToast) {
+      showSuccess("Azimut enregistré");
+    }
   };
 
   return (
@@ -179,9 +193,12 @@ export const OrientationPanel = () => {
             </div>
 
             <div
-              onMouseLeave={() => {
-                // Enregistre l’azimut quand on arrête de survoler le slider
-                saveOrientation(localDeg);
+              onMouseLeave={async () => {
+                // Enregistre seulement si déverrouillé et modifié
+                if (!locked && hasChanged) {
+                  await saveOrientation(localDeg, true);
+                  setHasChanged(false);
+                }
               }}
             >
               <Slider
@@ -190,6 +207,13 @@ export const OrientationPanel = () => {
                   const deg = v[0];
                   setLocalDeg(deg);
                   setOrientationAzimuth(deg); // live update
+                  if (!locked) {
+                    // Déclarer une modification si différente du point de départ
+                    const ref = unlockStartDeg ?? deg;
+                    if (Math.round(deg) !== Math.round(ref)) {
+                      setHasChanged(true);
+                    }
+                  }
                 }}
                 min={0}
                 max={359}
@@ -197,7 +221,6 @@ export const OrientationPanel = () => {
                 className="h-1"
               />
             </div>
-            {/* Description retirée */}
           </div>
         )}
       </div>
