@@ -101,6 +101,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   // Affiche le panneau d'import modèle si aucun modèle 3D n'est chargé,
   // mais ne masque plus les autres panneaux quand la liste de capteurs est vide.
   const showFileUpload = !gltfModel;
+  const hasSensorMapping = Boolean(currentSpace?.json_file_path) || Boolean((currentSpace as any)?.localJsonText);
 
   return (
     <div className="h-screen overflow-hidden p-2 sm:p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 flex flex-col">
@@ -241,19 +242,12 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
               </motion.div>
             )}
 
-            {/* Timeline - always visible on mobile */}
-            {mode === 'replay' && (
-              <div className="flex-shrink-0 space-y-2">
-                <DataControlPanel />
-                {dataReady && <TimelineControl />}
-              </div>
-            )}
-
-            {mode === 'live' && (
-              <div className="flex-shrink-0">
-                <TimelineControl />
-              </div>
-            )}
+            {/* Timeline & Données (mobile) */}
+            <div className="flex-shrink-0 space-y-2">
+              {hasSensorMapping && <DataControlPanel />}
+              {mode === 'replay' && dataReady && <TimelineControl />}
+              {mode === 'live' && <TimelineControl />}
+            </div>
           </div>
 
           {/* Desktop/Tablet: Side-by-side layout */}
@@ -315,28 +309,26 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
             </motion.div>
           </div>
 
-          {/* Desktop Timeline */}
+          {/* Desktop Timeline & Données */}
           <div className="hidden lg:block flex-shrink-0 space-y-4">
-            {mode === 'replay' && (
-              <>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  <DataControlPanel />
-                </motion.div>
-                
-                {dataReady && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    <TimelineControl />
-                  </motion.div>
-                )}
-              </>
+            {hasSensorMapping && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <DataControlPanel />
+              </motion.div>
+            )}
+
+            {mode === 'replay' && dataReady && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <TimelineControl />
+              </motion.div>
             )}
 
             {mode === 'live' && (

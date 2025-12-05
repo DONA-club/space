@@ -916,6 +916,11 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   };
 
   const handleObserveSpace = (space: Space) => {
+    const hasJson = !!(space.json_file_path || (space as any).localJsonText);
+    if (!hasJson) {
+      showError('Le mapping des capteurs (JSON) est requis pour observer cet espace.');
+      return;
+    }
     if (!space.latitude || !space.longitude) {
       showError('La localisation de cet espace n\'est pas définie. Veuillez la configurer avant d\'observer.');
       return;
@@ -1160,6 +1165,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
               const stats = spaceStats.get(space.id);
               const address = spaceAddresses.get(space.id);
               const hasLocation = space.latitude && space.longitude;
+              const hasJsonMapping = Boolean(space.json_file_path) || Boolean((space as any).localJsonText);
               
               return (
                 <motion.div
@@ -1403,7 +1409,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                             size="sm"
                             className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
                             onClick={() => handleObserveSpace(space)}
-                            disabled={!hasLocation}
+                            disabled={!hasLocation || !hasJsonMapping}
                           >
                             <Eye size={16} className="mr-2" />
                             Observer
@@ -1411,8 +1417,10 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                         </TooltipTrigger>
                         <TooltipContent>
                           <p className="text-xs">
-                            {hasLocation 
-                              ? 'Entrer dans la visualisation 3D' 
+                            {hasLocation && hasJsonMapping
+                              ? 'Entrer dans la visualisation 3D'
+                              : !hasJsonMapping
+                              ? 'Mapping JSON requis pour observer'
                               : 'Localisation requise pour observer'}
                           </p>
                         </TooltipContent>
