@@ -165,37 +165,9 @@ export const useSensorData = (
   useEffect(() => {
     if (!currentSpace) return;
 
-    const loadTimeRange = async () => {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const { data: minRows, error: minError } = await supabase
-          .from('sensor_data')
-          .select('timestamp')
-          .eq('space_id', currentSpace.id)
-          .order('timestamp', { ascending: true })
-          .limit(1);
-
-        if (minError) throw minError;
-
-        const { data: maxRows, error: maxError } = await supabase
-          .from('sensor_data')
-          .select('timestamp')
-          .eq('space_id', currentSpace.id)
-          .order('timestamp', { ascending: false })
-          .limit(1);
-
-        if (maxError) throw maxError;
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Error loading time range';
-        setError(errorMessage);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadTimeRange();
+    // Cette app calcule la plage min/max via DataControlPanel.handleAnalyze()
+    // On n'interroge plus Supabase ici pour éviter les 406.
+    setLoading(false);
   }, [currentSpace]);
 
   return { sensorData, outdoorData, loading, error };
