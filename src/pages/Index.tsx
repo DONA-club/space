@@ -21,21 +21,11 @@ const Index = () => {
   const setSensors = useAppStore((state) => state.setSensors);
 
   useEffect(() => {
-    // Synchroniser la session initiale
+    // Synchroniser la session initiale (une seule fois)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuth(session?.user ?? null);
       setLoading(false);
     });
-
-    // Source unique de vérité pour l'état d'auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuth(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, [setAuth]);
 
   const parseNumber = (value: any): number => {
