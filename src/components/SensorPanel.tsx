@@ -970,7 +970,7 @@ export const SensorPanel = () => {
                           className={`text-[9px] h-5 px-1.5 flex items-center gap-1 cursor-help ${getDelayBadgeClasses()}`}
                         >
                           <Clock size={10} />
-                          {delayLabel}
+                          -{delayLabel}
                         </Badge>
                       </TooltipTrigger>
                       <TooltipContent>
