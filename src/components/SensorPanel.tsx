@@ -56,14 +56,9 @@ export const SensorPanel = () => {
   const prevScienceExpandedRef = useRef(scienceExpanded);
   useEffect(() => {
     // Quand on passe de grand (true) à petit (false)
-    if (prevScienceExpandedRef.current && !scienceExpanded) {
-      if (meshingEnabled) {
-        // Interpolation active: garder le panneau replié
-        setIsInterpolationExpanded(false);
-      } else {
-        // Interpolation désactivée: on peut le laisser déroulé
-        setIsInterpolationExpanded(true);
-      }
+    if (prevScienceExpandedRef.current && !scienceExpanded && meshingEnabled) {
+      // Interpolation active: garder le panneau replié
+      setIsInterpolationExpanded(false);
     }
     prevScienceExpandedRef.current = scienceExpanded;
   }, [scienceExpanded, meshingEnabled]);
@@ -1675,7 +1670,14 @@ export const SensorPanel = () => {
                     size="icon"
                     variant="outline"
                     className="h-7 w-7 rounded-md border border-gray-300 dark:border-gray-700 bg-white/50 dark:bg-black/40 text-gray-700 dark:text-gray-200 hover:bg-white/70 dark:hover:bg-black/60"
-                    onClick={() => setScienceExpanded(!scienceExpanded)}
+                    onClick={() => {
+                      const next = !scienceExpanded;
+                      // Si on passe de grand à petit et que l’interpolation est active, on replie
+                      if (scienceExpanded && !next && meshingEnabled) {
+                        setIsInterpolationExpanded(false);
+                      }
+                      setScienceExpanded(next);
+                    }}
                     aria-label={scienceExpanded ? "Réduire" : "Agrandir"}
                     title={scienceExpanded ? "Réduire" : "Agrandir"}
                   >
