@@ -1,6 +1,6 @@
 "use client";
 
-import { Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
+import { Thermometer, Droplets, Wind, CloudRain, Gauge } from 'lucide-react';
 import { SensorDataPoint, MetricType } from '@/types/sensor.types';
 import { getColorFromValue } from '@/utils/colorUtils';
 import { formatMetricValue, getMetricUnit } from '@/utils/metricUtils';
@@ -45,6 +45,8 @@ export const OutdoorBadge = ({
         return <Wind {...iconProps} />;
       case 'dewPoint':
         return <CloudRain {...iconProps} />;
+      case 'vpd':
+        return <Gauge {...iconProps} />;
     }
   };
 

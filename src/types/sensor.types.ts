@@ -12,9 +12,10 @@ export interface SensorDataPoint {
   humidity: number;
   absoluteHumidity: number;
   dewPoint: number;
+  vpdKpa?: number;
 }
 
-export type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint';
+export type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint' | 'vpd';
 
 export interface MetricInfo {
   label: string;
@@ -26,5 +27,6 @@ export const METRIC_INFO: Record<MetricType, MetricInfo> = {
   temperature: { label: 'Température', unit: '°C', icon: 'thermometer' },
   humidity: { label: 'Humidité Relative', unit: '%', icon: 'droplets' },
   absoluteHumidity: { label: 'Humidité Absolue', unit: 'g/m³', icon: 'wind' },
-  dewPoint: { label: 'Point de Rosée', unit: '°C', icon: 'cloud-rain' }
+  dewPoint: { label: 'Point de Rosée', unit: '°C', icon: 'cloud-rain' },
+  vpd: { label: 'VPD', unit: 'kPa', icon: 'gauge' }
 };

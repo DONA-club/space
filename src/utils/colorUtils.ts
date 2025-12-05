@@ -52,6 +52,19 @@ const calculateHue = (normalized: number, metric: MetricType): number => {
       } else {
         return 0.583 - ((normalized - 0.75) / 0.25) * 0.083;
       }
+    case 'vpd':
+      // Même palette que la température: faible VPD = humide (bleu) → fort VPD = sec (rouge)
+      if (normalized < 0.2) {
+        return 0.667 - (normalized / 0.2) * 0.167;
+      } else if (normalized < 0.4) {
+        return 0.5 - ((normalized - 0.2) / 0.2) * 0.167;
+      } else if (normalized < 0.6) {
+        return 0.333 - ((normalized - 0.4) / 0.2) * 0.166;
+      } else if (normalized < 0.8) {
+        return 0.167 - ((normalized - 0.6) / 0.2) * 0.084;
+      } else {
+        return 0.083 - ((normalized - 0.8) / 0.2) * 0.083;
+      }
   }
 };
 

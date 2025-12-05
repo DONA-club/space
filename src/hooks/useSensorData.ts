@@ -72,7 +72,8 @@ export const useSensorData = (
               temperature: d.temperature,
               humidity: d.humidity,
               absoluteHumidity: d.absolute_humidity,
-              dewPoint: d.dew_point
+              dewPoint: d.dew_point,
+              vpdKpa: d.vpd_kpa ?? (0.6108 * Math.exp((17.27 * d.temperature) / (d.temperature + 237.3)) * (1 - (d.humidity ?? 0) / 100))
             }));
 
             const existingData = newData.get(sensor.id) || [];
@@ -141,7 +142,8 @@ export const useSensorData = (
             temperature: d.temperature,
             humidity: d.humidity,
             absoluteHumidity: d.absolute_humidity,
-            dewPoint: d.dew_point
+            dewPoint: d.dew_point,
+            vpdKpa: d.vpd_kpa ?? (0.6108 * Math.exp((17.27 * d.temperature) / (d.temperature + 237.3)) * (1 - (d.humidity ?? 0) / 100))
           }));
 
           const mergedData = [...outdoorData, ...formattedData]

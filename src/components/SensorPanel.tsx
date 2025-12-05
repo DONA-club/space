@@ -379,6 +379,8 @@ export const SensorPanel = () => {
       const dpt = parseFloat(dptStr);
       if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
 
+      const vpd = vpdStr !== undefined ? parseFloat(vpdStr) : NaN;
+
       newData.push({
         space_id: currentSpace.id,
         sensor_id: 0,
@@ -388,6 +390,7 @@ export const SensorPanel = () => {
         humidity: hum,
         absolute_humidity: absHum,
         dew_point: dpt,
+        vpd_kpa: Number.isFinite(vpd) ? vpd : null,
       });
     }
 
@@ -444,6 +447,8 @@ export const SensorPanel = () => {
       const dpt = parseFloat(dptStr);
       if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
 
+      const vpd = vpdStr !== undefined ? parseFloat(vpdStr) : NaN;
+
       newData.push({
         space_id: currentSpace.id,
         sensor_id: sensorId,
@@ -453,6 +458,7 @@ export const SensorPanel = () => {
         humidity: hum,
         absolute_humidity: absHum,
         dew_point: dpt,
+        vpd_kpa: Number.isFinite(vpd) ? vpd : null,
       });
     }
 
