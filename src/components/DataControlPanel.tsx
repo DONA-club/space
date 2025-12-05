@@ -19,6 +19,8 @@ export const DataControlPanel = () => {
   const [checking, setChecking] = useState(false);
   const [sensorDataCounts, setSensorDataCounts] = useState<Map<number, number>>(new Map());
 
+  console.debug('[DataControlPanel] render', { mode, spaceId: currentSpace?.id, sensors: sensors.length, dataReady });
+
   // Check if all sensors have data
   useEffect(() => {
     if (!currentSpace || mode !== 'replay') return;
@@ -106,7 +108,6 @@ export const DataControlPanel = () => {
     }
   };
 
-  if (mode !== 'replay') return null;
 
   const allSensorsHaveData = sensors.length > 0 && sensors.every(s => (sensorDataCounts.get(s.id) || 0) > 0);
 

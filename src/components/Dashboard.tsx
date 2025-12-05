@@ -103,6 +103,15 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
   const showFileUpload = !gltfModel;
   const hasSensorMapping = Boolean(currentSpace?.json_file_path) || Boolean((currentSpace as any)?.localJsonText);
 
+  console.debug('[Dashboard] state', {
+    hasSensorMapping,
+    mode,
+    dataReady,
+    spaceId: currentSpace?.id,
+    gltfModelLoaded: Boolean(gltfModel),
+    sensors: sensors.length
+  });
+
   return (
     <div className="h-screen overflow-hidden p-2 sm:p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 flex flex-col">
       <div className="max-w-7xl mx-auto w-full flex flex-col h-full gap-2 sm:gap-4">
