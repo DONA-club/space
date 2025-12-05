@@ -20,8 +20,10 @@ import OrientationPanel from './OrientationPanel';
 import PsychrometricSvgChart from './PsychrometricSvgChart';
 import { getColorFromValueSaturated } from '@/utils/colorUtils';
 import { getMetricValue } from '@/utils/metricUtils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export const SensorPanel = () => {
+  const isMobile = useIsMobile();
   const sensors = useAppStore((state) => state.sensors);
   const mode = useAppStore((state) => state.mode);
   const currentSpace = useAppStore((state) => state.currentSpace);
@@ -74,13 +76,14 @@ export const SensorPanel = () => {
   // Replie le panneau Interpolation si non survolé > 12s
   useEffect(() => {
     if (!isInterpolationExpanded) return;
+    if (isMobile) return; // Ne pas auto-fermer sur mobile
     const id = setInterval(() => {
       if (!interpHovered && Date.now() - lastInteraction > 12000) {
         setIsInterpolationExpanded(false);
       }
     }, 1000);
     return () => clearInterval(id);
-  }, [isInterpolationExpanded, interpHovered, lastInteraction]);
+  }, [isInterpolationExpanded, interpHovered, lastInteraction, isMobile]);
   const [hoveredSensorId, setHoveredSensorId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [sensorDataCounts, setSensorDataCounts] = useState<Map<number, number>>(new Map());
