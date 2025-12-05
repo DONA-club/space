@@ -1256,9 +1256,9 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                     <div className="flex flex-wrap gap-2 mb-3">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge 
-                            variant="outline" 
-                            className={`text-xs cursor-help ${space.gltf_file_name ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-800/20'}`}
+                          <Badge
+                            variant="outline"
+                            className={`text-xs cursor-help ${space.gltf_file_name ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-200' : 'bg-gray-50 dark:bg-gray-800/20 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}
                           >
                             <Box size={12} className="mr-1" />
                             Modèle 3D
@@ -1274,9 +1274,9 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge 
-                            variant="outline" 
-                            className={`text-xs cursor-help ${stats?.indoorSensorCount ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700' : 'bg-gray-50 dark:bg-gray-800/20'}`}
+                          <Badge
+                            variant="outline"
+                            className={`text-xs cursor-help ${stats?.indoorSensorCount ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-200' : 'bg-gray-50 dark:bg-gray-800/20 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}
                           >
                             <Activity size={12} className="mr-1" />
                             {stats?.indoorSensorCount || 0} capteurs
@@ -1307,9 +1307,9 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                           <div className="flex flex-wrap gap-2">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Badge 
-                                  variant="outline" 
-                                  className={`text-xs cursor-help ${stats?.hasOutdoorData ? 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-700' : 'bg-gray-50 dark:bg-gray-800/20 opacity-50'}`}
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs cursor-help ${stats?.hasOutdoorData ? 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-700 text-cyan-700 dark:text-cyan-200' : 'bg-gray-50 dark:bg-gray-800/20 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 opacity-50'}`}
                                 >
                                   <Cloud size={12} className="mr-1" />
                                   Extérieur
@@ -1327,9 +1327,9 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
 
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Badge 
-                                  variant="outline" 
-                                  className={`text-xs cursor-help ${stats?.dataStartDate ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-800/20 opacity-50'}`}
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs cursor-help ${stats?.dataStartDate ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-200' : 'bg-gray-50 dark:bg-gray-800/20 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 opacity-50'}`}
                                 >
                                   <Calendar size={12} className="mr-1" />
                                   {formatPreciseDuration(stats?.dataStartDate || null, stats?.dataEndDate || null)}
@@ -1351,14 +1351,14 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
                             {stats?.lastDataDate && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge 
-                                    variant="outline" 
+                                  <Badge
+                                    variant="outline"
                                     className={`text-xs cursor-help ${
-                                      (stats.dataDelayDays || 0) > 7 
-                                        ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' 
+                                      (stats.dataDelayDays || 0) > 7
+                                        ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 text-red-700 dark:text-red-200'
                                         : (stats.dataDelayDays || 0) > 1
-                                        ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
-                                        : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+                                        ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-200'
+                                        : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-200'
                                     }`}
                                   >
                                     <Clock size={12} className="mr-1" />
