@@ -55,10 +55,9 @@ export const DataControlPanel = () => {
     };
 
     checkSensorData();
-    
-    // Re-check every 2 seconds
-    const interval = setInterval(checkSensorData, 2000);
-    return () => clearInterval(interval);
+
+    // Plus de polling inutile: on ne re-vérifie pas périodiquement
+    return () => {};
   }, [currentSpace, mode, sensors, dataReady]);
 
   const handleAnalyze = async () => {
