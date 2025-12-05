@@ -16,6 +16,7 @@ import { DataControlPanel } from './DataControlPanel';
 import { supabase } from '@/integrations/supabase/client';
 import PsychrometricSvgChart from './PsychrometricSvgChart';
 import { useChartPoints } from '@/hooks/useChartPoints';
+import DebugStatus from './DebugStatus';
 
 interface DashboardProps {
   onBackToSpaces: () => void;
@@ -211,6 +212,22 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
               </div>
             </div>
           </LiquidGlassCard>
+        </motion.div>
+
+        {/* Panneau de debug pour diagnostiquer l’affichage Données */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-3xl mx-auto w-full"
+        >
+          <DebugStatus
+            currentSpace={currentSpace}
+            hasSensorMapping={Boolean(currentSpace?.json_file_path) || Boolean((currentSpace as any)?.localJsonText) || Boolean(currentSpace?.json_file_name)}
+            mode={mode}
+            dataReady={dataReady}
+            sensorsCount={sensors.length}
+            gltfModelLoaded={Boolean(gltfModel)}
+          />
         </motion.div>
 
         {showFileUpload && (
