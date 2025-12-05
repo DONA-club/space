@@ -103,7 +103,6 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     typeof window !== 'undefined' && localStorage.getItem('adminUnlocked') === 'true'
   );
   const [isAnonSession, setIsAnonSession] = useState<boolean>(false);
-  const [authReady, setAuthReady] = useState<boolean>(false);
 
   useEffect(() => {
     const handler = () => setAdminUnlocked(localStorage.getItem('adminUnlocked') === 'true');
@@ -111,37 +110,21 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
     return () => window.removeEventListener('storage', handler);
   }, []);
 
-  // S'assurer d'une session avant de charger les espaces:
-  // - si VITE_DEMO_EMAIL/PASSWORD sont fournis et aucune session: connexion au compte démo partagé
-  // - sinon: session anonyme Supabase
+  // Charger les espaces au montage; la session est gérée globalement par DemoSessionProvider
   useEffect(() => {
-    const ensureSession = async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        const demoEmail = import.meta.env.VITE_DEMO_EMAIL as string | undefined;
-        const demoPassword = import.meta.env.VITE_DEMO_PASSWORD as string | undefined;
-        if (demoEmail && demoPassword) {
-          await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPassword });
-        } else {
-          await supabase.auth.signInAnonymously();
-        }
-      }
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user || null;
-      const isAnonymous =
-        !!(user && ((user as any).is_anonymous || (user as any).app_metadata?.provider === 'anonymous'));
-      setIsAnonSession(!!isAnonymous);
-      setAuthReady(true);
-    };
-    ensureSession();
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data?.user;
+      const anon = !!(u && ((u as ps: any).is_anonymous || (u as any).app_metadata?.provider === 'anonymous'));
+      setIsAnonSession(anon);
+    });
+    loadSpaces();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Chargement des espaces déclenché au montage (voir effet ci-dessus)
   useEffect(() => {
-    if (authReady) {
-      loadSpaces();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady]);
+    // no-op
+  }, []);
 
   useEffect(() => {
     if (spaces.length > 0) {
