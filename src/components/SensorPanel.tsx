@@ -52,7 +52,8 @@ export const SensorPanel = () => {
   const setChartPointsStore = useAppStore((state) => state.setChartPoints);
   
   const [isDataExpanded, setIsDataExpanded] = useState(true);
-  const [isInterpolationExpanded, setIsInterpolationExpanded] = useState(true);
+  const isInterpolationExpanded = useAppStore((state) => state.isInterpolationExpanded);
+  const setIsInterpolationExpanded = useAppStore((state) => state.setIsInterpolationExpanded);
   const prevScienceExpandedRef = useRef(scienceExpanded);
   useEffect(() => {
     // Quand on passe de grand (true) à petit (false)

@@ -95,6 +95,7 @@ interface AppState {
 
   // Monitoring scientifique & diagramme
   scienceExpanded: boolean;
+  isInterpolationExpanded: boolean;
   chartPoints: { name: string; temperature: number; absoluteHumidity: number; color?: string }[];
 
   // Psychrometric overlay adjustments
@@ -134,6 +135,7 @@ interface AppState {
 
   // Monitoring actions
   setScienceExpanded: (expanded: boolean) => void;
+  setIsInterpolationExpanded: (expanded: boolean) => void;
   setChartPoints: (points: { name: string; temperature: number; absoluteHumidity: number; color?: string }[]) => void;
 
   // Psychrometric adjustments actions
@@ -176,6 +178,7 @@ export const useAppStore = create<AppState>((set) => ({
   liveSystemConnected: false,
 
   scienceExpanded: false,
+  isInterpolationExpanded: true,
   chartPoints: [],
 
   psychroAdjust: { xShiftDeg: 0, widthScale: 1, yOffsetPx: 0, curvatureGain: 0.7, heightScale: 1, zoomScale: 1 },
@@ -240,6 +243,7 @@ export const useAppStore = create<AppState>((set) => ({
   setLiveSystemConnected: (connected) => set({ liveSystemConnected: connected }),
 
   setScienceExpanded: (expanded) => set({ scienceExpanded: expanded }),
+  setIsInterpolationExpanded: (expanded) => set({ isInterpolationExpanded: expanded }),
   setChartPoints: (points) => set({ chartPoints: points }),
 
   setPsychroXShiftDeg: (deg) => set((state) => ({ psychroAdjust: { ...state.psychroAdjust, xShiftDeg: deg } })),
