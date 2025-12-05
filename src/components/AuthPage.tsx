@@ -36,9 +36,6 @@ export const AuthPage = () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-        },
       });
       if (error) throw error;
     } catch (error) {
@@ -53,9 +50,6 @@ export const AuthPage = () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'azure',
-        options: {
-          redirectTo: window.location.origin,
-        },
       });
       if (error) throw error;
     } catch (error) {
