@@ -112,20 +112,37 @@ export const DataControlPanel = () => {
 
 
   const allSensorsHaveData = sensors.length > 0 && sensors.every(s => (sensorDataCounts.get(s.id) || 0) > 0);
+  const sensorsWithData = sensors.filter(s => (sensorDataCounts.get(s.id) || 0) > 0).length;
+  const indoorSensors = sensors.filter(s => !s.isOutdoor).length;
+  const outdoorSensors = sensors.filter(s => s.isOutdoor).length;
+
+  // Afficher le panneau dès qu'il y a des capteurs mappés, même sans données
+  if (sensors.length === 0) {
+    console.debug('[DataControlPanel] No sensors mapped');
+    return null;
+  }
 
   if (!allSensorsHaveData) {
-    const sensorsWithData = sensors.filter(s => (sensorDataCounts.get(s.id) || 0) > 0).length;
     console.debug('[DataControlPanel] Not all sensors have data', { sensorsWithData, total: sensors.length, checking });
     return (
       <LiquidGlassCard className="p-4">
-        <div className="text-sm text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg flex items-center gap-2">
-          {checking && <Loader2 className="animate-spin h-4 w-4" />}
-          📊 Chargez les fichiers CSV pour tous les capteurs pour commencer l'analyse
-          {sensorsWithData > 0 && (
-            <span className="ml-2 text-xs">
-              ({sensorsWithData}/{sensors.length} capteurs prêts)
-            </span>
-          )}
+        <div className="space-y-2">
+          <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            📊 Données des capteurs
+          </div>
+          <div className="text-xs text-gray-600 dark:text-gray-400">
+            {indoorSensors} capteur{indoorSensors > 1 ? 's' : ''} intérieur{indoorSensors > 1 ? 's' : ''}
+            {outdoorSensors > 0 && ` · ${outdoorSensors} capteur${outdoorSensors > 1 ? 's' : ''} extérieur${outdoorSensors > 1 ? 's' : ''}`}
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg flex items-center gap-2">
+            {checking && <Loader2 className="animate-spin h-4 w-4" />}
+            Chargez les fichiers CSV pour tous les capteurs pour commencer l'analyse
+            {sensorsWithData > 0 && (
+              <span className="ml-2 text-xs font-medium">
+                ({sensorsWithData}/{sensors.length} prêts)
+              </span>
+            )}
+          </div>
         </div>
       </LiquidGlassCard>
     );
