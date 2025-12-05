@@ -270,7 +270,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
 
             {/* Timeline & Données (mobile) */}
             <div className="flex-shrink-0 space-y-2">
-              {hasSensorMapping && <DataControlPanel />}
+              <DataControlPanel />
               {mode === 'replay' && dataReady && <TimelineControl />}
               {mode === 'live' && <TimelineControl />}
             </div>
@@ -337,15 +337,13 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
 
           {/* Desktop Timeline & Données */}
           <div className="hidden lg:block flex-shrink-0 space-y-4">
-            {hasSensorMapping && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <DataControlPanel />
-              </motion.div>
-            )}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <DataControlPanel />
+            </motion.div>
 
             {mode === 'replay' && dataReady && (
               <motion.div
