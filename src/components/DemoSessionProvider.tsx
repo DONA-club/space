@@ -27,7 +27,11 @@ const DemoSessionProvider: React.FC<Props> = ({ children }) => {
         const demoPassword = import.meta.env.VITE_DEMO_PASSWORD as string | undefined;
 
         if (demoEmail && demoPassword) {
-          await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPassword });
+          const { error } = await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPassword });
+          if (error) {
+            console.warn('Échec de connexion démo, bascule en session anonyme', error);
+            await supabase.auth.signInAnonymously();
+          }
         } else {
           // Fallback: session anonyme Supabase (cela crée un nouvel utilisateur si cookies effacés)
           await supabase.auth.signInAnonymously();
