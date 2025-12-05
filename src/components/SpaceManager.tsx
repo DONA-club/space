@@ -114,7 +114,7 @@ export const SpaceManager = ({ onSpaceSelected }: SpaceManagerProps) => {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       const u = data?.user;
-      const anon = !!(u && ((u as ps: any).is_anonymous || (u as any).app_metadata?.provider === 'anonymous'));
+      const anon = !!(u && ((u as any).is_anonymous || (u as any).app_metadata?.provider === 'anonymous'));
       setIsAnonSession(anon);
     });
     loadSpaces();
