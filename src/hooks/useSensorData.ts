@@ -170,23 +170,21 @@ export const useSensorData = (
       setError(null);
       
       try {
-        const { data: minData, error: minError } = await supabase
+        const { data: minRows, error: minError } = await supabase
           .from('sensor_data')
           .select('timestamp')
           .eq('space_id', currentSpace.id)
           .order('timestamp', { ascending: true })
-          .limit(1)
-          .single();
+          .limit(1);
 
         if (minError) throw minError;
 
-        const { data: maxData, error: maxError } = await supabase
+        const { data: maxRows, error: maxError } = await supabase
           .from('sensor_data')
           .select('timestamp')
           .eq('space_id', currentSpace.id)
           .order('timestamp', { ascending: false })
-          .limit(1)
-          .single();
+          .limit(1);
 
         if (maxError) throw maxError;
       } catch (err) {

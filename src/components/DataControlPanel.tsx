@@ -65,32 +65,33 @@ export const DataControlPanel = () => {
 
     try {
       // Get time range from all sensor data (NO LIMIT - fetch all data)
-      const { data: minData, error: minError } = await supabase
+      const { data: minRows, error: minError } = await supabase
         .from('sensor_data')
         .select('timestamp')
         .eq('space_id', currentSpace.id)
         .order('timestamp', { ascending: true })
-        .limit(1)
-        .single();
+        .limit(1);
 
       if (minError) throw minError;
 
-      const { data: maxData, error: maxError } = await supabase
+      const { data: maxRows, error: maxError } = await supabase
         .from('sensor_data')
         .select('timestamp')
         .eq('space_id', currentSpace.id)
         .order('timestamp', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
       if (maxError) throw maxError;
       
-      if (!minData || !maxData) {
+      const minRow = (minRows && minRows[0]) || null;
+      const maxRow = (maxRows && maxRows[0]) || null;
+
+      if (!minRow || !maxRow) {
         throw new Error('Aucune donnée trouvée');
       }
 
-      const minTime = new Date(minData.timestamp).getTime();
-      const maxTime = new Date(maxData.timestamp).getTime();
+      const minTime = new Date(minRow.timestamp).getTime();
+      const maxTime = new Date(maxRow.timestamp).getTime();
       
       // Get total count across all sensors
       const { count, error: countError } = await supabase
