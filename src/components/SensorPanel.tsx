@@ -676,36 +676,36 @@ export const SensorPanel = () => {
 
   const getIndoorBadgeClasses = () => {
     if (sensors.length === 0) {
-      return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+      return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300';
     }
     if (indoorSensorsWithData === sensors.length) {
-      return 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
+      return 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-200';
     }
     if (indoorSensorsWithData > 0) {
-      return 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700';
+      return 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-200';
     }
-    return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+    return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300';
   };
 
   const getOutdoorBadgeClasses = () => {
     if (hasOutdoorData) {
-      return 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-700';
+      return 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-700 text-cyan-700 dark:text-cyan-200';
     }
-    return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+    return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300';
   };
 
   const getDelayBadgeClasses = () => {
     if (!globalLastDate) {
-      return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+      return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300';
     }
     const diffHours = Math.floor((Date.now() - globalLastDate.getTime()) / (1000 * 60 * 60));
     if (diffHours <= 1) {
-      return 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700';
+      return 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-200';
     }
     if (diffHours <= 24) {
-      return 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700';
+      return 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-200';
     }
-    return 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700';
+    return 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-200';
   };
 
   const delayLabel = useMemo(() => {
@@ -960,7 +960,7 @@ export const SensorPanel = () => {
                         <TooltipTrigger asChild>
                           <Badge
                             variant="outline"
-                            className="text-[9px] h-5 px-1.5 flex items-center gap-1 cursor-help bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
+                            className="text-[9px] h-5 px-1.5 flex items-center gap-1 cursor-help bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-200"
                           >
                             <Calendar size={10} />
                             {dataPeriod}
@@ -1065,7 +1065,7 @@ export const SensorPanel = () => {
                           {outdoorSensorName}
                         </span>
                         <div className="flex items-center gap-1">
-                          <Badge variant="outline" className="text-[9px] h-4 px-1 bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700">
+                          <Badge variant="outline" className="text-[9px] h-4 px-1 bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-200">
                             {outdoorDataCount.toLocaleString()}
                           </Badge>
                         </div>
@@ -1327,7 +1327,7 @@ export const SensorPanel = () => {
                   <div className="flex items-center gap-1.5">
                     <Badge
                       variant="outline"
-                      className="text-[9px] h-5 px-1.5 flex items-center gap-1 bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-400 dark:border-indigo-600"
+                      className="text-[9px] h-5 px-1.5 flex items-center gap-1 bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-400 dark:border-indigo-600 text-indigo-700 dark:text-indigo-200"
                       title="Résolution"
                     >
                       <Grid3X3 size={12} className="text-indigo-600" />
