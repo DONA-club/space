@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,20 @@ export const SensorPanel = () => {
   
   const [isDataExpanded, setIsDataExpanded] = useState(true);
   const [isInterpolationExpanded, setIsInterpolationExpanded] = useState(true);
+  const prevScienceExpandedRef = useRef(scienceExpanded);
+  useEffect(() => {
+    // Quand on passe de grand (true) à petit (false)
+    if (prevScienceExpandedRef.current && !scienceExpanded) {
+      if (meshingEnabled) {
+        // Interpolation active: garder le panneau replié
+        setIsInterpolationExpanded(false);
+      } else {
+        // Interpolation désactivée: on peut le laisser déroulé
+        setIsInterpolationExpanded(true);
+      }
+    }
+    prevScienceExpandedRef.current = scienceExpanded;
+  }, [scienceExpanded, meshingEnabled]);
   const [lastInteraction, setLastInteraction] = useState<number>(Date.now());
   const [interpHovered, setInterpHovered] = useState(false);
 
