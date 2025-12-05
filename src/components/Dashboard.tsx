@@ -214,7 +214,29 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
             <FileUploadPanel />
           </motion.div>
         )}
-        <>
+        
+        {/* Afficher SensorPanel et DataControlPanel dès qu'il y a un JSON, même sans modèle 3D */}
+        {hasSensorMapping && (
+          <>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex-1 min-h-0"
+            >
+              <SensorPanel />
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <DataControlPanel />
+            </motion.div>
+          </>
+        )}
+
+        {!showFileUpload && (
+          <>
           {/* Mobile: Stacked layout */}
           <div className="flex-1 min-h-0 flex flex-col lg:hidden gap-2">
             {/* 3D Scene */}
