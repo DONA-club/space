@@ -63,28 +63,8 @@ const calculateHue = (normalized: number, metric: MetricType): number => {
       } else {
         return 0.556 + ((normalized - 0.75) / 0.25) * 0.111; // Bleu clair -> Bleu
       }
-  }
-      // Vert (0.333) -> Teal (0.472) -> Cyan (0.5) -> Bleu clair (0.556) -> Bleu (0.667)
-      if (normalized < 0.25) {
-        return 0.333 + (normalized / 0.25) * 0.139; // Vert -> Teal
-      } else if (normalized < 0.5) {
-        return 0.472 + ((normalized - 0.25) / 0.25) * 0.028; // Teal -> Cyan
-      } else if (normalized < 0.75) {
-        return 0.5 + ((normalized - 0.5) / 0.25) * 0.056; // Cyan -> Bleu clair
-      } else {
-        return 0.556 + ((normalized - 0.75) / 0.25) * 0.111; // Bleu clair -> Bleu
-      }
-  }
-      // Vert (0.333) -> Teal (0.5) -> Cyan (0.5) -> Bleu clair (0.583) -> Bleu (0.667)
-      if (normalized < 0.25) {
-        return 0.333 + (normalized / 0.25) * 0.084; // Vert -> Teal
-      } else if (normalized < 0.5) {
-        return 0.417 + ((normalized - 0.25) / 0.25) * 0.083; // Teal -> Cyan
-      } else if (normalized < 0.75) {
-        return 0.5 + ((normalized - 0.5) / 0.25) * 0.083; // Cyan -> Bleu clair
-      } else {
-        return 0.583 + ((normalized - 0.75) / 0.25) * 0.084; // Bleu clair -> Bleu
-      }
+    default:
+      return 0.5; // Cyan par défaut
   }
 };
 
