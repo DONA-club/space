@@ -225,6 +225,14 @@ export const CSVManager = () => {
 
         if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
 
+        // Calculer VPD (Vapor Pressure Deficit) en kPa
+        // VPD = VPsat - VPair
+        // VPsat = 0.6108 * exp((17.27 * T) / (T + 237.3))
+        // VPair = VPsat * (RH / 100)
+        const vpSat = 0.6108 * Math.exp((17.27 * temp) / (temp + 237.3));
+        const vpAir = vpSat * (hum / 100);
+        const vpdKpa = vpSat - vpAir;
+
         newData.push({
           space_id: currentSpace.id,
           sensor_id: sensorId,
@@ -234,6 +242,7 @@ export const CSVManager = () => {
           humidity: hum,
           absolute_humidity: absHum,
           dew_point: dpt,
+          vpd_kpa: vpdKpa,
         });
       }
 
@@ -294,7 +303,7 @@ export const CSVManager = () => {
       }
 
       // Convert to CSV
-      const headers = ['timestamp', 'temperature', 'humidity', 'absolute_humidity', 'dew_point'];
+      const headers = ['timestamp', 'temperature', 'humidity', 'absolute_humidity', 'dew_point', 'vpd_kpa'];
       const csvLines = [headers.join(',')];
 
       data.forEach(row => {
@@ -303,7 +312,8 @@ export const CSVManager = () => {
           row.temperature,
           row.humidity,
           row.absolute_humidity,
-          row.dew_point
+          row.dew_point,
+          row.vpd_kpa ?? ''
         ].join(','));
       });
 

@@ -74,7 +74,9 @@ export const getColorFromValue = (
   maxValue: number,
   metric: MetricType
 ): number => {
-  const normalized = (value - minValue) / (maxValue - minValue);
+  // Clamp la valeur pour éviter les valeurs hors plage
+  const clampedValue = Math.max(minValue, Math.min(maxValue, value));
+  const normalized = (clampedValue - minValue) / (maxValue - minValue);
   const hue = calculateHue(normalized, metric);
   const color = new THREE.Color();
   color.setHSL(hue, 1.0, 0.5);
@@ -87,7 +89,9 @@ export const getColorFromValueSaturated = (
   maxValue: number,
   metric: MetricType
 ): THREE.Color => {
-  const normalized = (value - minValue) / (maxValue - minValue);
+  // Clamp la valeur pour éviter les valeurs hors plage
+  const clampedValue = Math.max(minValue, Math.min(maxValue, value));
+  const normalized = (clampedValue - minValue) / (maxValue - minValue);
   const hue = calculateHue(normalized, metric);
   const color = new THREE.Color();
   color.setHSL(hue, 1.0, INTERPOLATION_DEFAULTS.SATURATION_LIGHTNESS);

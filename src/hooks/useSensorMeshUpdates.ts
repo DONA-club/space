@@ -39,6 +39,17 @@ export const useSensorMeshUpdates = ({
       const averaged = getAverageDataPointInWindow(data, currentTimestamp, smoothingWindowSec * 1000);
       const value = getMetricValue(averaged, selectedMetric);
 
+      // Debug: vérifier les valeurs VPD
+      if (selectedMetric === 'vpdKpa' && sensor.id === sensors[0]?.id) {
+        console.log('VPD Debug:', {
+          sensorName: sensor.name,
+          value,
+          min: interpolationRange.min,
+          max: interpolationRange.max,
+          averaged
+        });
+      }
+
       const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
       const emissiveColor = new THREE.Color(color).multiplyScalar(0.3);
 
