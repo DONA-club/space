@@ -1,11 +1,5 @@
 import { SensorDataPoint } from '@/types/sensor.types';
 
-const computeVpdKpa = (temperatureC: number, rhPercent: number): number => {
-  // Tetens formula for saturation vapor pressure (kPa), VPD = es * (1 - RH/100)
-  const es = 0.6108 * Math.exp((17.27 * temperatureC) / (temperatureC + 237.3));
-  return es * (1 - rhPercent / 100);
-};
-
 export const findClosestDataPoint = (
   data: SensorDataPoint[],
   targetTimestamp: number
@@ -81,10 +75,9 @@ export const getAverageDataPointInWindow = (
       acc.humidity += d.humidity;
       acc.absoluteHumidity += d.absoluteHumidity;
       acc.dewPoint += d.dewPoint;
-      acc.vpdKpa += (d.vpdKpa ?? computeVpdKpa(d.temperature, d.humidity));
       return acc;
     },
-    { temperature: 0, humidity: 0, absoluteHumidity: 0, dewPoint: 0, vpdKpa: 0 }
+    { temperature: 0, humidity: 0, absoluteHumidity: 0, dewPoint: 0 }
   );
 
   const count = inWindow.length;
@@ -94,8 +87,7 @@ export const getAverageDataPointInWindow = (
     temperature: sum.temperature / count,
     humidity: sum.humidity / count,
     absoluteHumidity: sum.absoluteHumidity / count,
-    dewPoint: sum.dewPoint / count,
-    vpdKpa: sum.vpdKpa / count
+    dewPoint: sum.dewPoint / count
   };
 };
 
@@ -105,7 +97,7 @@ export const calculateIndoorAverage = (
   currentTimestamp: number,
   windowMs: number = 0
 ): SensorDataPoint | null => {
-  let tempSum = 0, humSum = 0, absHumSum = 0, dpSum = 0, vpdSum = 0, count = 0;
+  let tempSum = 0, humSum = 0, absHumSum = 0, dpSum = 0, count = 0;
 
   sensors.forEach((sensor) => {
     if (!sensorData.has(sensor.id)) return;
@@ -117,7 +109,6 @@ export const calculateIndoorAverage = (
     humSum += point.humidity;
     absHumSum += point.absoluteHumidity;
     dpSum += point.dewPoint;
-    vpdSum += (point.vpdKpa ?? computeVpdKpa(point.temperature, point.humidity));
     count++;
   });
 
@@ -128,8 +119,7 @@ export const calculateIndoorAverage = (
     temperature: tempSum / count,
     humidity: humSum / count,
     absoluteHumidity: absHumSum / count,
-    dewPoint: dpSum / count,
-    vpdKpa: vpdSum / count
+    dewPoint: dpSum / count
   };
 };
 
@@ -147,8 +137,7 @@ export const getDataRange = (
 
     const data = sensorData.get(sensor.id)!;
     const point = getAverageDataPointInWindow(data, currentTimestamp, windowMs);
-    const val = metricKey === 'vpdKpa' ? (point.vpdKpa ?? computeVpdKpa(point.temperature, point.humidity)) : (point as any)[metricKey];
-    values.push(val);
+    values.push(point[metricKey]);
   });
 
   if (values.length === 0) {

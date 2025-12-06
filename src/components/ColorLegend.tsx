@@ -59,12 +59,6 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
           unit: '°C',
           colors: ['#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4'],
         };
-      case 'vpd':
-        return {
-          label: 'VPD',
-          unit: 'kPa',
-          colors: ['#3b82f6', '#06b6d4', '#10b981', '#fbbf24', '#f97316', '#ef4444'],
-        };
       default:
         return {
           label: '',
@@ -123,7 +117,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const minColor = metricInfo.colors[0];
   const maxColor = metricInfo.colors[metricInfo.colors.length - 1];
 
-  const decimals = (selectedMetric === 'absoluteHumidity' || selectedMetric === 'vpd') ? 2 : 1;
+  const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
 
   return (
     <AnimatePresence>

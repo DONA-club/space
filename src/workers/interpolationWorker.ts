@@ -13,9 +13,9 @@ type ComputePayload = {
     humidity: number;
     absoluteHumidity: number;
     dewPoint: number;
-  } & { vpd_kpa?: number }>>;
+  }>>;
   currentTimestamp: number;
-  selectedMetric: 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint' | 'vpd';
+  selectedMetric: 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint';
   modelScale: number;
   originalCenter: Vec3 | null;
   modelPosition: Vec3;
@@ -45,21 +45,14 @@ type ComputeResult = {
   jobTs: number;
 };
 
-function es_kPa(Tc: number): number {
-  return 0.6108 * Math.exp((17.27 * Tc) / (Tc + 237.3));
-}
-
 function getMetricValue(
-  point: { temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number; vpd_kpa?: number },
-  metric: 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint' | 'vpd'
+  point: { temperature: number; humidity: number; absoluteHumidity: number; dewPoint: number },
+  metric: 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint'
 ): number {
   if (metric === 'temperature') return point.temperature;
   if (metric === 'humidity') return point.humidity;
   if (metric === 'absoluteHumidity') return point.absoluteHumidity;
-  if (metric === 'dewPoint') return point.dewPoint;
-  // vpd
-  if (typeof point.vpd_kpa === 'number') return point.vpd_kpa;
-  return es_kPa(point.temperature) * (1 - point.humidity / 100);
+  return point.dewPoint;
 }
 
 function buildInterpolationPoints(

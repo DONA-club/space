@@ -72,8 +72,7 @@ export const useSensorData = (
               temperature: d.temperature,
               humidity: d.humidity,
               absoluteHumidity: d.absolute_humidity,
-              dewPoint: d.dew_point,
-              vpdKpa: d.vpd_kpa ?? (0.6108 * Math.exp((17.27 * d.temperature) / (d.temperature + 237.3)) * (1 - (d.humidity ?? 0) / 100))
+              dewPoint: d.dew_point
             }));
 
             const existingData = newData.get(sensor.id) || [];
@@ -142,8 +141,7 @@ export const useSensorData = (
             temperature: d.temperature,
             humidity: d.humidity,
             absoluteHumidity: d.absolute_humidity,
-            dewPoint: d.dew_point,
-            vpdKpa: d.vpd_kpa ?? (0.6108 * Math.exp((17.27 * d.temperature) / (d.temperature + 237.3)) * (1 - (d.humidity ?? 0) / 100))
+            dewPoint: d.dew_point
           }));
 
           const mergedData = [...outdoorData, ...formattedData]
@@ -165,9 +163,39 @@ export const useSensorData = (
   useEffect(() => {
     if (!currentSpace) return;
 
-    // Cette app calcule la plage min/max via DataControlPanel.handleAnalyze()
-    // On n'interroge plus Supabase ici pour éviter les 406.
-    setLoading(false);
+    const loadTimeRange = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const { data: minData, error: minError } = await supabase
+          .from('sensor_data')
+          .select('timestamp')
+          .eq('space_id', currentSpace.id)
+          .order('timestamp', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (minError) throw minError;
+
+        const { data: maxData, error: maxError } = await supabase
+          .from('sensor_data')
+          .select('timestamp')
+          .eq('space_id', currentSpace.id)
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (maxError) throw maxError;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Error loading time range';
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTimeRange();
   }, [currentSpace]);
 
   return { sensorData, outdoorData, loading, error };

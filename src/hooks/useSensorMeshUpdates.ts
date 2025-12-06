@@ -61,7 +61,7 @@ export const useSensorMeshUpdates = ({
         const averaged = getAverageDataPointInWindow(data, currentTimestamp, smoothingWindowSec * 1000);
         const value = getMetricValue(averaged, selectedMetric);
         
-        const decimals = (selectedMetric === 'absoluteHumidity' || selectedMetric === 'vpd') ? 2 : 1;
+        const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
         const formatted = formatMetricValue(value, selectedMetric, decimals);
         
         updateSpriteLabel(meshes.sprite, formatted);

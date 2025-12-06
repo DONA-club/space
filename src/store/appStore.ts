@@ -22,7 +22,7 @@ interface OutdoorData {
   timestamp: number;
 }
 
-type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint' | 'vpd';
+type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint';
 type InterpolationMethod = 'idw' | 'rbf';
 type RBFKernel = 'gaussian' | 'multiquadric' | 'inverse_multiquadric' | 'thin_plate_spline';
 type VisualizationType = 'points' | 'vectors' | 'isosurface' | 'mesh';

@@ -64,24 +64,33 @@ export const DataControlPanel = () => {
     if (!currentSpace) return;
 
     try {
-      // Récupérer min/max en une seule requête agrégée (évite les 406)
-      const { data: aggRows, error: aggError } = await supabase
+      // Get time range from all sensor data (NO LIMIT - fetch all data)
+      const { data: minData, error: minError } = await supabase
         .from('sensor_data')
-        .select('min:timestamp.min, max:timestamp.max')
+        .select('timestamp')
         .eq('space_id', currentSpace.id)
-        .limit(1);
+        .order('timestamp', { ascending: true })
+        .limit(1)
+        .single();
 
-      if (aggError) throw aggError;
+      if (minError) throw minError;
 
-      type AggRow = { min: string | null; max: string | null };
-      const agg = ((aggRows as unknown as AggRow[])?.[0]) ?? null;
-      if (!agg || !agg.min || !agg.max) {
+      const { data: maxData, error: maxError } = await supabase
+        .from('sensor_data')
+        .select('timestamp')
+        .eq('space_id', currentSpace.id)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (maxError) throw maxError;
+      
+      if (!minData || !maxData) {
         throw new Error('Aucune donnée trouvée');
       }
 
-      const { min, max } = agg as AggRow;
-      const minTime = new Date(min as string).getTime();
-      const maxTime = new Date(max as string).getTime();
+      const minTime = new Date(minData.timestamp).getTime();
+      const maxTime = new Date(maxData.timestamp).getTime();
       
       // Get total count across all sensors
       const { count, error: countError } = await supabase
@@ -106,6 +115,7 @@ export const DataControlPanel = () => {
     }
   };
 
+  if (mode !== 'replay') return null;
 
   const allSensorsHaveData = sensors.length > 0 && sensors.every(s => (sensorDataCounts.get(s.id) || 0) > 0);
 

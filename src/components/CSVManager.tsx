@@ -213,7 +213,7 @@ export const CSVManager = () => {
         const values = line.replace(/"/g, '').split(',');
         if (values.length < 5) continue;
 
-        const [timestampStr, tempStr, humStr, absHumStr, dptStr, vpdStr] = values;
+        const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
         const timestamp = new Date(timestampStr.trim());
 
         if (isNaN(timestamp.getTime())) continue;
@@ -225,8 +225,6 @@ export const CSVManager = () => {
 
         if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
 
-        const vpd = vpdStr !== undefined ? parseFloat(vpdStr) : NaN;
-
         newData.push({
           space_id: currentSpace.id,
           sensor_id: sensorId,
@@ -236,7 +234,6 @@ export const CSVManager = () => {
           humidity: hum,
           absolute_humidity: absHum,
           dew_point: dpt,
-          vpd_kpa: Number.isFinite(vpd) ? vpd : null,
         });
       }
 
@@ -297,7 +294,7 @@ export const CSVManager = () => {
       }
 
       // Convert to CSV
-      const headers = ['timestamp', 'temperature', 'humidity', 'absolute_humidity', 'dew_point', 'vpd_kpa'];
+      const headers = ['timestamp', 'temperature', 'humidity', 'absolute_humidity', 'dew_point'];
       const csvLines = [headers.join(',')];
 
       data.forEach(row => {
@@ -306,8 +303,7 @@ export const CSVManager = () => {
           row.temperature,
           row.humidity,
           row.absolute_humidity,
-          row.dew_point,
-          row.vpd_kpa ?? ''
+          row.dew_point
         ].join(','));
       });
 
