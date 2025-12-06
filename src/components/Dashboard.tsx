@@ -365,6 +365,7 @@ export const Dashboard = ({ onBackToSpaces }: DashboardProps) => {
             )}
           </div>
         </>
+        )}
       </div>
     </div>
   );
