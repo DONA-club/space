@@ -91,6 +91,7 @@ export function useChartPoints() {
                 humidity: s.currentData.humidity,
                 absoluteHumidity: s.currentData.absoluteHumidity,
                 dewPoint: s.currentData.dewPoint,
+                vpdKpa: s.currentData.vpdKpa,
               },
               selectedMetric
             );
@@ -119,6 +120,7 @@ export function useChartPoints() {
               humidity: outdoorData.humidity,
               absoluteHumidity: outdoorData.absoluteHumidity,
               dewPoint: outdoorData.dewPoint,
+              vpdKpa: outdoorData.vpdKpa,
             },
             selectedMetric
           );
@@ -153,6 +155,7 @@ export function useChartPoints() {
                 humidity: outdoorData.humidity,
                 absoluteHumidity: outdoorData.absoluteHumidity,
                 dewPoint: outdoorData.dewPoint,
+                vpdKpa: outdoorData.vpdKpa,
               },
               selectedMetric
             );

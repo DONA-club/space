@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { MetricType } from '@/types/sensor.types';
 
 interface Sensor {
   id: number;
@@ -10,6 +11,7 @@ interface Sensor {
     humidity: number;
     absoluteHumidity: number;
     dewPoint: number;
+    vpdKpa?: number;
     timestamp: number;
   };
 }
@@ -19,10 +21,10 @@ interface OutdoorData {
   humidity: number;
   absoluteHumidity: number;
   dewPoint: number;
+  vpdKpa?: number;
   timestamp: number;
 }
 
-type MetricType = 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint';
 type InterpolationMethod = 'idw' | 'rbf';
 type RBFKernel = 'gaussian' | 'multiquadric' | 'inverse_multiquadric' | 'thin_plate_spline';
 type VisualizationType = 'points' | 'vectors' | 'isosurface' | 'mesh';
@@ -40,7 +42,7 @@ interface Space {
   updated_at: string;
   latitude: number | null;
   longitude: number | null;
-  orientation_azimuth: number | null; // nouvel attribut
+  orientation_azimuth: number | null;
 }
 
 interface AppState {
@@ -86,7 +88,7 @@ interface AppState {
   interpolationRange: { min: number; max: number } | null;
   
   // Orientation
-  orientationAzimuth: number; // en degrés [0..359]
+  orientationAzimuth: number;
   
   // WebSocket & Live
   wsConnected: boolean;

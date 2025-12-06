@@ -1,6 +1,6 @@
 "use client";
 
-import { Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
+import { Thermometer, Droplets, Wind, CloudRain, Gauge } from 'lucide-react';
 import { MetricType } from '@/types/sensor.types';
 import { getColorFromValue, rgbaFromColor } from '@/utils/colorUtils';
 import { formatMetricValue, getMetricLabel } from '@/utils/metricUtils';
@@ -37,6 +37,8 @@ export const AverageTemperatureBadge = ({
         return <Wind {...iconProps} />;
       case 'dewPoint':
         return <CloudRain {...iconProps} />;
+      case 'vpdKpa':
+        return <Gauge {...iconProps} />;
     }
   };
 
@@ -50,7 +52,7 @@ export const AverageTemperatureBadge = ({
     return `#${color.toString(16).padStart(6, '0')}`;
   };
 
-  const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
+  const decimals = (selectedMetric === 'absoluteHumidity' || selectedMetric === 'vpdKpa') ? 2 : 1;
   const displayValue = formatMetricValue(averageValue, selectedMetric, decimals);
   const metricLabel = getMetricLabel(selectedMetric);
 

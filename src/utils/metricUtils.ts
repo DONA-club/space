@@ -13,6 +13,8 @@ export const getMetricValue = (
       return data.absoluteHumidity;
     case 'dewPoint':
       return data.dewPoint;
+    case 'vpdKpa':
+      return data.vpdKpa ?? 0;
   }
 };
 

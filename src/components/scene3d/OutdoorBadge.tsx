@@ -1,6 +1,6 @@
 "use client";
 
-import { Thermometer, Droplets, Wind, CloudRain } from 'lucide-react';
+import { Thermometer, Droplets, Wind, CloudRain, Gauge } from 'lucide-react';
 import { SensorDataPoint, MetricType } from '@/types/sensor.types';
 import { getColorFromValue } from '@/utils/colorUtils';
 import { formatMetricValue, getMetricUnit } from '@/utils/metricUtils';
@@ -45,6 +45,8 @@ export const OutdoorBadge = ({
         return <Wind {...iconProps} />;
       case 'dewPoint':
         return <CloudRain {...iconProps} />;
+      case 'vpdKpa':
+        return <Gauge {...iconProps} />;
     }
   };
 
@@ -52,7 +54,7 @@ export const OutdoorBadge = ({
     const outdoorValue = currentOutdoorData[selectedMetric];
     const clampedValue = Math.max(
       interpolationRange.min,
-      Math.min(interpolationRange.max, outdoorValue)
+      Math.min(interpolationRange.max, outdoorValue ?? 0)
     );
     
     const color = getColorFromValue(clampedValue, interpolationRange.min, interpolationRange.max, selectedMetric);
@@ -62,18 +64,18 @@ export const OutdoorBadge = ({
   const getDifferenceText = () => {
     if (!meshingEnabled || volumetricAverage === null) return null;
 
-    const outdoorValue = currentOutdoorData[selectedMetric];
+    const outdoorValue = currentOutdoorData[selectedMetric] ?? 0;
     const diff = outdoorValue - volumetricAverage;
     
     const sign = diff > 0 ? '+' : '';
-    const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
+    const decimals = (selectedMetric === 'absoluteHumidity' || selectedMetric === 'vpdKpa') ? 2 : 1;
     const unit = getMetricUnit(selectedMetric);
     
     return `${sign}${diff.toFixed(decimals)}${unit}`;
   };
 
-  const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
-  const displayValue = formatMetricValue(currentOutdoorData[selectedMetric], selectedMetric, decimals);
+  const decimals = (selectedMetric === 'absoluteHumidity' || selectedMetric === 'vpdKpa') ? 2 : 1;
+  const displayValue = formatMetricValue(currentOutdoorData[selectedMetric] ?? 0, selectedMetric, decimals);
   const differenceText = getDifferenceText();
   const metricColor = getMetricColor();
 
@@ -95,7 +97,6 @@ export const OutdoorBadge = ({
   return (
     <div className="absolute bottom-4 left-4 z-10">
       <div className="space-y-2">
-        {/* Title with icon */}
         <div className="flex items-center gap-2">
           <div style={{ color: metricColor, filter: isDarkMode ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.35)) brightness(1.0) opacity(0.85)' : 'drop-shadow(0 1px 1px rgba(0,0,0,0.15)) brightness(0.9) opacity(0.7)' }}>
             {getMetricIcon()}
@@ -105,7 +106,6 @@ export const OutdoorBadge = ({
           </span>
         </div>
 
-        {/* Main value */}
         <div className="flex items-center justify-center">
           <span 
             className="text-2xl font-black tracking-tight"
@@ -115,7 +115,6 @@ export const OutdoorBadge = ({
           </span>
         </div>
         
-        {/* Difference with interior */}
         {meshingEnabled && volumetricAverage !== null && differenceText && (
           <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-black/5 dark:border-white/10">
             <span className="text-[10px] font-medium" style={textStyle}>

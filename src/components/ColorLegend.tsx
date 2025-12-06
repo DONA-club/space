@@ -4,6 +4,7 @@ import { useAppStore } from '@/store/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/components/theme-provider';
 import { useSmoothedValue } from '@/hooks/useSmoothedValue';
+import { Gauge } from 'lucide-react';
 
 interface ColorLegendProps {
   volumetricAverage?: number | null;
@@ -23,8 +24,6 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
       window.matchMedia &&
       window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-  // IMPORTANT: appeler tous les hooks AVANT tout return conditionnel
-  // Lissage visuel uniquement pour l'affichage (pas de coût côté calculs)
   const smoothedAverage = useSmoothedValue(volumetricAverage ?? null, {
     stiffness: 200,
     damping: 28,
@@ -58,6 +57,12 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
           label: 'POINT DE ROSÉE',
           unit: '°C',
           colors: ['#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4'],
+        };
+      case 'vpdKpa':
+        return {
+          label: 'PRESSION VAPEUR SATURANTE',
+          unit: 'kPa',
+          colors: ['#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6'],
         };
       default:
         return {
@@ -117,7 +122,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
   const minColor = metricInfo.colors[0];
   const maxColor = metricInfo.colors[metricInfo.colors.length - 1];
 
-  const decimals = selectedMetric === 'absoluteHumidity' ? 2 : 1;
+  const decimals = (selectedMetric === 'absoluteHumidity' || selectedMetric === 'vpdKpa') ? 2 : 1;
 
   return (
     <AnimatePresence>

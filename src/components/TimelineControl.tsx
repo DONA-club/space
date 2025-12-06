@@ -3,7 +3,7 @@
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { useAppStore } from '@/store/appStore';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, SkipBack, SkipForward, Thermometer, Droplets, Wind, CloudRain, Repeat, Circle, Download } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Thermometer, Droplets, Wind, CloudRain, Repeat, Circle, Download, Gauge } from 'lucide-react';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
@@ -48,7 +48,6 @@ export const TimelineControl = () => {
   const [liveTimelineEnd, setLiveTimelineEnd] = useState<number>(Date.now());
   const [isDragging, setIsDragging] = useState<'start' | 'end' | 'current' | null>(null);
   const [dewPointDifferences, setDewPointDifferences] = useState<DewPointDifference[]>([]);
-  // Segments jour/nuit pour l'overlay subtil de la timeline
   const [loadedRanges, setLoadedRanges] = useState<Array<{start: number, end: number}>>([]);
   const [loadingRanges, setLoadingRanges] = useState<Set<string>>(new Set());
   const [loopEnabled, setLoopEnabled] = useState(false);
@@ -529,7 +528,6 @@ export const TimelineControl = () => {
     return ((timestamp - timeRange[0]) / effectiveRange) * 100;
   };
 
-  // Jour/nuit à un instant donné (continuité sans rupture à minuit)
   const isDayAt = (ts: number): boolean => {
     if (!currentSpace || currentSpace.latitude == null || currentSpace.longitude == null) return true;
     const date = new Date(ts);
@@ -544,7 +542,6 @@ export const TimelineControl = () => {
     return pos.altitude > 0;
   };
 
-  // Calcul des segments jour/nuit selon la localisation et la plage temporelle
   const dayNightSegments = useMemo(() => {
     if (!timeRange) return [];
     if (!currentSpace || currentSpace.latitude == null || currentSpace.longitude == null) return [];
@@ -553,7 +550,6 @@ export const TimelineControl = () => {
     const lon = currentSpace.longitude!;
     const effectiveEnd = mode === 'live' ? liveTimelineEnd : timeRange[1];
 
-    // Collecter tous les événements sunrise/sunset sur la plage
     const events: Array<{ time: number; type: 'sunrise' | 'sunset' }> = [];
     const startMidnight = new Date(timeRange[0]);
     startMidnight.setHours(0, 0, 0, 0);
@@ -573,7 +569,6 @@ export const TimelineControl = () => {
 
     events.sort((a, b) => a.time - b.time);
 
-    // Construire les segments en alternant entre événements
     const segments: Array<{ start: number; end: number; type: 'day' | 'night' }> = [];
     let cursor = timeRange[0];
     let isDayNow = isDayAt(cursor);
@@ -589,7 +584,6 @@ export const TimelineControl = () => {
       segments.push({ start: cursor, end: effectiveEnd, type: isDayNow ? 'day' : 'night' });
     }
 
-    // Fusion légère pour gommer les micro-écarts
     const merged: Array<{ start: number; end: number; type: 'day' | 'night' }> = [];
     for (const seg of segments.sort((a, b) => a.start - b.start)) {
       const last = merged[merged.length - 1];
@@ -751,12 +745,53 @@ export const TimelineControl = () => {
   
   const effectiveTimelineEnd = isLiveMode ? liveTimelineEnd : timeRange[1];
 
+  const getMetricInfo = () => {
+    switch (selectedMetric) {
+      case 'temperature':
+        return {
+          label: 'TEMPÉRATURE',
+          unit: '°C',
+          colors: ['#3b82f6', '#06b6d4', '#10b981', '#fbbf24', '#f97316', '#ef4444'],
+        };
+      case 'humidity':
+        return {
+          label: 'HUMIDITÉ RELATIVE',
+          unit: '%',
+          colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#3b82f6'],
+        };
+      case 'absoluteHumidity':
+        return {
+          label: 'HUMIDITÉ ABSOLUE',
+          unit: 'g/m³',
+          colors: ['#fbbf24', '#f97316', '#ef4444', '#ec4899', '#a855f7'],
+        };
+      case 'dewPoint':
+        return {
+          label: 'POINT DE ROSÉE',
+          unit: '°C',
+          colors: ['#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4'],
+        };
+      case 'vpdKpa':
+        return {
+          label: 'PRESSION VAPEUR SATURANTE',
+          unit: 'kPa',
+          colors: ['#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6'],
+        };
+      default:
+        return {
+          label: '',
+          unit: '',
+          colors: ['#3b82f6', '#ef4444'],
+        };
+    }
+  };
+
   return (
     <LiquidGlassCard className="p-2 sm:p-4">
       <div className="space-y-2 sm:space-y-4">
         <TooltipPrimitive.Provider delayDuration={300}>
           <Tabs value={selectedMetric} onValueChange={(v) => setSelectedMetric(v as any)} className="w-full">
-            <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 sm:h-9 p-1 gap-1 w-full grid grid-cols-4">
+            <TabsList className="bg-white/30 dark:bg-black/30 backdrop-blur-sm h-8 sm:h-9 p-1 gap-1 w-full grid grid-cols-5">
               <TooltipPrimitive.Root>
                 <TooltipPrimitive.Trigger asChild>
                   <TabsTrigger 
@@ -837,6 +872,27 @@ export const TimelineControl = () => {
                   <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
                     <p className="font-medium mb-1">Point de Rosée (°C)</p>
                     <p className="text-gray-300">Température de condensation</p>
+                  </TooltipPrimitive.Content>
+                </TooltipPrimitive.Portal>
+              </TooltipPrimitive.Root>
+
+              <TooltipPrimitive.Root>
+                <TooltipPrimitive.Trigger asChild>
+                  <TabsTrigger 
+                    value="vpdKpa" 
+                    className="relative flex items-center justify-center gap-1 sm:gap-1.5 h-6 sm:h-7 px-2 sm:px-3 data-[state=active]:bg-white/90 dark:data-[state=active]:bg-gray-800/90 data-[state=active]:shadow-md transition-all"
+                  >
+                    {selectedMetric === 'vpdKpa' && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 to-teal-600/20 rounded-md"></div>
+                    )}
+                    <Gauge size={12} className={selectedMetric === 'vpdKpa' ? 'text-emerald-600 relative z-10' : 'text-emerald-500 relative z-10'} />
+                    <span className={`text-[10px] sm:text-xs font-medium relative z-10 ${selectedMetric === 'vpdKpa' ? 'text-emerald-700 dark:text-emerald-500' : ''}`}>VPD</span>
+                  </TabsTrigger>
+                </TooltipPrimitive.Trigger>
+                <TooltipPrimitive.Portal>
+                  <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
+                    <p className="font-medium mb-1">Pression Vapeur Saturante (kPa)</p>
+                    <p className="text-gray-300">Déficit de pression de vapeur</p>
                   </TooltipPrimitive.Content>
                 </TooltipPrimitive.Portal>
               </TooltipPrimitive.Root>
@@ -1018,8 +1074,8 @@ export const TimelineControl = () => {
                   const left = Math.min(start, end);
                   const width = Math.max(0.1, Math.abs(end - start));
                   const bg = seg.type === 'night'
-                    ? NIGHT_BG // nuit uniforme (gris identique toute la nuit)
-                    : DAY_BG; // jour uniforme (bleu ciel léger)
+                    ? NIGHT_BG
+                    : DAY_BG;
                   return (
                     <div
                       key={`seg-${i}`}

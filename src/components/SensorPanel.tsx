@@ -369,7 +369,7 @@ export const SensorPanel = () => {
       const values = line.replace(/"/g, '').split(',');
       if (values.length < 5) continue;
 
-      const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
+      const [timestampStr, tempStr, humStr, absHumStr, dptStr, vpdStr] = values;
       const timestamp = new Date(timestampStr.trim());
       if (isNaN(timestamp.getTime())) continue;
 
@@ -379,7 +379,7 @@ export const SensorPanel = () => {
       const dpt = parseFloat(dptStr);
       if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
 
-      newData.push({
+      const dataPoint: any = {
         space_id: currentSpace.id,
         sensor_id: 0,
         sensor_name: detectedName,
@@ -388,7 +388,17 @@ export const SensorPanel = () => {
         humidity: hum,
         absolute_humidity: absHum,
         dew_point: dpt,
-      });
+      };
+
+      // Ajouter VPD si présent dans le CSV
+      if (vpdStr && vpdStr.trim()) {
+        const vpd = parseFloat(vpdStr);
+        if (!isNaN(vpd)) {
+          dataPoint.vpd_kpa = vpd;
+        }
+      }
+
+      newData.push(dataPoint);
     }
 
     if (newData.length === 0) {
@@ -434,7 +444,7 @@ export const SensorPanel = () => {
       const values = line.replace(/"/g, '').split(',');
       if (values.length < 5) continue;
 
-      const [timestampStr, tempStr, humStr, absHumStr, dptStr] = values;
+      const [timestampStr, tempStr, humStr, absHumStr, dptStr, vpdStr] = values;
       const timestamp = new Date(timestampStr.trim());
       if (isNaN(timestamp.getTime())) continue;
 
@@ -444,7 +454,7 @@ export const SensorPanel = () => {
       const dpt = parseFloat(dptStr);
       if (isNaN(temp) || isNaN(hum) || isNaN(absHum) || isNaN(dpt)) continue;
 
-      newData.push({
+      const dataPoint: any = {
         space_id: currentSpace.id,
         sensor_id: sensorId,
         sensor_name: sensor.name,
@@ -453,7 +463,17 @@ export const SensorPanel = () => {
         humidity: hum,
         absolute_humidity: absHum,
         dew_point: dpt,
-      });
+      };
+
+      // Ajouter VPD si présent dans le CSV
+      if (vpdStr && vpdStr.trim()) {
+        const vpd = parseFloat(vpdStr);
+        if (!isNaN(vpd)) {
+          dataPoint.vpd_kpa = vpd;
+        }
+      }
+
+      newData.push(dataPoint);
     }
 
     if (newData.length === 0) {
