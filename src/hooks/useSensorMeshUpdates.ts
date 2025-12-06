@@ -40,10 +40,14 @@ export const useSensorMeshUpdates = ({
       const value = getMetricValue(averaged, selectedMetric);
 
       const color = getColorFromValue(value, interpolationRange.min, interpolationRange.max, selectedMetric);
-      const emissiveColor = new THREE.Color(color).multiplyScalar(0.5);
+      const emissiveColor = new THREE.Color(color).multiplyScalar(0.3);
 
       (meshes.sphere.material as THREE.MeshStandardMaterial).color.setHex(color);
       (meshes.sphere.material as THREE.MeshStandardMaterial).emissive.setHex(emissiveColor.getHex());
+      (meshes.sphere.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.8;
+      (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(color);
+      (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(color);
+      (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(color);
       (meshes.glow.material as THREE.MeshBasicMaterial).color.setHex(color);
     });
   }, [sensorMeshes, sensors, sensorData, currentTimestamp, selectedMetric, interpolationRange, dataReady, smoothingWindowSec]);

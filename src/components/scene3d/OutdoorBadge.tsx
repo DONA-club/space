@@ -2,9 +2,8 @@
 
 import { Thermometer, Droplets, Wind, CloudRain, Gauge } from 'lucide-react';
 import { SensorDataPoint, MetricType } from '@/types/sensor.types';
-import { getColorFromValue } from '@/utils/colorUtils';
+import { getColorFromValue, rgbaFromColor } from '@/utils/colorUtils';
 import { formatMetricValue, getMetricUnit } from '@/utils/metricUtils';
-import { useTheme } from '@/components/theme-provider';
 
 interface OutdoorBadgeProps {
   currentOutdoorData: SensorDataPoint | null;
@@ -27,15 +26,12 @@ export const OutdoorBadge = ({
   volumetricAverage,
   meshingEnabled
 }: OutdoorBadgeProps) => {
-  const { theme } = useTheme();
-  const isDarkMode = theme === 'dark' || (theme === 'system' && typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-
   if (!hasOutdoorData || !currentOutdoorData || !dataReady || !interpolationRange) {
     return null;
   }
 
   const getMetricIcon = () => {
-    const iconProps = { size: 13, strokeWidth: 2.5 };
+    const iconProps = { size: 16 };
     switch (selectedMetric) {
       case 'temperature':
         return <Thermometer {...iconProps} />;
@@ -61,6 +57,17 @@ export const OutdoorBadge = ({
     return `#${color.toString(16).padStart(6, '0')}`;
   };
 
+  const getBackgroundColor = () => {
+    const outdoorValue = currentOutdoorData[selectedMetric];
+    const clampedValue = Math.max(
+      interpolationRange.min,
+      Math.min(interpolationRange.max, outdoorValue ?? 0)
+    );
+    
+    const color = getColorFromValue(clampedValue, interpolationRange.min, interpolationRange.max, selectedMetric);
+    return rgbaFromColor(color, 0.15);
+  };
+
   const getDifferenceText = () => {
     if (!meshingEnabled || volumetricAverage === null) return null;
 
@@ -79,57 +86,33 @@ export const OutdoorBadge = ({
   const differenceText = getDifferenceText();
   const metricColor = getMetricColor();
 
-  const textStyle = {
-    textShadow: isDarkMode
-      ? '0 1px 1px rgba(255, 255, 255, 0.06), 0 -1px 0 rgba(0, 0, 0, 0.5)'
-      : '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
-    color: isDarkMode ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.4)'
-  } as const;
-
-  const valueStyle = {
-    textShadow: isDarkMode
-      ? '0 1px 1px rgba(0, 0, 0, 0.6), 0 -1px 0 rgba(255, 255, 255, 0.08)'
-      : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.25)',
-    color: metricColor,
-    filter: isDarkMode ? 'brightness(1.2) opacity(0.95)' : 'brightness(0.9) opacity(0.8)'
-  } as const;
-
   return (
     <div className="absolute bottom-4 left-4 z-10">
-      <div className="space-y-2">
+      <div 
+        className="backdrop-blur-xl rounded-xl p-3 shadow-lg border border-white/40"
+        style={{ backgroundColor: getBackgroundColor() }}
+      >
         <div className="flex items-center gap-2">
-          <div style={{ color: metricColor, filter: isDarkMode ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.35)) brightness(1.0) opacity(0.85)' : 'drop-shadow(0 1px 1px rgba(0,0,0,0.15)) brightness(0.9) opacity(0.7)' }}>
+          <div style={{ color: metricColor }}>
             {getMetricIcon()}
           </div>
-          <span className="text-xs font-bold tracking-wide" style={textStyle}>
-            Extérieur
-          </span>
-        </div>
-
-        <div className="flex items-center justify-center">
-          <span 
-            className="text-2xl font-black tracking-tight"
-            style={valueStyle}
-          >
-            {displayValue}
-          </span>
-        </div>
-        
-        {meshingEnabled && volumetricAverage !== null && differenceText && (
-          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-black/5 dark:border-white/10">
-            <span className="text-[10px] font-medium" style={textStyle}>
-              Δ Intérieur
-            </span>
-            <span className="text-[10px] font-bold" style={{
-              textShadow: isDarkMode
-                ? '0 1px 1px rgba(0, 0, 0, 0.6), 0 -1px 0 rgba(255, 255, 255, 0.06)'
-                : '0 1px 1px rgba(0, 0, 0, 0.2), 0 -1px 0 rgba(255, 255, 255, 0.25)',
-              color: isDarkMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.5)'
-            }}>
-              {differenceText}
-            </span>
+          <div>
+            <p className="text-[10px] text-gray-600 dark:text-gray-300">Extérieur</p>
+            <div className="flex items-baseline gap-1">
+              <p 
+                className="text-sm font-semibold"
+                style={{ color: metricColor }}
+              >
+                {displayValue}
+              </p>
+            </div>
+            {meshingEnabled && volumetricAverage !== null && differenceText && (
+              <p className="text-[9px] text-gray-500 dark:text-gray-400">
+                Δ Int: {differenceText}
+              </p>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
