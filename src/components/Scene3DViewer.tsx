@@ -102,7 +102,8 @@ export const Scene3DViewer = () => {
 
     const metricKey = selectedMetric === 'temperature' ? 'temperature' :
                       selectedMetric === 'humidity' ? 'humidity' :
-                      selectedMetric === 'absoluteHumidity' ? 'absoluteHumidity' : 'dewPoint';
+                      selectedMetric === 'absoluteHumidity' ? 'absoluteHumidity' :
+                      selectedMetric === 'vpdKpa' ? 'vpdKpa' : 'dewPoint';
 
     const range = getDataRange(sensorData, sensors, currentTimestamp, metricKey, smoothingWindowSec * 1000);
     setInterpolationRange(range);
