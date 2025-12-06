@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/components/theme-provider';
 import { useSmoothedValue } from '@/hooks/useSmoothedValue';
-import { Gauge } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ColorLegendProps {
   volumetricAverage?: number | null;
@@ -60,7 +60,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
         };
       case 'vpdKpa':
         return {
-          label: 'PRESSION VAPEUR SATURANTE',
+          label: 'DÉFICIT DE PRESSION DE VAPEUR (VPD)',
           unit: 'kPa',
           colors: ['#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6'],
         };
@@ -124,6 +124,35 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
 
   const decimals = (selectedMetric === 'absoluteHumidity' || selectedMetric === 'vpdKpa') ? 2 : 1;
 
+  const VPDTooltip = () => (
+    <div className="max-w-xs">
+      <p className="font-semibold mb-1">Déficit de pression de vapeur (VPD)</p>
+      <p className="text-xs text-gray-200/90">
+        Le VPD mesure la capacité de l’air à absorber l’humidité: plus il est élevé, plus l’évapotranspiration du corps s’accélère.
+      </p>
+      <div className="mt-2 space-y-0.5 text-[11px]">
+        <p>• 0.2–0.6 kPa: air humide, évaporation faible</p>
+        <p>• 0.7–1.2 kPa: zone de confort typique</p>
+        <p>• 1.3–2.0 kPa: air sec, évaporation rapide</p>
+        <p>• > 2.0 kPa: très sec, déshydratation accélérée</p>
+      </div>
+    </div>
+  );
+
+  const titleSpan = (
+    <span
+      className="text-[10px] sm:text-xs font-semibold tracking-wide"
+      style={{
+        textShadow: isDarkMode
+          ? '0 1px 1px rgba(255,255,255,0.06), 0 -1px 0 rgba(0,0,0,0.5)'
+          : '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
+        color: isDarkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0, 0, 0, 0.5)',
+      }}
+    >
+      {metricInfo.label}
+    </span>
+  );
+
   return (
     <AnimatePresence>
       <motion.div
@@ -135,17 +164,20 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
       >
         <div className="space-y-1 sm:space-y-2 flex flex-col items-center">
           <div className="flex items-center justify-center">
-            <span
-              className="text-[10px] sm:text-xs font-semibold tracking-wide"
-              style={{
-                textShadow: isDarkMode
-                  ? '0 1px 1px rgba(255,255,255,0.06), 0 -1px 0 rgba(0,0,0,0.5)'
-                  : '0 1px 1px rgba(0, 0, 0, 0.15), 0 -1px 0 rgba(255, 255, 255, 0.3)',
-                color: isDarkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0, 0, 0, 0.5)',
-              }}
-            >
-              {metricInfo.label}
-            </span>
+            {selectedMetric === 'vpdKpa' ? (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {titleSpan}
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="center" className="max-w-xs">
+                    <VPDTooltip />
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              titleSpan
+            )}
           </div>
 
           <div className="relative w-[150px] sm:w-[200px]">
