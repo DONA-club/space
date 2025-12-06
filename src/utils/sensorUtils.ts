@@ -5,65 +5,75 @@ export const findClosestDataPoint = (
   targetTimestamp: number
 ): SensorDataPoint => {
   if (data.length === 0) {
-    throw new Error('No data points available');
+    return {
+      timestamp: targetTimestamp,
+      temperature: 0,
+      humidity: 0,
+      absoluteHumidity: 0,
+      dewPoint: 0,
+      vpdKpa: 0
+    };
+  }
+
+  if (data.length === 1) {
+    return {
+      ...data[0],
+      vpdKpa: data[0].vpdKpa
+    };
   }
 
   let left = 0;
   let right = data.length - 1;
 
-  if (targetTimestamp <= data[left].timestamp) {
-    return data[left];
-  }
-  if (targetTimestamp >= data[right].timestamp) {
-    return data[right];
-  }
-
-  while (left <= right) {
+  while (left < right) {
     const mid = Math.floor((left + right) / 2);
-    const midTimestamp = data[mid].timestamp;
-
-    if (midTimestamp === targetTimestamp) {
-      return data[mid];
-    }
-
-    if (midTimestamp < targetTimestamp) {
+    if (data[mid].timestamp < targetTimestamp) {
       left = mid + 1;
     } else {
-      right = mid - 1;
+      right = mid;
     }
   }
 
-  if (left >= data.length) return data[right];
-  if (right < 0) return data[left];
+  if (left === 0) {
+    return {
+      ...data[0],
+      vpdKpa: data[0].vpdKpa
+    };
+  }
+
+  if (left === data.length) {
+    return {
+      ...data[data.length - 1],
+      vpdKpa: data[data.length - 1].vpdKpa
+    };
+  }
 
   const leftDiff = Math.abs(data[left].timestamp - targetTimestamp);
   const rightDiff = Math.abs(data[right].timestamp - targetTimestamp);
 
-  return leftDiff < rightDiff ? data[left] : data[right];
+  const closest = leftDiff < rightDiff ? data[left] : data[right];
+  return {
+    ...closest,
+    vpdKpa: closest.vpdKpa
+  };
 };
 
-/**
- * Calcule la moyenne de toutes les mesures dans une fenêtre temporelle centrée
- * autour de targetTimestamp. Si aucune mesure dans la fenêtre, retombe sur le point le plus proche.
- */
 export const getAverageDataPointInWindow = (
   data: SensorDataPoint[],
   targetTimestamp: number,
   windowMs: number
 ): SensorDataPoint => {
-  if (data.length === 0) {
-    throw new Error('No data points available');
-  }
-  if (!windowMs || windowMs <= 0) {
+  if (windowMs === 0 || data.length === 0) {
     return findClosestDataPoint(data, targetTimestamp);
   }
 
-  const half = windowMs / 2;
-  const start = targetTimestamp - half;
-  const end = targetTimestamp + half;
+  const halfWindow = windowMs / 2;
+  const startTime = targetTimestamp - halfWindow;
+  const endTime = targetTimestamp + halfWindow;
 
-  // On suppose data trié par timestamp
-  const inWindow = data.filter(d => d.timestamp >= start && d.timestamp <= end);
+  const inWindow = data.filter(
+    (d) => d.timestamp >= startTime && d.timestamp <= endTime
+  );
 
   if (inWindow.length === 0) {
     return findClosestDataPoint(data, targetTimestamp);
@@ -75,9 +85,10 @@ export const getAverageDataPointInWindow = (
       acc.humidity += d.humidity;
       acc.absoluteHumidity += d.absoluteHumidity;
       acc.dewPoint += d.dewPoint;
+      acc.vpdKpa += (d.vpdKpa ?? 0);
       return acc;
     },
-    { temperature: 0, humidity: 0, absoluteHumidity: 0, dewPoint: 0 }
+    { temperature: 0, humidity: 0, absoluteHumidity: 0, dewPoint: 0, vpdKpa: 0 }
   );
 
   const count = inWindow.length;
@@ -87,8 +98,55 @@ export const getAverageDataPointInWindow = (
     temperature: sum.temperature / count,
     humidity: sum.humidity / count,
     absoluteHumidity: sum.absoluteHumidity / count,
-    dewPoint: sum.dewPoint / count
+    dewPoint: sum.dewPoint / count,
+    vpdKpa: sum.vpdKpa / count
   };
+};
+
+export const getDataRange = (
+  sensorData: Map<number, SensorDataPoint[]>,
+  sensors: Array<{ id: number }>,
+  currentTimestamp: number,
+  metric: 'temperature' | 'humidity' | 'absoluteHumidity' | 'dewPoint' | 'vpdKpa',
+  smoothingWindowMs: number = 0
+): { min: number; max: number } => {
+  let min = Infinity;
+  let max = -Infinity;
+
+  sensors.forEach((sensor) => {
+    const data = sensorData.get(sensor.id);
+    if (!data || data.length === 0) return;
+
+    const averaged = getAverageDataPointInWindow(data, currentTimestamp, smoothingWindowMs);
+    
+    let value: number;
+    switch (metric) {
+      case 'temperature':
+        value = averaged.temperature;
+        break;
+      case 'humidity':
+        value = averaged.humidity;
+        break;
+      case 'absoluteHumidity':
+        value = averaged.absoluteHumidity;
+        break;
+      case 'dewPoint':
+        value = averaged.dewPoint;
+        break;
+      case 'vpdKpa':
+        value = averaged.vpdKpa ?? 0;
+        break;
+    }
+    
+    if (value < min) min = value;
+    if (value > max) max = value;
+  });
+
+  if (min === Infinity || max === -Infinity) {
+    return { min: 0, max: 100 };
+  }
+
+  return { min, max };
 };
 
 export const calculateIndoorAverage = (
@@ -97,7 +155,7 @@ export const calculateIndoorAverage = (
   currentTimestamp: number,
   windowMs: number = 0
 ): SensorDataPoint | null => {
-  let tempSum = 0, humSum = 0, absHumSum = 0, dpSum = 0, count = 0;
+  let tempSum = 0, humSum = 0, absHumSum = 0, dpSum = 0, vpdSum = 0, count = 0;
 
   sensors.forEach((sensor) => {
     if (!sensorData.has(sensor.id)) return;
@@ -109,6 +167,7 @@ export const calculateIndoorAverage = (
     humSum += point.humidity;
     absHumSum += point.absoluteHumidity;
     dpSum += point.dewPoint;
+    vpdSum += (point.vpdKpa ?? 0);
     count++;
   });
 
@@ -119,33 +178,7 @@ export const calculateIndoorAverage = (
     temperature: tempSum / count,
     humidity: humSum / count,
     absoluteHumidity: absHumSum / count,
-    dewPoint: dpSum / count
-  };
-};
-
-export const getDataRange = (
-  sensorData: Map<number, SensorDataPoint[]>,
-  sensors: Array<{ id: number }>,
-  currentTimestamp: number,
-  metricKey: keyof Omit<SensorDataPoint, 'timestamp'>,
-  windowMs: number = 0
-): { min: number; max: number } => {
-  const values: number[] = [];
-
-  sensors.forEach((sensor) => {
-    if (!sensorData.has(sensor.id)) return;
-
-    const data = sensorData.get(sensor.id)!;
-    const point = getAverageDataPointInWindow(data, currentTimestamp, windowMs);
-    values.push(point[metricKey]);
-  });
-
-  if (values.length === 0) {
-    return { min: 0, max: 0 };
-  }
-
-  return {
-    min: Math.min(...values),
-    max: Math.max(...values)
+    dewPoint: dpSum / count,
+    vpdKpa: vpdSum / count
   };
 };
