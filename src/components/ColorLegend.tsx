@@ -134,7 +134,7 @@ export const ColorLegend = ({ volumetricAverage }: ColorLegendProps) => {
         <p>• 0.2–0.6 kPa: air humide, évaporation faible</p>
         <p>• 0.7–1.2 kPa: zone de confort typique</p>
         <p>• 1.3–2.0 kPa: air sec, évaporation rapide</p>
-        <p>• > 2.0 kPa: très sec, déshydratation accélérée</p>
+        <p>• &gt; 2.0 kPa: très sec, déshydratation accélérée</p>
       </div>
     </div>
   );
