@@ -28,5 +28,5 @@ export const METRIC_INFO: Record<MetricType, MetricInfo> = {
   humidity: { label: 'Humidité Relative', unit: '%', icon: 'droplets' },
   absoluteHumidity: { label: 'Humidité Absolue', unit: 'g/m³', icon: 'wind' },
   dewPoint: { label: 'Point de Rosée', unit: '°C', icon: 'cloud-rain' },
-  vpdKpa: { label: 'Déficit de pression de vapeur (VPD)', unit: 'kPa', icon: 'gauge' }
+  vpdKpa: { label: 'Déficit de pression de vapeur', unit: 'kPa', icon: 'gauge' }
 };
