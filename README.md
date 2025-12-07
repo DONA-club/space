@@ -45,15 +45,6 @@ DONA.club Space est une application de visualisation environnementale et de jume
 - Migrations Supabase: `supabase/migrations/`
 - Configuration: `vite.config.ts`, `tailwind.config.ts`, `components.json`
 
-## Démarrage (dans l’interface Dyad)
-
-- Pour redémarrer le serveur: utilisez le bouton Restart.
-- Pour reconstruire complètement (réinstaller les dépendances): utilisez le bouton Rebuild.
-- Pour rafraîchir l’aperçu: utilisez le bouton Refresh.
-
-Scripts disponibles (pour référence):
-- dev, build, preview, lint
-
 ## Configuration & variables d’environnement
 
 - Le client Supabase est déjà configuré dans `src/integrations/supabase/client.ts`.
