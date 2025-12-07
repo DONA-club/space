@@ -891,8 +891,18 @@ export const TimelineControl = () => {
                 </TooltipPrimitive.Trigger>
                 <TooltipPrimitive.Portal>
                   <TooltipPrimitive.Content side="top" sideOffset={5} className="z-[10000] bg-gray-900 text-white px-3 py-1.5 rounded-md text-xs max-w-xs hidden sm:block">
-                    <p className="font-medium mb-1">Pression Vapeur Saturante (kPa)</p>
-                    <p className="text-gray-300">Déficit de pression de vapeur</p>
+                    <div className="max-w-xs">
+                      <p className="font-medium mb-1">Déficit de pression de vapeur</p>
+                      <p className="text-gray-300">
+                        Le VPD mesure la capacité de l’air à absorber l’humidité: plus il est élevé, plus l’évapotranspiration du corps s’accélère.
+                      </p>
+                      <div className="mt-2 space-y-0.5 text-[11px] text-gray-200/90">
+                        <p>• 0.2–0.6 kPa: air humide, évaporation faible</p>
+                        <p>• 0.7–1.2 kPa: zone de confort typique</p>
+                        <p>• 1.3–2.0 kPa: air sec, évaporation rapide</p>
+                        <p>• &gt; 2.0 kPa: très sec, déshydratation accélérée</p>
+                      </div>
+                    </div>
                   </TooltipPrimitive.Content>
                 </TooltipPrimitive.Portal>
               </TooltipPrimitive.Root>
